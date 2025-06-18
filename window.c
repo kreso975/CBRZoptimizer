@@ -12,7 +12,12 @@
 #include "gui.h"
 #include "functions.h"
 
+#include <uxtheme.h>
+#pragma comment(lib, "uxtheme.lib")
+
+
 volatile BOOL g_StopProcessing = FALSE;
+HINSTANCE g_hInstance;
 
 HFONT hBoldFont;
 
@@ -28,7 +33,7 @@ HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
 HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hImageMagickLabel, hImageQualityLabel, hImageQualityValue, hImageDpiLabel, hImageSizeLabel;
 HWND hImageQualitySlider, hImageDpi, hImageSize;
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
-HWND hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
+HWND hOutputType, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
 HWND hMenuBar, hFileMenu, hHelpMenu; // **Added Menu Handles**
 
 wchar_t TMP_FOLDER[MAX_PATH];
@@ -196,7 +201,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // lf.lfItalic = TRUE; // uncomment for italic
 
       hBoldFont = CreateFontIndirect(&lf);
-
+      HFONT hFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
       HBRUSH hGrayBrush;
       hGrayBrush = CreateSolidBrush(RGB(192, 192, 192));
 
@@ -264,10 +271,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                                20, 70, 270, 150, hwnd, (HMENU)ID_LISTBOX, NULL, NULL);
       if (hListBox)
       {
-         HFONT hFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                                   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                                   DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-
          SendMessageW(hListBox, WM_SETFONT, (WPARAM)hFont, TRUE);
       }
 
@@ -297,7 +300,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       SetWindowLongPtr(hStartButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hStartButton, GWLP_WNDPROC));
       SetWindowLongPtr(hStartButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
 
-      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | WS_VISIBLE,
+      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                   20, 230, 60, 30, hwnd, (HMENU)ID_STOP_BUTTON, NULL, NULL);
 
       // **Settings Group (Right)**
@@ -342,6 +345,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          }
       }
 
+      if (hTmpFolder)
+         SendMessageW(hTmpFolder, WM_SETFONT, (WPARAM)hFont, TRUE);
+      if (hOutputFolder)
+         SendMessageW(hOutputFolder, WM_SETFONT, (WPARAM)hFont, TRUE);
+      if (hWinrarPath)
+         SendMessageW(hWinrarPath, WM_SETFONT, (WPARAM)hFont, TRUE);
+      if (hSevenZipPath)
+         SendMessageW(hSevenZipPath, WM_SETFONT, (WPARAM)hFont, TRUE);
+      if (hImageMagickPath)
+         SendMessageW(hImageMagickPath, WM_SETFONT, (WPARAM)hFont, TRUE);
+
       // **Image Settings Group (Right)**
       hImageSettingsGroup = CreateWindowW(L"BUTTON", L"Image Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                           320, 190, 480, 120, hwnd, NULL, NULL, NULL);
@@ -354,10 +368,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hImageDpiLabel = CreateWindowW(L"STATIC", L"Image DPI:", WS_CHILD | WS_VISIBLE, 330, 250, 120, 20, hwnd, NULL, NULL, NULL);
       hImageDpi = CreateWindowW(L"EDIT", IMAGE_DPI, WS_CHILD | WS_VISIBLE | WS_BORDER,
                                 460, 250, 120, 20, hwnd, NULL, NULL, NULL);
+      if (hImageDpi)
+         SendMessageW(hImageDpi, WM_SETFONT, (WPARAM)hFont, TRUE);
 
       hImageSizeLabel = CreateWindowW(L"STATIC", L"Image Size:", WS_CHILD | WS_VISIBLE, 330, 280, 120, 20, hwnd, NULL, NULL, NULL);
       hImageSize = CreateWindowW(L"EDIT", IMAGE_SIZE, WS_CHILD | WS_VISIBLE | WS_BORDER,
                                  460, 280, 120, 20, hwnd, NULL, NULL, NULL);
+      if (hImageSize)
+         SendMessageW(hImageSize, WM_SETFONT, (WPARAM)hFont, TRUE);
 
       SendMessageW(hImageQualitySlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
       SendMessageW(hImageQualitySlider, TBM_SETTICFREQ, 5, 0);
@@ -366,6 +384,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // **Output Group (Right)**
       hOutputGroup = CreateWindowW(L"BUTTON", L"Output", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                    320, 400, 480, 100, hwnd, NULL, NULL, NULL);
+
+      hOutputType = CreateWindowExW(
+          0L,                                                    // dwExStyle
+          L"COMBOBOX",                                           // lpClassName
+          NULL,                                                  // lpWindowName
+          WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST, // dwStyle
+          460, 280, 120, 100,                                    // x, y, width, height
+          hwnd,                                                  // hWndParent
+          NULL,                                                  // hMenu
+          g_hInstance,                                           // hInstance
+          NULL                                                   // lpParam
+      );
+
+      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
+      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
+      SendMessageW(hOutputType, CB_SETCURSEL, 0, 0); // Set default selection
 
       for (int i = 0; i < ARRAYSIZE(controls); ++i)
       {
@@ -761,12 +795,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
-   InitCommonControls();
+   g_hInstance = hInstance;
+   INITCOMMONCONTROLSEX icex = {sizeof(icex), ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES};
+   icex.dwICC = ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES | ICC_BAR_CLASSES;
+   InitCommonControlsEx(&icex);
 
    WNDCLASSEX wc = {0};
    wc.cbSize = sizeof(WNDCLASSEX); // Required for extended class structure
    wc.style = CS_HREDRAW | CS_VREDRAW;
    wc.lpfnWndProc = WndProc;
+   wc.hInstance = hInstance;
+   wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+   wc.lpszClassName = "ResizableWindowClass";
    wc.hInstance = hInstance;
    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
 
@@ -774,19 +814,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
    wc.hIcon = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 32, 32, LR_SHARED);
    wc.hIconSm = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 16, 16, LR_SHARED);
 
-   wc.lpszClassName = "ResizableWindow";
+   if (!RegisterClassEx(&wc))
+      return -1;
 
-   RegisterClassEx(&wc);
-
-   HWND hwnd = CreateWindowW(L"ResizableWindow", L"CBR Processor",
-                             WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT,
-                             500, 400, NULL, NULL, hInstance, NULL);
+   HWND hwnd = CreateWindowW( L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT, 
+         500, 400, NULL, NULL, hInstance, NULL);
 
    SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)wc.hIcon);
    SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)wc.hIconSm);
 
    ShowWindow(hwnd, nCmdShow);
    UpdateWindow(hwnd);
+
+   if (!IsThemeActive())
+   {
+      MessageBoxW(NULL, L"Visual styles are NOT active!", L"Theme Status", MB_OK | MB_ICONWARNING);
+   }
 
    // **Handle dragged files when launching the .exe (Skip empty entries)**
    if (wcslen(lpCmdLine) > 0)

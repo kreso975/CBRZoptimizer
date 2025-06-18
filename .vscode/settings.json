@@ -66,6 +66,8 @@
    "commdlg.h": "c",
    "commctrl.h": "c",
    "stb_image_resize2.h": "c",
-   "stb_image_write.h": "c"
+   "stb_image_write.h": "c",
+   "*.rh": "c",
+   "uxtheme.h": "c"
 }
 }

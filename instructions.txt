@@ -1,0 +1,20 @@
+gcc window.c -o SimpleGUI.exe -mwindows -lMsimg32
+
+-lMsimg32 is needed for image transparency
+
+Firs we need to precompile .rs
+windres app_icon.rc -O coff -o app_icon.res
+
+And noww new compiler CMD is:
+gcc window.c app_icon.res -o SimpleGUI.exe -mwindows -lmsimg32
+
+
+main.c is CMD version but not finished
+
+
+
+
+
+Created Makefile that compiles Windows version, run it in Terminal :
+mingw32-make
+

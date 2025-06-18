@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C Debugging",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "D:/Downloads/codeRepo/Windows/CBRoptimize/CBRoptimize.exe",
+            "args": ["S:/Stripovi/Alan Ford/1 - Regularna Serija/005 - Daj Daj Daj.cbr"],
+            "cwd": "D:/Downloads/codeRepo/Windows/CBRoptimize",
+            "externalConsole": true,
+            "MIMode": "gdb",
+            "setupCommands": [
+                { "text": "-enable-pretty-printing", "description": "Enable better debugging" }
+            ]
+        }
+    ]
+}

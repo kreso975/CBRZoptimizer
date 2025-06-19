@@ -819,25 +819,55 @@ void process_file(HWND hwnd, const wchar_t *file_path)
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
 }
 
-// Process Dragged Files
-void ProcessDroppedFiles(HWND hListBox, HDROP hDrop)
+
+void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
 {
-   wchar_t filePath[MAX_PATH];
-   UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+    if (!IsWindow(hListBox) || !itemText || !*itemText)
+        return;
 
-   for (UINT i = 0; i < fileCount; i++)
-   {
-      if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
-      {
-         if (IsWindow(hListBox))
-         {
-            SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)filePath);
-         }
-      }
-   }
+    int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, -1, (LPARAM)itemText);
 
-   DragFinish(hDrop);
+    if (existingIndex == LB_ERR)
+    {
+        SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)itemText);
+    }
+    else
+    {
+        SendMessageW(hListBox, LB_SETSEL, FALSE, -1);                    // Deselect all
+        SendMessageW(hListBox, LB_SETSEL, TRUE, existingIndex);         // Select duplicate
+        SendMessageW(hListBox, LB_SETCARETINDEX, existingIndex, TRUE);  // Focus on it
+
+        SetForegroundWindow(hwndOwner);
+        MessageBeep(MB_ICONWARNING);
+
+        MSGBOXPARAMSW mbp = {0};
+        mbp.cbSize = sizeof(MSGBOXPARAMSW);
+        mbp.hwndOwner = hwndOwner;
+        mbp.lpszText = L"This file is already in the list.";
+        mbp.lpszCaption = L"Duplicate Detected";
+        mbp.dwStyle = MB_OK | MB_ICONWARNING | MB_APPLMODAL;
+        mbp.dwLanguageId = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
+        MessageBoxIndirectW(&mbp);
+    }
 }
+
+// Process Dragged Files
+void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
+{
+    wchar_t filePath[MAX_PATH];
+    UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+
+    for (UINT i = 0; i < fileCount; i++)
+    {
+        if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
+        {
+            AddUniqueToListBox(hwnd, hListBox, filePath);
+        }
+    }
+
+    DragFinish(hDrop);
+}
+
 
 // Start Processing
 void StartProcessing(HWND hwnd, HWND hListBox)
@@ -872,6 +902,7 @@ void StartProcessing(HWND hwnd, HWND hListBox)
    }
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"DONE", L"");
+   MessageBeep(MB_ICONINFORMATION); // play warning sound
    MessageBoxW(hwnd, L"Processing Complete!", L"Info", MB_OK);
    ShowWindow(hTerminalProcessingLabel, SW_HIDE);
    ShowWindow(hTerminalProcessingText, SW_HIDE);
@@ -902,45 +933,45 @@ void BrowseFile(HWND hwnd, wchar_t *targetPath)
    GetOpenFileNameW(&ofn);
 }
 
-// File Dialog with Multi-Selection
 void OpenFileDialog(HWND hwnd, HWND hListBox)
 {
-   OPENFILENAMEW ofn;
-   wchar_t fileNames[MAX_PATH * 50] = {0}; // Large buffer to hold multiple file paths
+    OPENFILENAMEW ofn;
+    wchar_t fileNames[MAX_PATH * 50] = {0}; // Large buffer to hold multiple file paths
 
-   ZeroMemory(&ofn, sizeof(ofn));
-   ofn.lStructSize = sizeof(ofn);
-   ofn.hwndOwner = hwnd;
-   ofn.lpstrFilter = L"CBR/CBZ/RAR/ZIP Files (*.cbr;*.cbz;*.rar;*.zip)\0*.cbr;*.cbz;*.rar;*.zip\0All Files\0*.*\0";
-   ofn.lpstrFile = fileNames;
-   ofn.nMaxFile = sizeof(fileNames);
-   ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter = L"CBR/CBZ/RAR/ZIP Files (*.cbr;*.cbz;*.rar;*.zip)\0*.cbr;*.cbz;*.rar;*.zip\0All Files\0*.*\0";
+    ofn.lpstrFile = fileNames;
+    ofn.nMaxFile = sizeof(fileNames);
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
 
-   if (GetOpenFileNameW(&ofn))
-   {
-      wchar_t *p = fileNames + wcslen(fileNames) + 1;
+    if (GetOpenFileNameW(&ofn))
+    {
+        wchar_t *p = fileNames + wcslen(fileNames) + 1;
 
-      if (*p == '\0')
-      {
-         // **Single file selected**
-         SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)fileNames);
-      }
-      else
-      {
-         // **Multiple files selected**
-         wchar_t folder[MAX_PATH];
-         wcscpy(folder, fileNames);
+        if (*p == L'\0')
+        {
+            // Single file selected
+            AddUniqueToListBox(hwnd, hListBox, fileNames);
+        }
+        else
+        {
+            // Multiple files selected
+            wchar_t folder[MAX_PATH];
+            wcscpy(folder, fileNames);
 
-         while (*p)
-         {
-            wchar_t fullPath[MAX_PATH];
-            swprintf(fullPath, sizeof(fullPath), L"%s\\%s", folder, p); // Safer than sprintf
-            SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)fullPath);
-            p += wcslen(p) + 1;
-         }
-      }
-   }
+            while (*p)
+            {
+                wchar_t fullPath[MAX_PATH];
+                swprintf(fullPath, MAX_PATH, L"%s\\%s", folder, p);
+                AddUniqueToListBox(hwnd, hListBox, fullPath);
+                p += wcslen(p) + 1;
+            }
+        }
+    }
 }
+
 
 void RemoveSelectedItems(HWND hListBox)
 {
@@ -962,33 +993,36 @@ void RemoveSelectedItems(HWND hListBox)
 
 void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath)
 {
-    const wchar_t *filename = wcsrchr(winrarPath, L'\\');
-    filename = filename ? filename + 1 : winrarPath;
+   const wchar_t *filename = wcsrchr(winrarPath, L'\\');
+   filename = filename ? filename + 1 : winrarPath;
 
-    BOOL isValid = 
-        wcslen(winrarPath) > 0 &&
-        GetFileAttributesW(winrarPath) != INVALID_FILE_ATTRIBUTES &&
-        !(GetFileAttributesW(winrarPath) & FILE_ATTRIBUTE_DIRECTORY) &&
-        _wcsicmp(filename, L"winrar.exe") == 0;
+   BOOL isValid =
+       wcslen(winrarPath) > 0 &&
+       GetFileAttributesW(winrarPath) != INVALID_FILE_ATTRIBUTES &&
+       !(GetFileAttributesW(winrarPath) & FILE_ATTRIBUTE_DIRECTORY) &&
+       _wcsicmp(filename, L"winrar.exe") == 0;
 
-    SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
-    SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
+   SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
+   SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
 
-    if (isValid) {
-        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
-        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
+   if (isValid)
+   {
+      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
+      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
 
-        // 👇 Select "Keep original" if added
-        LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, -1, (LPARAM)L"Keep original");
-        if (index != CB_ERR) {
-            SendMessageW(hOutputType, CB_SETCURSEL, index, 0);
-        }
-    } else {
-        // No WinRAR, so select "CBZ" which is index 0
-        SendMessageW(hOutputType, CB_SETCURSEL, 0, 0);
-    }
+      // 👇 Select "Keep original" if added
+      LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, -1, (LPARAM)L"Keep original");
+      if (index != CB_ERR)
+      {
+         SendMessageW(hOutputType, CB_SETCURSEL, index, 0);
+      }
+   }
+   else
+   {
+      // No WinRAR, so select "CBZ" which is index 0
+      SendMessageW(hOutputType, CB_SETCURSEL, 0, 0);
+   }
 }
-
 
 void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath,
                         HWND hSevenZipPath, HWND hImageMagickPath, HWND hImageDpi,

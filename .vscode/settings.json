@@ -68,6 +68,8 @@
    "stb_image_resize2.h": "c",
    "stb_image_write.h": "c",
    "*.rh": "c",
-   "uxtheme.h": "c"
+   "uxtheme.h": "c",
+   "windows.h": "c",
+   "d2d1.h": "c"
 }
 }

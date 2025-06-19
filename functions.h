@@ -27,7 +27,7 @@ BOOL optimize_images(HWND hwnd,const wchar_t *image_folder);
 BOOL create_cbz_with_miniz(HWND hwnd, const wchar_t *folder, const wchar_t *output_cbz);
 BOOL create_cbz_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *archive_name);
 void process_file(HWND hwnd,const wchar_t *file_path);
-void ProcessDroppedFiles(HWND hListBox, HDROP hDrop);
+void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop);
 void StartProcessing(HWND hwnd, HWND hListBox);
 void BrowseFolder(HWND hwnd, wchar_t *targetPath);
 void BrowseFile(HWND hwnd, wchar_t *targetPath);

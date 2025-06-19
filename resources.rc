@@ -1,21 +1,29 @@
 #include "resource.h"
 
+//
+// Version Information
+//
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 0,0,1,0
  PRODUCTVERSION 0,0,1,0
  FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
  FILEOS 0x40004L
  FILETYPE 0x1L
+ FILESUBTYPE 0x0L
 {
  BLOCK "StringFileInfo"
  {
    BLOCK "040904B0"
    {
-     VALUE "CompanyName", "Stergo"
-     VALUE "FileDescription", "CBR & CBZ Optimizer"
-     VALUE "FileVersion", "0.0.1.0"
-     VALUE "ProductName", "CBRZoptimizer"
-     VALUE "ProductVersion", "0.0.1.0"
+     VALUE "CompanyName",      "Stergo"
+     VALUE "FileDescription",  "CBR & CBZ Optimizer"
+     VALUE "FileVersion",      "0.0.1.0"
+     VALUE "InternalName",     "CBRZoptimizer"
+     VALUE "OriginalFilename", "CBRZoptimizer.exe"
+     VALUE "ProductName",      "CBRZoptimizer"
+     VALUE "ProductVersion",   "0.0.1.0"
+     VALUE "LegalCopyright",   "© 2025 Stergo. All rights reserved."
    }
  }
  BLOCK "VarFileInfo"
@@ -24,4 +32,8 @@ VS_VERSION_INFO VERSIONINFO
  }
 }
 
+//
+// Application Icon
+//
 IDI_ICON1 ICON "icons/comic.ico"
+

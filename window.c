@@ -1,3 +1,6 @@
+#ifndef UNICODE
+#define UNICODE
+#endif
 #include <windows.h>
 #include <commdlg.h>
 #include <shlobj.h>
@@ -11,6 +14,7 @@
 #include "resource.h"
 #include "gui.h"
 #include "functions.h"
+#include "aboutDialog.h"
 
 #include <uxtheme.h>
 #pragma comment(lib, "uxtheme.lib")
@@ -18,13 +22,11 @@
 volatile BOOL g_StopProcessing = FALSE;
 HINSTANCE g_hInstance;
 
-HFONT hBoldFont;
-HFONT hFontInput;
-HFONT hFontEmoji;
+HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
 
 WNDPROC gOriginalLabelProc = NULL;
 
-HBITMAP hButtonPlus, hButtonMinus, hTmpAdd, hButtonStart;
+HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart;
 
 HWND hListBox, hStartButton, hStopButton, hAddButton, hRemoveButton, hSettingsWnd;
 HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageResize;
@@ -88,14 +90,14 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
    if (msg == WM_LBUTTONDOWN)
    {
-      HWND hCheckbox = (HWND)GetProp(hwnd, "CheckboxHandle");
+      HWND hCheckbox = (HWND)GetProp(hwnd, L"CheckboxHandle");
       if (hCheckbox)
       {
          LRESULT state = SendMessage(hCheckbox, BM_GETCHECK, 0, 0);
          LRESULT newState = (state == BST_CHECKED) ? BST_UNCHECKED : BST_CHECKED;
          SendMessage(hCheckbox, BM_SETCHECK, newState, 0);
 
-         // 🔁 Immediately save to config.ini here
+         // Immediately save to config.ini here
          wchar_t iniPath[MAX_PATH];
          GetModuleFileNameW(NULL, iniPath, MAX_PATH);
          wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
@@ -118,64 +120,70 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    }
 
    // Fall through to original label drawing behavior
-   WNDPROC orig = (WNDPROC)GetProp(hwnd, "OrigProc");
+   WNDPROC orig = (WNDPROC)GetProp(hwnd, L"OrigProc");
    return CallWindowProc(orig ? orig : DefWindowProc, hwnd, msg, wParam, lParam);
 }
 
 BOOL isHoverRemove = FALSE;
 BOOL isHoverAdd = FALSE;
 BOOL isHoverStart = FALSE;
+BOOL isHoverTmp = FALSE;
+BOOL isHoverOutput = FALSE;
+BOOL isHoverWinrar = FALSE;
+BOOL isHoverSevenZip = FALSE;
+BOOL isHoverImageMagick = FALSE;
 
 LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
    static TRACKMOUSEEVENT tme;
+   int ctlId = GetDlgCtrlID(hwnd);
+   BOOL handled = FALSE;
+   BOOL *hoverFlag = NULL;
+
+   switch (ctlId)
+   {
+   case ID_REMOVE_BUTTON:
+      hoverFlag = &isHoverRemove;
+      break;
+   case ID_ADD_BUTTON:
+      hoverFlag = &isHoverAdd;
+      break;
+   case ID_START_BUTTON:
+      hoverFlag = &isHoverStart;
+      break;
+   case ID_TMP_FOLDER_BROWSE:
+      hoverFlag = &isHoverTmp;
+      break;
+   case ID_OUTPUT_FOLDER_BROWSE:
+      hoverFlag = &isHoverOutput;
+      break;
+   case ID_WINRAR_PATH_BROWSE:
+      hoverFlag = &isHoverWinrar;
+      break;
+   case ID_SEVEN_ZIP_PATH_BROWSE:
+      hoverFlag = &isHoverSevenZip;
+      break;
+   case ID_IMAGEMAGICK_PATH_BROWSE:
+      hoverFlag = &isHoverImageMagick;
+      break;
+   }
 
    switch (msg)
    {
    case WM_MOUSEMOVE:
-      if (hwnd == hRemoveButton && !isHoverRemove)
+      if (hoverFlag && !*hoverFlag)
       {
-         isHoverRemove = TRUE;
-         // MessageBox(hwnd, "Hover detected on Remove Button!", "Hover Test", MB_OK | MB_ICONINFORMATION);
-
-         TRACKMOUSEEVENT tme = {sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd};
+         *hoverFlag = TRUE;
+         tme = (TRACKMOUSEEVENT){sizeof(tme), TME_LEAVE, hwnd, 0};
          TrackMouseEvent(&tme);
          InvalidateRect(hwnd, NULL, TRUE);
       }
-      else if (hwnd == hAddButton && !isHoverAdd)
-      {
-         isHoverAdd = TRUE;
-         // MessageBox(hwnd, "Hover detected on Add Button!", "Hover Test", MB_OK | MB_ICONINFORMATION);
-
-         TRACKMOUSEEVENT tme = {sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd};
-         TrackMouseEvent(&tme);
-         InvalidateRect(hwnd, NULL, TRUE);
-      }
-      else if (hwnd == hStartButton && !isHoverStart)
-      {
-         isHoverStart = TRUE;
-         // MessageBox(hwnd, "Hover detected on Start Button!", "Hover Debug", MB_OK | MB_ICONINFORMATION); // Debug message
-         TRACKMOUSEEVENT tme = {sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd};
-         TrackMouseEvent(&tme);
-         InvalidateRect(hwnd, NULL, TRUE);
-      }
-
       break;
 
    case WM_MOUSELEAVE:
-      if (hwnd == hRemoveButton)
+      if (hoverFlag && *hoverFlag)
       {
-         isHoverRemove = FALSE;
-         InvalidateRect(hwnd, NULL, TRUE);
-      }
-      else if (hwnd == hAddButton)
-      {
-         isHoverAdd = FALSE;
-         InvalidateRect(hwnd, NULL, TRUE);
-      }
-      else if (hwnd == hStartButton)
-      {
-         isHoverStart = FALSE;
+         *hoverFlag = FALSE;
          InvalidateRect(hwnd, NULL, TRUE);
       }
       break;
@@ -183,7 +191,27 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    default:
       return CallWindowProc((WNDPROC)GetWindowLongPtr(hwnd, GWLP_USERDATA), hwnd, msg, wParam, lParam);
    }
+
    return 0;
+}
+
+BOOL isBrowseButtonHovered(UINT ctlId)
+{
+   switch (ctlId)
+   {
+   case ID_TMP_FOLDER_BROWSE:
+      return isHoverTmp;
+   case ID_OUTPUT_FOLDER_BROWSE:
+      return isHoverOutput;
+   case ID_WINRAR_PATH_BROWSE:
+      return isHoverWinrar;
+   case ID_SEVEN_ZIP_PATH_BROWSE:
+      return isHoverSevenZip;
+   case ID_IMAGEMAGICK_PATH_BROWSE:
+      return isHoverImageMagick;
+   default:
+      return FALSE;
+   }
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -202,14 +230,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // lf.lfItalic = TRUE; // uncomment for italic
 
       hBoldFont = CreateFontIndirect(&lf);
-      
+
       hFontInput = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                               DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+
+      hFontLabel = CreateFontW(-13, 0, 0, 0, FW_THIN, FALSE, FALSE, FALSE,
+                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                               DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 
       hFontEmoji = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Emoji");
+                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                               DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Emoji");
 
       HBRUSH hGrayBrush;
       hGrayBrush = CreateSolidBrush(RGB(192, 192, 192));
@@ -313,9 +345,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hSettingsGroup = CreateWindowW(L"BUTTON", L"Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                      320, 10, 480, 210, hwnd, NULL, NULL, NULL);
 
-      hTmpAdd = LoadBMP(L"icons/new_add_insert_file_32.bmp");
-      SetWindowLongPtr(hTmpBrowse, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hTmpBrowse, GWLP_WNDPROC));
-      SetWindowLongPtr(hTmpBrowse, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
+      hButtonBrowse = LoadBMP(L"icons/new_add_insert_file_32.bmp");
 
       typedef struct
       {
@@ -333,7 +363,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       } EditBrowseControl;
 
       EditBrowseControl inputs[] = {
-          {L"Temp Folder:", TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hTmpAdd, L"icons/new_add_insert_file_32.bmp"},
+          {L"Temp Folder:", TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, L"icons/new_add_insert_file_32.bmp"},
           {L"Output Folder:", OUTPUT_FOLDER, 60, 100, 200, ID_OUTPUT_FOLDER_BROWSE, &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, NULL, NULL},
           {L"WinRAR Path:", WINRAR_PATH, 90, 100, 200, ID_WINRAR_PATH_BROWSE, &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, NULL, NULL},
           {L"7-Zip Path:", SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, NULL, NULL},
@@ -349,35 +379,35 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          {
             *inputs[i].hBitmap = (HBITMAP)LoadImageW(NULL, inputs[i].bmpPath, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
          }
-      }
 
-      if (hTmpFolder)
-         SendMessageW(hTmpFolder, WM_SETFONT, (WPARAM)hFontInput, TRUE);
-      if (hOutputFolder)
-         SendMessageW(hOutputFolder, WM_SETFONT, (WPARAM)hFontInput, TRUE);
-      if (hWinrarPath)
-         SendMessageW(hWinrarPath, WM_SETFONT, (WPARAM)hFontInput, TRUE);
-      if (hSevenZipPath)
-         SendMessageW(hSevenZipPath, WM_SETFONT, (WPARAM)hFontInput, TRUE);
-      if (hImageMagickPath)
-         SendMessageW(hImageMagickPath, WM_SETFONT, (WPARAM)hFontInput, TRUE);
+         if (*inputs[i].hBrowse)
+         {
+            SendMessageW(*inputs[i].hLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+            SendMessageW(*inputs[i].hEdit, WM_SETFONT, (WPARAM)hFontInput, TRUE);
+            SetWindowLongPtr(*inputs[i].hBrowse, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(*inputs[i].hBrowse, GWLP_WNDPROC));
+            SetWindowLongPtr(*inputs[i].hBrowse, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
+         }
+      }
 
       // **Image Settings Group (Right)**
       hImageSettingsGroup = CreateWindowW(L"BUTTON", L"Image Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                           320, 190, 480, 120, hwnd, NULL, NULL, NULL);
 
       hImageQualityLabel = CreateWindowW(L"STATIC", L"Image Quality:", WS_CHILD | WS_VISIBLE, 330, 210, 120, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hImageQualityLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
       hImageQualityValue = CreateWindowW(L"STATIC", L"25", WS_CHILD | WS_VISIBLE, 430, 210, 50, 20, hwnd, NULL, NULL, NULL);
       hImageQualitySlider = CreateWindowW(L"msctls_trackbar32", NULL, WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
                                           460, 210, 220, 30, hwnd, (HMENU)ID_IMAGE_QUALITY_SLIDER, NULL, NULL);
 
       hImageDpiLabel = CreateWindowW(L"STATIC", L"Image DPI:", WS_CHILD | WS_VISIBLE, 330, 250, 120, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hImageDpiLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
       hImageDpi = CreateWindowW(L"EDIT", IMAGE_DPI, WS_CHILD | WS_VISIBLE | WS_BORDER,
                                 460, 250, 120, 20, hwnd, NULL, NULL, NULL);
       if (hImageDpi)
          SendMessageW(hImageDpi, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       hImageSizeLabel = CreateWindowW(L"STATIC", L"Image Size:", WS_CHILD | WS_VISIBLE, 330, 280, 120, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hImageSizeLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
       hImageSize = CreateWindowW(L"EDIT", IMAGE_SIZE, WS_CHILD | WS_VISIBLE | WS_BORDER,
                                  460, 280, 120, 20, hwnd, NULL, NULL, NULL);
       if (hImageSize)
@@ -392,6 +422,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                                    320, 400, 480, 100, hwnd, NULL, NULL, NULL);
 
       hOutputTypeLabel = CreateWindowW(L"STATIC", L"Format:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hOutputTypeLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
       hOutputType = CreateWindowExW(
           0L,                                                    // dwExStyle
           L"COMBOBOX",                                           // lpClassName
@@ -404,14 +435,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
           NULL                                                   // lpParam
       );
 
+      SendMessageW(hOutputType, WM_SETFONT, (WPARAM)hFontInput, TRUE);
+
       for (int i = 0; i < ARRAYSIZE(controls); ++i)
       {
          *controls[i].hCheckbox = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 350, controls[i].y, 20, 20, hwnd, NULL, NULL, NULL);
          *controls[i].hLabel = CreateWindowW(L"STATIC", controls[i].labelText, WS_CHILD | WS_VISIBLE | SS_NOTIFY, 330, controls[i].y, 180, 20, hwnd, NULL, NULL, NULL);
 
-         SetProp(*controls[i].hLabel, "CheckboxHandle", (HANDLE)(*controls[i].hCheckbox));
+         SetProp(*controls[i].hLabel, L"CheckboxHandle", (HANDLE)(*controls[i].hCheckbox));
+         SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+
          WNDPROC orig = (WNDPROC)SetWindowLongPtr(*controls[i].hLabel, GWLP_WNDPROC, (LONG_PTR)LabelProc);
-         SetProp(*controls[i].hLabel, "OrigProc", (HANDLE)orig);
+         SetProp(*controls[i].hLabel, L"OrigProc", (HANDLE)orig);
+         SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       }
 
       load_config_values(hTmpFolder, hOutputFolder, hWinrarPath,
@@ -431,13 +467,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       // **Resize and Move 'Files' Group**
       MoveWindow(hRemoveButton, 20, 30, 32, 32, TRUE);
-      MoveWindow(hAddButton, 70, 30, 32, 32, TRUE);
+      MoveWindow(hAddButton, 55, 30, 32, 32, TRUE);
       MoveWindow(hFilesGroup, 10, 10, rect.right - 380, rect.bottom - 175, TRUE);
       MoveWindow(hListBox, 20, 70, rect.right - 400, rect.bottom - 240, TRUE);
       MoveWindow(hTerminalGroup, 10, rect.bottom - 150, rect.right - 380, 100, TRUE);
-      MoveWindow(hTerminalProcessingLabel, 20, rect.bottom - 98, 100, 20, TRUE);
-      MoveWindow(hTerminalProcessingText, 120, rect.bottom - 98, 100, 20, TRUE);
-      MoveWindow(hTerminalText, 20, rect.bottom - 75, rect.right - 400, 20, TRUE);
+      MoveWindow(hTerminalProcessingLabel, 20, rect.bottom - 118, 100, 20, TRUE);
+      MoveWindow(hTerminalProcessingText, 120, rect.bottom - 118, 100, 20, TRUE);
+      MoveWindow(hTerminalText, 20, rect.bottom - 85, rect.right - 400, 20, TRUE);
       MoveWindow(hStartButton, rect.right - 460, rect.bottom - 40, 70, 30, TRUE);
       MoveWindow(hStopButton, rect.right - 560, rect.bottom - 40, 70, 30, TRUE);
       // MoveWindow(hStartButton, 20, rect.bottom - 50, 120, 30, TRUE);
@@ -478,17 +514,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hImageSize, rect.right - 240, 350, 120, 20, TRUE);
 
       // **Output Settings Fields**
-
       MoveWindow(hOutputTypeLabel, rect.right - 350, 430, 80, 20, TRUE);
       MoveWindow(hOutputType, rect.right - 280, 425, 120, 20, TRUE);
       MoveWindow(hOutputRunExtract, rect.right - 150, 460, 20, 20, TRUE);
-      MoveWindow(hOutputRunExtractLabel, rect.right - 130, 460, 100, 20, TRUE);
+      MoveWindow(hOutputRunExtractLabel, rect.right - 130, 462, 100, 20, TRUE);
       MoveWindow(hOutputRunImageOptimizer, rect.right - 350, 460, 20, 20, TRUE);
-      MoveWindow(hOutputRunImageOptimizerLabel, rect.right - 330, 460, 140, 20, TRUE);
+      MoveWindow(hOutputRunImageOptimizerLabel, rect.right - 330, 462, 140, 20, TRUE);
       MoveWindow(hOutputRunCompressor, rect.right - 150, 480, 20, 20, TRUE);
-      MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 480, 110, 20, TRUE);
+      MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 482, 110, 20, TRUE);
       MoveWindow(hOutputKeepExtracted, rect.right - 350, 480, 20, 20, TRUE);
-      MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 480, 150, 20, TRUE);
+      MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 482, 150, 20, TRUE);
 
       InvalidateRect(hwnd, NULL, TRUE);
       break;
@@ -583,7 +618,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
       else if (LOWORD(wParam) == ID_HELP_ABOUT)
       {
-         MessageBoxW(hwnd, L"This is a File Processor UI\nVersion 1.0", L"About", MB_OK | MB_ICONINFORMATION);
+         ShowAboutWindow(hwnd, g_hInstance);
       }
       else if (LOWORD(wParam) == ID_FILE_EXIT)
       {
@@ -651,7 +686,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    break;
 
    case WM_DROPFILES:
-      ProcessDroppedFiles(hListBox, (HDROP)wParam);
+      ProcessDroppedFiles(hwnd, hListBox, (HDROP)wParam);
       break;
 
    case WM_CLOSE:
@@ -662,37 +697,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       DeleteObject(hGrayBrush);
       PostQuitMessage(0);
       break;
-
-   case WM_CTLCOLORSTATIC:
-   {
-      HDC hdcStatic = (HDC)wParam;
-      HWND hStatic = (HWND)lParam;
-
-      // List of transparent controls
-      HWND transparentControls[] = {hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hImageMagickLabel, hImageQualityLabel, hImageDpiLabel};
-      int transparentCount = sizeof(transparentControls) / sizeof(transparentControls[0]);
-
-      // Check if the control is in the transparency list
-      for (int i = 0; i < transparentCount; i++)
-      {
-         if (hStatic == transparentControls[i])
-         {
-            SetBkMode(hdcStatic, TRANSPARENT);
-            SetTextColor(hdcStatic, RGB(0, 0, 0)); // Ensure text remains visible
-            return (LRESULT)GetStockObject(NULL_BRUSH);
-         }
-      }
-
-      if (hStatic == hTerminalProcessingText || hStatic == hTerminalProcessingLabel)
-      {
-         SetTextColor(hdcStatic, RGB(0, 128, 0)); // Dark green, for example
-         SetBkMode(hdcStatic, OPAQUE);
-         SetBkColor(hdcStatic, GetSysColor(COLOR_BTNFACE)); // or COLOR_WINDOW
-         return (INT_PTR)GetSysColorBrush(COLOR_BTNFACE);
-      }
-
-      return DefWindowProc(hwnd, msg, wParam, lParam); // Default behavior for others
-   }
 
       // For BLENDFUNCTION and AlphaBlend
 
@@ -721,12 +725,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          bmpH = 30;
          isHover = isHoverStart;
       }
-      else if (lpdis->CtlID == ID_TMP_FOLDER_BROWSE || lpdis->CtlID == ID_OUTPUT_FOLDER_BROWSE || lpdis->CtlID == ID_IMAGEMAGICK_PATH_BROWSE || lpdis->CtlID == ID_SEVEN_ZIP_PATH_BROWSE || lpdis->CtlID == ID_WINRAR_PATH_BROWSE)
+      else if (lpdis->CtlID == ID_TMP_FOLDER_BROWSE || lpdis->CtlID == ID_OUTPUT_FOLDER_BROWSE ||
+               lpdis->CtlID == ID_IMAGEMAGICK_PATH_BROWSE || lpdis->CtlID == ID_SEVEN_ZIP_PATH_BROWSE ||
+               lpdis->CtlID == ID_WINRAR_PATH_BROWSE)
       {
-         hBmp = hTmpAdd;
+         hBmp = hButtonBrowse;
          bmpW = 26;
-         bmpH = 26; // Set correct BMP size
-         // isHover = isHoverTmpBrowse;
+         bmpH = 26;
+         isHover = isBrowseButtonHovered(lpdis->CtlID);
       }
 
       if (hBmp)
@@ -769,6 +775,37 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       return TRUE;
    }
 
+   case WM_CTLCOLORSTATIC:
+   {
+      HDC hdcStatic = (HDC)wParam;
+      HWND hStatic = (HWND)lParam;
+
+      // List of transparent controls
+      HWND transparentControls[] = {hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hImageMagickLabel, hImageQualityLabel, hImageDpiLabel};
+      int transparentCount = sizeof(transparentControls) / sizeof(transparentControls[0]);
+
+      // Check if the control is in the transparency list
+      for (int i = 0; i < transparentCount; i++)
+      {
+         if (hStatic == transparentControls[i])
+         {
+            SetBkMode(hdcStatic, TRANSPARENT);
+            SetTextColor(hdcStatic, RGB(0, 0, 0)); // Ensure text remains visible
+            return (LRESULT)GetStockObject(NULL_BRUSH);
+         }
+      }
+
+      if (hStatic == hTerminalProcessingText || hStatic == hTerminalProcessingLabel)
+      {
+         SetTextColor(hdcStatic, RGB(0, 128, 0)); // Dark green, for example
+         SetBkMode(hdcStatic, OPAQUE);
+         SetBkColor(hdcStatic, GetSysColor(COLOR_BTNFACE)); // or COLOR_WINDOW
+         return (INT_PTR)GetSysColorBrush(COLOR_BTNFACE);
+      }
+
+      return DefWindowProc(hwnd, msg, wParam, lParam); // Default behavior for others
+   }
+
    case WM_SETFOCUS:
       // Move caret to end and scroll to it
       if (hwnd == hTmpFolder || hwnd == hOutputFolder || hwnd == hWinrarPath || hwnd == hSevenZipPath || hwnd == hImageMagickPath)
@@ -809,21 +846,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
    icex.dwICC = ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES | ICC_BAR_CLASSES;
    InitCommonControlsEx(&icex);
 
-   WNDCLASSEX wc = {0};
-   wc.cbSize = sizeof(WNDCLASSEX); // Required for extended class structure
+   WNDCLASSEXW wc = {0};
+   wc.cbSize = sizeof(wc); // Required for extended class structure
    wc.style = CS_HREDRAW | CS_VREDRAW;
    wc.lpfnWndProc = WndProc;
    wc.hInstance = hInstance;
    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-   wc.lpszClassName = "ResizableWindowClass";
+   wc.lpszClassName = L"ResizableWindowClass";
    wc.hInstance = hInstance;
    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+   //wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1); // To change BCKG and test transparency of components
 
    // **Set both large and small icons**
-   wc.hIcon = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 32, 32, LR_SHARED);
-   wc.hIconSm = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 16, 16, LR_SHARED);
+   wc.hIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 32, 32, LR_SHARED);
+   wc.hIconSm = (HICON)LoadImageW(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 16, 16, LR_SHARED);
 
-   if (!RegisterClassEx(&wc))
+   if (!RegisterClassExW(&wc))
       return -1;
 
    HWND hwnd = CreateWindowW(L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT,

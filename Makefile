@@ -7,23 +7,29 @@ CFLAGS += -fwide-exec-charset=UCS-2LE
 # Linker libraries (include uxtheme)
 LIBS = -lmsimg32 -lcomctl32 -luxtheme
 
+BIN_DIR = bin
+MANIFEST = CBRZoptimizer.exe.manifest
+
 MINIZ = src/miniz/miniz.c
 SRC = window.c functions.c $(MINIZ)
 OBJ = $(SRC:.c=.o)
 RES = resources.res
 
 # Target executable
-TARGET = CBRZoptimizer.exe
+TARGET = $(BIN_DIR)/CBRZoptimizer.exe
 
 # Build executable
 $(TARGET): $(OBJ) $(RES)
+	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
 	$(CC) $(OBJ) $(RES) -o $(TARGET) $(CFLAGS) $(LIBS)
+	copy /Y "$(MANIFEST)" "$(BIN_DIR)\\"
 
 %.o: %.c
 	$(CC) -c $< -o $@
 
-resources.res: resources.rc CBRZoptimizer.exe.manifest
-	$(RC) -O coff -i resources.rc -o resources.res
+resources.res: resources.rc $(MANIFEST)
+	$(RC) -O coff -i resources.rc -o $@
 
 clean:
-	cmd /C "del /Q *.o *.res $(TARGET)"
+	cmd /C "del /Q *.o *.res"
+	cmd /C "del /Q $(BIN_DIR)\\*.exe"

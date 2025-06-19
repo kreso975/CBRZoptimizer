@@ -15,11 +15,12 @@
 #include <uxtheme.h>
 #pragma comment(lib, "uxtheme.lib")
 
-
 volatile BOOL g_StopProcessing = FALSE;
 HINSTANCE g_hInstance;
 
 HFONT hBoldFont;
+HFONT hFontInput;
+HFONT hFontEmoji;
 
 WNDPROC gOriginalLabelProc = NULL;
 
@@ -33,7 +34,7 @@ HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
 HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hImageMagickLabel, hImageQualityLabel, hImageQualityValue, hImageDpiLabel, hImageSizeLabel;
 HWND hImageQualitySlider, hImageDpi, hImageSize;
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
-HWND hOutputType, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
+HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
 HWND hMenuBar, hFileMenu, hHelpMenu; // **Added Menu Handles**
 
 wchar_t TMP_FOLDER[MAX_PATH];
@@ -201,9 +202,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // lf.lfItalic = TRUE; // uncomment for italic
 
       hBoldFont = CreateFontIndirect(&lf);
-      HFONT hFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+      
+      hFontInput = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                 DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+
+      hFontEmoji = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Emoji");
+
       HBRUSH hGrayBrush;
       hGrayBrush = CreateSolidBrush(RGB(192, 192, 192));
 
@@ -250,14 +257,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       if (!hButtonPlus)
          MessageBoxW(hwnd, L"Failed to load plus image!", L"Error", MB_OK | MB_ICONERROR);
+      else
+         SendMessageW(hAddButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonPlus);
 
       if (!hButtonMinus)
          MessageBoxW(hwnd, L"Failed to load minus image!", L"Error", MB_OK | MB_ICONERROR);
-
-      if (hButtonMinus)
+      else
          SendMessageW(hRemoveButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonMinus);
-      if (hButtonPlus)
-         SendMessageW(hAddButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonPlus);
 
       SetWindowLongPtr(hRemoveButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hRemoveButton, GWLP_WNDPROC));
       SetWindowLongPtr(hRemoveButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
@@ -270,9 +276,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                                WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_EXTENDEDSEL | LBS_NOTIFY,
                                20, 70, 270, 150, hwnd, (HMENU)ID_LISTBOX, NULL, NULL);
       if (hListBox)
-      {
-         SendMessageW(hListBox, WM_SETFONT, (WPARAM)hFont, TRUE);
-      }
+         SendMessageW(hListBox, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       oldListBoxProc = (WNDPROC)SetWindowLongPtr(hListBox, GWLP_WNDPROC, (LONG_PTR)ListBoxProc); // Subclass ListBox
       DragAcceptFiles(hwnd, TRUE);
@@ -287,6 +291,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       SendMessageW(hTerminalProcessingText, WM_SETFONT, (WPARAM)hBoldFont, TRUE);
 
       hTerminalText = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 430, 210, 50, 20, hwnd, NULL, NULL, NULL);
+      if (hTerminalText)
+         SendMessageW(hListBox, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
 
       hStartButton = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
                                    20, 230, 120, 30, hwnd, (HMENU)ID_START_BUTTON, NULL, NULL);
@@ -346,15 +352,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
 
       if (hTmpFolder)
-         SendMessageW(hTmpFolder, WM_SETFONT, (WPARAM)hFont, TRUE);
+         SendMessageW(hTmpFolder, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       if (hOutputFolder)
-         SendMessageW(hOutputFolder, WM_SETFONT, (WPARAM)hFont, TRUE);
+         SendMessageW(hOutputFolder, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       if (hWinrarPath)
-         SendMessageW(hWinrarPath, WM_SETFONT, (WPARAM)hFont, TRUE);
+         SendMessageW(hWinrarPath, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       if (hSevenZipPath)
-         SendMessageW(hSevenZipPath, WM_SETFONT, (WPARAM)hFont, TRUE);
+         SendMessageW(hSevenZipPath, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       if (hImageMagickPath)
-         SendMessageW(hImageMagickPath, WM_SETFONT, (WPARAM)hFont, TRUE);
+         SendMessageW(hImageMagickPath, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       // **Image Settings Group (Right)**
       hImageSettingsGroup = CreateWindowW(L"BUTTON", L"Image Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -369,13 +375,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hImageDpi = CreateWindowW(L"EDIT", IMAGE_DPI, WS_CHILD | WS_VISIBLE | WS_BORDER,
                                 460, 250, 120, 20, hwnd, NULL, NULL, NULL);
       if (hImageDpi)
-         SendMessageW(hImageDpi, WM_SETFONT, (WPARAM)hFont, TRUE);
+         SendMessageW(hImageDpi, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       hImageSizeLabel = CreateWindowW(L"STATIC", L"Image Size:", WS_CHILD | WS_VISIBLE, 330, 280, 120, 20, hwnd, NULL, NULL, NULL);
       hImageSize = CreateWindowW(L"EDIT", IMAGE_SIZE, WS_CHILD | WS_VISIBLE | WS_BORDER,
                                  460, 280, 120, 20, hwnd, NULL, NULL, NULL);
       if (hImageSize)
-         SendMessageW(hImageSize, WM_SETFONT, (WPARAM)hFont, TRUE);
+         SendMessageW(hImageSize, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       SendMessageW(hImageQualitySlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
       SendMessageW(hImageQualitySlider, TBM_SETTICFREQ, 5, 0);
@@ -385,6 +391,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hOutputGroup = CreateWindowW(L"BUTTON", L"Output", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                    320, 400, 480, 100, hwnd, NULL, NULL, NULL);
 
+      hOutputTypeLabel = CreateWindowW(L"STATIC", L"Format:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hwnd, NULL, NULL, NULL);
       hOutputType = CreateWindowExW(
           0L,                                                    // dwExStyle
           L"COMBOBOX",                                           // lpClassName
@@ -396,10 +403,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
           g_hInstance,                                           // hInstance
           NULL                                                   // lpParam
       );
-
-      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
-      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
-      SendMessageW(hOutputType, CB_SETCURSEL, 0, 0); // Set default selection
 
       for (int i = 0; i < ARRAYSIZE(controls); ++i)
       {
@@ -415,7 +418,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                          hSevenZipPath, hImageMagickPath, hImageDpi,
                          hImageSize, hImageQualityValue, hImageQualitySlider,
                          hOutputRunExtract, hOutputRunImageOptimizer,
-                         hOutputRunCompressor, hOutputKeepExtracted, ARRAYSIZE(controls));
+                         hOutputRunCompressor, hOutputKeepExtracted, hOutputType, ARRAYSIZE(controls));
 
       SetWindowTextW(hImageQualityValue, IMAGE_QUALITY);
 
@@ -429,9 +432,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // **Resize and Move 'Files' Group**
       MoveWindow(hRemoveButton, 20, 30, 32, 32, TRUE);
       MoveWindow(hAddButton, 70, 30, 32, 32, TRUE);
-      MoveWindow(hFilesGroup, 10, 10, rect.right - 380, rect.bottom - 135, TRUE);
-      MoveWindow(hListBox, 20, 70, rect.right - 400, rect.bottom - 200, TRUE);
-      MoveWindow(hTerminalGroup, 10, rect.bottom - 120, rect.right - 380, 70, TRUE);
+      MoveWindow(hFilesGroup, 10, 10, rect.right - 380, rect.bottom - 175, TRUE);
+      MoveWindow(hListBox, 20, 70, rect.right - 400, rect.bottom - 240, TRUE);
+      MoveWindow(hTerminalGroup, 10, rect.bottom - 150, rect.right - 380, 100, TRUE);
       MoveWindow(hTerminalProcessingLabel, 20, rect.bottom - 98, 100, 20, TRUE);
       MoveWindow(hTerminalProcessingText, 120, rect.bottom - 98, 100, 20, TRUE);
       MoveWindow(hTerminalText, 20, rect.bottom - 75, rect.right - 400, 20, TRUE);
@@ -467,7 +470,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       // **Image Settings Fields**
       MoveWindow(hImageQualityLabel, rect.right - 350, 240, 100, 20, TRUE);
-      MoveWindow(hImageQualityValue, rect.right - 240, 240, 100, 20, TRUE);
+      MoveWindow(hImageQualityValue, rect.right - 250, 240, 100, 20, TRUE);
       MoveWindow(hImageQualitySlider, rect.right - 350, 265, 330, 30, TRUE);
       MoveWindow(hImageDpiLabel, rect.right - 350, 320, 90, 20, TRUE);
       MoveWindow(hImageDpi, rect.right - 240, 320, 120, 20, TRUE);
@@ -475,14 +478,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hImageSize, rect.right - 240, 350, 120, 20, TRUE);
 
       // **Output Settings Fields**
-      MoveWindow(hOutputRunExtract, rect.right - 350, 430, 20, 20, TRUE);
-      MoveWindow(hOutputRunExtractLabel, rect.right - 330, 430, 180, 20, TRUE);
-      MoveWindow(hOutputRunImageOptimizer, rect.right - 350, 450, 20, 20, TRUE);
-      MoveWindow(hOutputRunImageOptimizerLabel, rect.right - 330, 450, 180, 20, TRUE);
-      MoveWindow(hOutputRunCompressor, rect.right - 350, 470, 20, 20, TRUE);
-      MoveWindow(hOutputRunCompressorLabel, rect.right - 330, 470, 180, 20, TRUE);
-      MoveWindow(hOutputKeepExtracted, rect.right - 350, 490, 20, 20, TRUE);
-      MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 490, 180, 20, TRUE);
+
+      MoveWindow(hOutputTypeLabel, rect.right - 350, 430, 80, 20, TRUE);
+      MoveWindow(hOutputType, rect.right - 280, 425, 120, 20, TRUE);
+      MoveWindow(hOutputRunExtract, rect.right - 150, 460, 20, 20, TRUE);
+      MoveWindow(hOutputRunExtractLabel, rect.right - 130, 460, 100, 20, TRUE);
+      MoveWindow(hOutputRunImageOptimizer, rect.right - 350, 460, 20, 20, TRUE);
+      MoveWindow(hOutputRunImageOptimizerLabel, rect.right - 330, 460, 140, 20, TRUE);
+      MoveWindow(hOutputRunCompressor, rect.right - 150, 480, 20, 20, TRUE);
+      MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 480, 110, 20, TRUE);
+      MoveWindow(hOutputKeepExtracted, rect.right - 350, 480, 20, 20, TRUE);
+      MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 480, 150, 20, TRUE);
 
       InvalidateRect(hwnd, NULL, TRUE);
       break;
@@ -512,6 +518,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          BrowseFile(hwnd, WINRAR_PATH);
          WritePrivateProfileStringW(L"Paths", L"WINRAR_PATH", WINRAR_PATH, iniPath);
          SetWindowTextW(hWinrarPath, WINRAR_PATH);
+         update_output_type_dropdown(hOutputType, WINRAR_PATH); // clean, direct
       }
       else if (LOWORD(wParam) == ID_SEVEN_ZIP_PATH_BROWSE)
       {
@@ -541,6 +548,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          {
             GetWindowTextW(hWinrarPath, WINRAR_PATH, MAX_PATH);
             WritePrivateProfileStringW(L"Paths", L"WINRAR_PATH", L"", iniPath);
+
+            update_output_type_dropdown(hOutputType, WINRAR_PATH); // clean, direct
          }
          else if ((HWND)lParam == hSevenZipPath)
          {
@@ -715,8 +724,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       else if (lpdis->CtlID == ID_TMP_FOLDER_BROWSE || lpdis->CtlID == ID_OUTPUT_FOLDER_BROWSE || lpdis->CtlID == ID_IMAGEMAGICK_PATH_BROWSE || lpdis->CtlID == ID_SEVEN_ZIP_PATH_BROWSE || lpdis->CtlID == ID_WINRAR_PATH_BROWSE)
       {
          hBmp = hTmpAdd;
-         bmpW = 30;
-         bmpH = 30; // Set correct BMP size
+         bmpW = 26;
+         bmpH = 26; // Set correct BMP size
          // isHover = isHoverTmpBrowse;
       }
 
@@ -728,8 +737,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          // Apply hover effect correctly to hButtonStart
          if (isHover)
          {
-            bmpW += 2;
-            bmpH += 2;
+            bmpW -= 2;
+            bmpH -= 2;
          }
 
          // Center the bitmap in the button
@@ -817,8 +826,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
    if (!RegisterClassEx(&wc))
       return -1;
 
-   HWND hwnd = CreateWindowW( L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT, 
-         500, 400, NULL, NULL, hInstance, NULL);
+   HWND hwnd = CreateWindowW(L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT,
+                             500, 400, NULL, NULL, hInstance, NULL);
 
    SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)wc.hIcon);
    SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)wc.hIconSm);

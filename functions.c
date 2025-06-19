@@ -225,96 +225,95 @@ void replace_all(wchar_t *str, const wchar_t *old_sub, const wchar_t *new_sub)
 
 BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 {
-    wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH];
-    wcscpy(cleanDir, file_path);
+   wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH];
+   wcscpy(cleanDir, file_path);
 
-    wchar_t *ext = wcsrchr(cleanDir, L'.');
-    if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
-        *ext = L'\0';
+   wchar_t *ext = wcsrchr(cleanDir, L'.');
+   if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
+      *ext = L'\0';
 
-    swprintf(baseFolder, MAX_PATH, L"%s\\%s", TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
+   swprintf(baseFolder, MAX_PATH, L"%s\\%s", TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
-    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
-    {
-        if (!CreateDirectoryW(baseFolder, NULL))
-        {
-            MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
-            return FALSE;
-        }
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
-    }
+   if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
+   {
+      if (!CreateDirectoryW(baseFolder, NULL))
+      {
+         MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
+         return FALSE;
+      }
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
+   }
 
-    char zip_utf8[MAX_PATH];
-    WideCharToMultiByte(CP_UTF8, 0, file_path, -1, zip_utf8, MAX_PATH, NULL, NULL);
+   char zip_utf8[MAX_PATH];
+   WideCharToMultiByte(CP_UTF8, 0, file_path, -1, zip_utf8, MAX_PATH, NULL, NULL);
 
-    mz_zip_archive zip;
-    ZeroMemory(&zip, sizeof(zip));
+   mz_zip_archive zip;
+   ZeroMemory(&zip, sizeof(zip));
 
-    if (!mz_zip_reader_init_file(&zip, zip_utf8, 0))
-    {
-        MessageBoxW(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
-        return FALSE;
-    }
+   if (!mz_zip_reader_init_file(&zip, zip_utf8, 0))
+   {
+      MessageBoxW(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
+      return FALSE;
+   }
 
-    mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
+   mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
 
-    wchar_t status_msg[128];
-    swprintf(status_msg, 128, L"Files in archive: %u", fileCount);
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
+   wchar_t status_msg[128];
+   swprintf(status_msg, 128, L"Files in archive: %u", fileCount);
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
 
-    for (mz_uint i = 0; i < fileCount; ++i)
-    {
-        mz_zip_archive_file_stat stat;
-        if (!mz_zip_reader_file_stat(&zip, i, &stat))
-            continue;
+   for (mz_uint i = 0; i < fileCount; ++i)
+   {
+      mz_zip_archive_file_stat stat;
+      if (!mz_zip_reader_file_stat(&zip, i, &stat))
+         continue;
 
-        if (mz_zip_reader_is_file_a_directory(&zip, i))
-            continue;
+      if (mz_zip_reader_is_file_a_directory(&zip, i))
+         continue;
 
-        char relpath_utf8[MAX_PATH];
-        mz_zip_reader_get_filename(&zip, i, relpath_utf8, MAX_PATH);
+      char relpath_utf8[MAX_PATH];
+      mz_zip_reader_get_filename(&zip, i, relpath_utf8, MAX_PATH);
 
-        wchar_t relpath_wide[MAX_PATH];
-        MultiByteToWideChar(CP_UTF8, 0, relpath_utf8, -1, relpath_wide, MAX_PATH);
+      wchar_t relpath_wide[MAX_PATH];
+      MultiByteToWideChar(CP_UTF8, 0, relpath_utf8, -1, relpath_wide, MAX_PATH);
 
-        swprintf(status_msg, 128, L"[%u/%u] %s", i + 1, fileCount, relpath_wide);
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
+      swprintf(status_msg, 128, L"[%u/%u] %s", i + 1, fileCount, relpath_wide);
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
 
-        wchar_t fullDestW[MAX_PATH];
-        swprintf(fullDestW, MAX_PATH, L"%s\\%s", baseFolder, relpath_wide);
+      wchar_t fullDestW[MAX_PATH];
+      swprintf(fullDestW, MAX_PATH, L"%s\\%s", baseFolder, relpath_wide);
 
-        // Recursively create folders in fullDestW
-        wchar_t tempPath[MAX_PATH];
-        wcscpy(tempPath, fullDestW);
-        wchar_t *p = wcschr(tempPath + wcslen(baseFolder) + 1, L'\\');
-        while (p)
-        {
-            *p = L'\0';
-            CreateDirectoryW(tempPath, NULL);
-            *p = L'\\';
-            p = wcschr(p + 1, L'\\');
-        }
+      // Recursively create folders in fullDestW
+      wchar_t tempPath[MAX_PATH];
+      wcscpy(tempPath, fullDestW);
+      wchar_t *p = wcschr(tempPath + wcslen(baseFolder) + 1, L'\\');
+      while (p)
+      {
+         *p = L'\0';
+         CreateDirectoryW(tempPath, NULL);
+         *p = L'\\';
+         p = wcschr(p + 1, L'\\');
+      }
 
-        char fullDest_utf8[MAX_PATH];
-        WideCharToMultiByte(CP_UTF8, 0, fullDestW, -1, fullDest_utf8, MAX_PATH, NULL, NULL);
+      char fullDest_utf8[MAX_PATH];
+      WideCharToMultiByte(CP_UTF8, 0, fullDestW, -1, fullDest_utf8, MAX_PATH, NULL, NULL);
 
-        if (!mz_zip_reader_extract_to_file(&zip, i, fullDest_utf8, 0))
-        {
-            swprintf(status_msg, 256, L"❌ Failed to extract: %s", relpath_wide);
-            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
-        }
-    }
+      if (!mz_zip_reader_extract_to_file(&zip, i, fullDest_utf8, 0))
+      {
+         swprintf(status_msg, 256, L"❌ Failed to extract: %s", relpath_wide);
+         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
+      }
+   }
 
-    mz_zip_reader_end(&zip);
+   mz_zip_reader_end(&zip);
 
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
-    flatten_and_clean_folder(baseFolder, baseFolder);
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
+   flatten_and_clean_folder(baseFolder, baseFolder);
 
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
-    wcscpy(final_dir, baseFolder);
-    return TRUE;
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
+   wcscpy(final_dir, baseFolder);
+   return TRUE;
 }
-
 
 BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 {
@@ -386,94 +385,92 @@ typedef struct
 // STB safe write callback
 void stb_write_func(void *context, void *data, int size)
 {
-    FILE *fp = (FILE *)context;
-    fwrite(data, 1, size, fp);
+   FILE *fp = (FILE *)context;
+   fwrite(data, 1, size, fp);
 }
 
 DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
 {
-    ImageTask *task = (ImageTask *)lpParam;
+   ImageTask *task = (ImageTask *)lpParam;
 
-    wchar_t *pathW = task->image_path;
-    char utf8_path[MAX_PATH];
-    WideCharToMultiByte(CP_UTF8, 0, pathW, -1, utf8_path, MAX_PATH, NULL, NULL);
+   wchar_t *pathW = task->image_path;
+   char utf8_path[MAX_PATH];
+   WideCharToMultiByte(CP_UTF8, 0, pathW, -1, utf8_path, MAX_PATH, NULL, NULL);
 
-    // Open image with Win32 API
-    HANDLE hFile = CreateFileW(pathW, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hFile == INVALID_HANDLE_VALUE)
-    {
-        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Unable to open file.");
-        free(task);
-        return 1;
-    }
+   // Open image with Win32 API
+   HANDLE hFile = CreateFileW(pathW, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+   if (hFile == INVALID_HANDLE_VALUE)
+   {
+      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Unable to open file.");
+      free(task);
+      return 1;
+   }
 
-    DWORD fileSize = GetFileSize(hFile, NULL);
-    BYTE *buffer = malloc(fileSize);
-    if (!buffer)
-    {
-        CloseHandle(hFile);
-        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
-        free(task);
-        return 1;
-    }
+   DWORD fileSize = GetFileSize(hFile, NULL);
+   BYTE *buffer = malloc(fileSize);
+   if (!buffer)
+   {
+      CloseHandle(hFile);
+      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
+      free(task);
+      return 1;
+   }
 
-    DWORD bytesRead;
-    ReadFile(hFile, buffer, fileSize, &bytesRead, NULL);
-    CloseHandle(hFile);
+   DWORD bytesRead;
+   ReadFile(hFile, buffer, fileSize, &bytesRead, NULL);
+   CloseHandle(hFile);
 
-    int w, h, c;
-    unsigned char *input = stbi_load_from_memory(buffer, fileSize, &w, &h, &c, 3);
-    free(buffer);
+   int w, h, c;
+   unsigned char *input = stbi_load_from_memory(buffer, fileSize, &w, &h, &c, 3);
+   free(buffer);
 
-    if (!input)
-    {
-        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Failed to decode image.");
-        free(task);
-        return 1;
-    }
+   if (!input)
+   {
+      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Failed to decode image.");
+      free(task);
+      return 1;
+   }
 
-    int newH = task->target_height > 0 ? task->target_height : 1;
-    int newW = max(1, w * newH / h);
+   int newH = task->target_height > 0 ? task->target_height : 1;
+   int newW = max(1, w * newH / h);
 
-    unsigned char *resized = malloc(newW * newH * 3);
-    if (!resized)
-    {
-        stbi_image_free(input);
-        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
-        free(task);
-        return 1;
-    }
+   unsigned char *resized = malloc(newW * newH * 3);
+   if (!resized)
+   {
+      stbi_image_free(input);
+      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
+      free(task);
+      return 1;
+   }
 
-    stbir_resize_uint8_linear(input, w, h, 0, resized, newW, newH, 0, STBIR_RGB);
-    stbi_image_free(input);
+   stbir_resize_uint8_linear(input, w, h, 0, resized, newW, newH, 0, STBIR_RGB);
+   stbi_image_free(input);
 
-    const wchar_t *extW = wcsrchr(pathW, L'.');
-    int result = 0;
+   const wchar_t *extW = wcsrchr(pathW, L'.');
+   int result = 0;
 
-    FILE *fp = _wfopen(pathW, L"wb");
-    if (fp)
-    {
-        if (extW && _wcsicmp(extW, L".jpg") == 0)
-        {
-            result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(IMAGE_QUALITY));
-        }
-        else if (extW && _wcsicmp(extW, L".png") == 0)
-        {
-            result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, resized, newW * 3);
-        }
-        fclose(fp);
-    }
-    
-    free(resized);
+   FILE *fp = _wfopen(pathW, L"wb");
+   if (fp)
+   {
+      if (extW && _wcsicmp(extW, L".jpg") == 0)
+      {
+         result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(IMAGE_QUALITY));
+      }
+      else if (extW && _wcsicmp(extW, L".png") == 0)
+      {
+         result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, resized, newW * 3);
+      }
+      fclose(fp);
+   }
 
-    SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ",
-               result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");
+   free(resized);
 
-    free(task);
-    return 0;
+   SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ",
+              result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");
+
+   free(task);
+   return 0;
 }
-
-
 
 // Fallback Image Optimization using STB
 BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
@@ -508,7 +505,7 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
             break;
 
          swprintf(image_path, MAX_PATH, L"%s\\%s", folder, ffd.cFileName);
-         
+
          ImageTask *task = malloc(sizeof(ImageTask));
          if (!task)
             continue;
@@ -808,7 +805,8 @@ void process_file(HWND hwnd, const wchar_t *file_path)
       if (!fallback_optimize_images(hwnd, extracted_dir))
          return;
    }
-   else {
+   else
+   {
       if (!optimize_images(hwnd, extracted_dir))
          return;
    }
@@ -962,11 +960,41 @@ void RemoveSelectedItems(HWND hListBox)
    }
 }
 
+void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath)
+{
+    const wchar_t *filename = wcsrchr(winrarPath, L'\\');
+    filename = filename ? filename + 1 : winrarPath;
+
+    BOOL isValid = 
+        wcslen(winrarPath) > 0 &&
+        GetFileAttributesW(winrarPath) != INVALID_FILE_ATTRIBUTES &&
+        !(GetFileAttributesW(winrarPath) & FILE_ATTRIBUTE_DIRECTORY) &&
+        _wcsicmp(filename, L"winrar.exe") == 0;
+
+    SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
+    SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
+
+    if (isValid) {
+        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
+        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
+
+        // 👇 Select "Keep original" if added
+        LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, -1, (LPARAM)L"Keep original");
+        if (index != CB_ERR) {
+            SendMessageW(hOutputType, CB_SETCURSEL, index, 0);
+        }
+    } else {
+        // No WinRAR, so select "CBZ" which is index 0
+        SendMessageW(hOutputType, CB_SETCURSEL, 0, 0);
+    }
+}
+
+
 void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath,
                         HWND hSevenZipPath, HWND hImageMagickPath, HWND hImageDpi,
                         HWND hImageSize, HWND hImageQualityValue, HWND hImageQualitySlider,
                         HWND hOutputRunExtract, HWND hOutputRunImageOptimizer,
-                        HWND hOutputRunCompressor, HWND hOutputKeepExtracted,
+                        HWND hOutputRunCompressor, HWND hOutputKeepExtracted, HWND hOutputType,
                         int controlCount)
 {
    wchar_t buffer[256];
@@ -1024,4 +1052,7 @@ void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath,
       SendMessageW(*controls[i].hCheckbox, BM_SETCHECK,
                    (wcscmp(buffer, L"true") == 0) ? BST_CHECKED : BST_UNCHECKED, 0);
    }
+
+   // Output type dropdown behavior
+   update_output_type_dropdown(hOutputType, WINRAR_PATH);
 }

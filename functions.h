@@ -34,11 +34,12 @@ void BrowseFile(HWND hwnd, wchar_t *targetPath);
 void OpenFileDialog(HWND hwnd, HWND hListBox);
 void RemoveSelectedItems(HWND hListBox);
 HBITMAP LoadBMP(const wchar_t *filename);
+void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath);
 void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath,
                         HWND hSevenZipPath, HWND hImageMagickPath, HWND hImageDpi,
                         HWND hImageSize, HWND hImageQualityValue, HWND hImageQualitySlider,
                         HWND hOutputRunExtract, HWND hOutputRunImageOptimizer,
-                        HWND hOutputRunCompressor, HWND hOutputKeepExtracted,
+                        HWND hOutputRunCompressor, HWND hOutputKeepExtracted, HWND hOutputType,
                         int controlCount);
 
 

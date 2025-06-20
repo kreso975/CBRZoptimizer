@@ -1,7 +1,78 @@
 #include <windows.h>
+#include <wchar.h>
+#include <stdio.h>
 
 #define IDC_ABOUT_ICON 101
 #define IDC_ABOUT_OK 102
+
+typedef struct
+{
+   wchar_t CompanyName[128];
+   wchar_t FileDescription[128];
+   wchar_t FileVersion[64];
+   wchar_t InternalName[128];
+   wchar_t OriginalFilename[128];
+   wchar_t ProductName[128];
+   wchar_t ProductVersion[64];
+   wchar_t LegalCopyright[256];
+} AppVersionInfo;
+
+void GetAppVersionFields(AppVersionInfo *info)
+{
+   memset(info, 0, sizeof(*info));
+
+   wchar_t path[MAX_PATH];
+   GetModuleFileNameW(NULL, path, MAX_PATH);
+
+   DWORD dummy = 0;
+   DWORD size = GetFileVersionInfoSizeW(path, &dummy);
+   if (size == 0)
+      return;
+
+   BYTE *data = (BYTE *)malloc(size);
+   if (!GetFileVersionInfoW(path, 0, size, data))
+   {
+      free(data);
+      return;
+   }
+
+   // Get translation info
+   struct LANGANDCODEPAGE
+   {
+      WORD wLanguage;
+      WORD wCodePage;
+   } *lpTranslate;
+   UINT cbTranslate = 0;
+   if (!VerQueryValueW(data, L"\\VarFileInfo\\Translation", (LPVOID *)&lpTranslate, &cbTranslate))
+   {
+      free(data);
+      return;
+   }
+
+   wchar_t subBlock[64];
+   wchar_t *value = NULL;
+   UINT len = 0;
+   WORD lang = lpTranslate[0].wLanguage;
+   WORD code = lpTranslate[0].wCodePage;
+
+#define FETCH(field, target)                                                  \
+   swprintf(subBlock, 64, L"\\StringFileInfo\\%04x%04x\\" field, lang, code); \
+   if (VerQueryValueW(data, subBlock, (LPVOID *)&value, &len) && value)       \
+   wcsncpy(target, value, len)
+
+   FETCH(L"CompanyName", info->CompanyName);
+   FETCH(L"FileDescription", info->FileDescription);
+   FETCH(L"FileVersion", info->FileVersion);
+   FETCH(L"InternalName", info->InternalName);
+   FETCH(L"OriginalFilename", info->OriginalFilename);
+   FETCH(L"ProductName", info->ProductName);
+   FETCH(L"ProductVersion", info->ProductVersion);
+   FETCH(L"LegalCopyright", info->LegalCopyright);
+
+#undef FETCH
+
+   free(data);
+}
 
 LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -22,9 +93,12 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
          SendMessageW(hIconCtrl, STM_SETIMAGE, IMAGE_ICON, (LPARAM)hIcon);
       }
 
-      CreateWindowW(L"STATIC", L"CBRZ Optimizer", WS_CHILD | WS_VISIBLE, 140, 20, 200, 20, hWnd, NULL, NULL, NULL);
+      AppVersionInfo info;
+      GetAppVersionFields(&info);
 
-      HWND hwndAppVersionStatic = CreateWindowW(L"STATIC", L"v0.1.0", WS_CHILD | WS_VISIBLE, 170, 50, 200, 20, hWnd, NULL, NULL, NULL);
+      CreateWindowW(L"STATIC", info.ProductName, WS_CHILD | WS_VISIBLE, 140, 20, 200, 20, hWnd, NULL, NULL, NULL);
+
+      HWND hwndAppVersionStatic = CreateWindowW(L"STATIC", info.ProductVersion, WS_CHILD | WS_VISIBLE, 170, 50, 200, 20, hWnd, NULL, NULL, NULL);
 
       HWND hwndCopyRightStatic = CreateWindowW(L"STATIC", L"© 2025 by Krešimir Kokanović", WS_CHILD | WS_VISIBLE, 120, 75, 200, 20, hWnd, NULL, NULL, NULL);
 
@@ -105,5 +179,3 @@ void ShowAboutWindow(HWND hwndOwner, HINSTANCE hInst)
    EnableWindow(hwndOwner, TRUE);
    SetActiveWindow(hwndOwner);
 }
-
-

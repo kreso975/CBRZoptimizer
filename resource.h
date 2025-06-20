@@ -9,6 +9,7 @@
 #define ID_FILE_EXIT 109  // **Added Exit ID**
 #define ID_HELP_ABOUT 110 // **Added About ID**
 #define ID_LISTBOX 111
+#define ID_OUTPUT_TYPE 121
 
 // Settings Window IDs
 #define ID_TMP_FOLDER_BROWSE 112

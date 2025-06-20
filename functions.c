@@ -1,10 +1,4 @@
-#include "functions.h"
-#include "gui.h"
-#include "resource.h"
-#include "rar_handle.h"
-
-
-#include "src/miniz/miniz.h"
+// #include "src/miniz/miniz.h"
 
 #include <windows.h>
 #include <shlobj.h> // For SHFileOperation
@@ -15,6 +9,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <direct.h>
+
+#include "functions.h"
+#include "gui.h"
+#include "resource.h"
+#include "rar_handle.h"
+#include "zip_handle.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -32,7 +32,8 @@ DWORD WINAPI ProcessingThread(LPVOID lpParam)
 {
    HWND hwnd = (HWND)lpParam;
    HWND hListBox = GetDlgItem(hwnd, ID_LISTBOX); // Or pass both in a struct
-   StartProcessing(hwnd, hListBox);
+   HWND hOutputType = GetDlgItem(hwnd, ID_OUTPUT_TYPE);
+   StartProcessing(hwnd, hOutputType, hListBox);
 
    // You can post a message back to the window if needed
    PostMessage(hwnd, WM_USER + 1, 0, 0);
@@ -223,98 +224,6 @@ void replace_all(wchar_t *str, const wchar_t *old_sub, const wchar_t *new_sub)
    }
    wcscat(buffer, curr);
    wcscpy(str, buffer);
-}
-
-BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
-{
-   wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH];
-   wcscpy(cleanDir, file_path);
-
-   wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
-      *ext = L'\0';
-
-   swprintf(baseFolder, MAX_PATH, L"%s\\%s", TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
-
-   if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
-   {
-      if (!CreateDirectoryW(baseFolder, NULL))
-      {
-         MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
-         return FALSE;
-      }
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
-   }
-
-   char zip_utf8[MAX_PATH];
-   WideCharToMultiByte(CP_UTF8, 0, file_path, -1, zip_utf8, MAX_PATH, NULL, NULL);
-
-   mz_zip_archive zip;
-   ZeroMemory(&zip, sizeof(zip));
-
-   if (!mz_zip_reader_init_file(&zip, zip_utf8, 0))
-   {
-      MessageBoxW(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
-      return FALSE;
-   }
-
-   mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
-
-   wchar_t status_msg[128];
-   swprintf(status_msg, 128, L"Files in archive: %u", fileCount);
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
-
-   for (mz_uint i = 0; i < fileCount; ++i)
-   {
-      mz_zip_archive_file_stat stat;
-      if (!mz_zip_reader_file_stat(&zip, i, &stat))
-         continue;
-
-      if (mz_zip_reader_is_file_a_directory(&zip, i))
-         continue;
-
-      char relpath_utf8[MAX_PATH];
-      mz_zip_reader_get_filename(&zip, i, relpath_utf8, MAX_PATH);
-
-      wchar_t relpath_wide[MAX_PATH];
-      MultiByteToWideChar(CP_UTF8, 0, relpath_utf8, -1, relpath_wide, MAX_PATH);
-
-      swprintf(status_msg, 128, L"[%u/%u] %s", i + 1, fileCount, relpath_wide);
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
-
-      wchar_t fullDestW[MAX_PATH];
-      swprintf(fullDestW, MAX_PATH, L"%s\\%s", baseFolder, relpath_wide);
-
-      // Recursively create folders in fullDestW
-      wchar_t tempPath[MAX_PATH];
-      wcscpy(tempPath, fullDestW);
-      wchar_t *p = wcschr(tempPath + wcslen(baseFolder) + 1, L'\\');
-      while (p)
-      {
-         *p = L'\0';
-         CreateDirectoryW(tempPath, NULL);
-         *p = L'\\';
-         p = wcschr(p + 1, L'\\');
-      }
-
-      char fullDest_utf8[MAX_PATH];
-      WideCharToMultiByte(CP_UTF8, 0, fullDestW, -1, fullDest_utf8, MAX_PATH, NULL, NULL);
-
-      if (!mz_zip_reader_extract_to_file(&zip, i, fullDest_utf8, 0))
-      {
-         swprintf(status_msg, 256, L"❌ Failed to extract: %s", relpath_wide);
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
-      }
-   }
-
-   mz_zip_reader_end(&zip);
-
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
-   flatten_and_clean_folder(baseFolder, baseFolder);
-
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
-   wcscpy(final_dir, baseFolder);
-   return TRUE;
 }
 
 typedef struct
@@ -559,247 +468,116 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
    return TRUE;
 }
 
-// Create CBZ Archive using miniz
-BOOL create_cbz_with_miniz(HWND hwnd, const wchar_t *folder, const wchar_t *output_cbz)
+void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 {
-   mz_zip_archive zip;
-   memset(&zip, 0, sizeof(zip));
-   wchar_t status_buf[256];
+   wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
 
-   // Convert output CBZ filename to UTF-8 for MiniZ
-   char output_cbz_utf8[MAX_PATH];
-   WideCharToMultiByte(CP_UTF8, 0, output_cbz, -1, output_cbz_utf8, MAX_PATH, NULL, NULL);
+   const wchar_t *file_name = wcsrchr(file_path, L'\\');
+   file_name = file_name ? file_name + 1 : file_path;
 
-   if (!mz_zip_writer_init_file(&zip, output_cbz_utf8, 0))
-      return FALSE;
+   wchar_t base[MAX_PATH];
+   wcscpy(base, file_name);
+   wchar_t *ext = wcsrchr(base, L'.');
+   if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
+      *ext = L'\0';
 
-   wchar_t search_path[MAX_PATH];
-   swprintf(search_path, MAX_PATH, L"%s\\*", folder);
+   swprintf(extracted_dir, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
+   swprintf(archive_name, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
 
-   WIN32_FIND_DATAW ffd;
-   HANDLE hFind = FindFirstFileW(search_path, &ffd);
-   if (hFind == INVALID_HANDLE_VALUE)
-      return FALSE;
+   if (g_StopProcessing)
+      return;
 
-   do
+   ArchiveType type = detect_archive_type(file_path);
+   BOOL extracted = FALSE;
+
+   if (type == ARCHIVE_CBR)
    {
-      if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+      BOOL useExternalTool = FALSE;
+      if (wcslen(WINRAR_PATH) > 0)
       {
-         wchar_t filepathW[MAX_PATH], archiveW[MAX_PATH];
-         swprintf(filepathW, MAX_PATH, L"%s\\%s", folder, ffd.cFileName);
-         wcscpy(archiveW, ffd.cFileName);
-
-         // Convert both paths to UTF-8 for MiniZ
-         char filepath_utf8[MAX_PATH], archive_utf8[MAX_PATH];
-         WideCharToMultiByte(CP_UTF8, 0, filepathW, -1, filepath_utf8, MAX_PATH, NULL, NULL);
-         WideCharToMultiByte(CP_UTF8, 0, archiveW, -1, archive_utf8, MAX_PATH, NULL, NULL);
-
-         swprintf(status_buf, 256, L"Adding %s", ffd.cFileName);
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_buf);
-
-         if (!mz_zip_writer_add_file(&zip, archive_utf8, filepath_utf8, NULL, 0, MZ_BEST_COMPRESSION))
+         DWORD attrib = GetFileAttributesW(WINRAR_PATH);
+         if (attrib != INVALID_FILE_ATTRIBUTES)
          {
-            mz_zip_writer_end(&zip);
-            FindClose(hFind);
-            return FALSE;
+            const wchar_t *exeName = wcsrchr(WINRAR_PATH, L'\\');
+            if (exeName && (wcsicmp(exeName + 1, L"winrar.exe") == 0 || wcsicmp(exeName + 1, L"unrar.exe") == 0))
+               useExternalTool = TRUE;
          }
       }
-   } while (FindNextFileW(hFind, &ffd));
 
-   FindClose(hFind);
-   mz_zip_writer_finalize_archive(&zip);
-   mz_zip_writer_end(&zip);
-
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"Archive finalized successfully.");
-
-   if (OUTPUT_FOLDER[0] != L'\0')
+      if (useExternalTool)
+      {
+         extracted = extract_cbr(hwnd, file_path, extracted_dir);
+      }
+      else
+      {
+         extracted = extract_unrar_dll(hwnd, file_path, extracted_dir);
+      }
+   }
+   else if (type == ARCHIVE_CBZ)
    {
-      const wchar_t *cbz_name = wcsrchr(output_cbz, L'\\');
-      cbz_name = cbz_name ? cbz_name + 1 : output_cbz;
+      extracted = extract_cbz(hwnd, file_path, extracted_dir);
+   }
 
-      wchar_t dest_cbzW[MAX_PATH];
-      swprintf(dest_cbzW, MAX_PATH, L"%s\\%s", OUTPUT_FOLDER, cbz_name);
+   if (!extracted)
+      return;
 
-      MoveFileW(output_cbz, dest_cbzW);
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"✔ Archive moved to OUTPUT_FOLDER.");
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
+
+   if (g_StopProcessing)
+      return;
+
+   if (wcslen(IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+       (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+   {
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
+      if (!fallback_optimize_images(hwnd, extracted_dir))
+         return;
    }
    else
    {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"📁 OUTPUT_FOLDER not set. Leaving archive in TMP.");
+      if (!optimize_images(hwnd, extracted_dir))
+         return;
    }
 
-   return TRUE;
-}
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
 
-// Create CBZ Archive
-BOOL create_cbz_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *archive_name)
-{
-   wchar_t cleanName[MAX_PATH], zip_file[MAX_PATH], cbz_file[MAX_PATH], command[1024];
-   wchar_t buffer[4096];
-   DWORD bytesRead;
-   HANDLE hReadPipe = NULL, hWritePipe = NULL;
-   SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+   if (g_StopProcessing)
+      return;
 
-   wcscpy(cleanName, archive_name);
-   wchar_t *ext = wcsrchr(cleanName, L'.');
-   if (ext && wcscmp(ext, L".cbr") == 0)
-      *ext = L'\0';
+   // 💡 Decide output format based on dropdown and original type
+   BOOL useCBR = FALSE;
+   int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
+   wchar_t selectedText[32];
+   SendMessageW(hOutputType, CB_GETLBTEXT, selected, (LPARAM)selectedText);
 
-   swprintf(zip_file, MAX_PATH, L"%s.zip", cleanName);
-   swprintf(cbz_file, MAX_PATH, L"%s.cbz", cleanName);
+   // Check if WinRAR is present and valid
+   const wchar_t *exeName = wcsrchr(WINRAR_PATH, L'\\');
+   BOOL hasValidWinRAR = (wcslen(WINRAR_PATH) > 0 &&
+                          GetFileAttributesW(WINRAR_PATH) != INVALID_FILE_ATTRIBUTES &&
+                          exeName && _wcsicmp(exeName + 1, L"winrar.exe") == 0);
 
-   if (wcslen(SEVEN_ZIP_PATH) > 0)
+   // Determine whether to use CBR output
+   if ((_wcsicmp(selectedText, L"CBR") == 0) || (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
    {
-      DWORD attrib = GetFileAttributesW(SEVEN_ZIP_PATH);
-      if (!(attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY)))
-      {
-         if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
-            goto fallback;
-
-         STARTUPINFOW si = {sizeof(STARTUPINFOW)};
-         PROCESS_INFORMATION pi;
-         si.hStdOutput = hWritePipe;
-         si.hStdError = hWritePipe;
-         si.wShowWindow = SW_HIDE;
-         si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-
-         swprintf(command, 1024, L"\"%s\" a -mx9 \"%s\" \"%s\"",
-                  SEVEN_ZIP_PATH, zip_file, image_folder);
-
-         if (CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW,
-                            NULL, NULL, &si, &pi))
-         {
-            CloseHandle(hWritePipe);
-            if (ReadFile(hReadPipe, buffer, sizeof(buffer) - sizeof(wchar_t), &bytesRead, NULL))
-            {
-               buffer[bytesRead / sizeof(wchar_t)] = L'\0';
-               SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", buffer);
-            }
-            else
-            {
-               SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"7-Zip might have run successfully.");
-            }
-
-            CloseHandle(hReadPipe);
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-
-            MoveFileW(zip_file, cbz_file);
-            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Renaming from .zip to .cbz");
-
-            if (OUTPUT_FOLDER[0] != L'\0')
-            {
-               const wchar_t *cbz_name = wcsrchr(cbz_file, L'\\');
-               cbz_name = cbz_name ? cbz_name + 1 : cbz_file;
-
-               wchar_t dest_cbz[MAX_PATH];
-               swprintf(dest_cbz, MAX_PATH, L"%s\\%s", OUTPUT_FOLDER, cbz_name);
-               MoveFileW(cbz_file, dest_cbz);
-
-               SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"✔ Archive moved to OUTPUT_FOLDER.");
-            }
-            else
-            {
-               SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"📁 OUTPUT_FOLDER not set. Leaving archive in TMP.");
-            }
-
-            return TRUE;
-         }
-      }
+      if (hasValidWinRAR)
+         useCBR = TRUE;
    }
 
-fallback:
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Fallback: ", L"7-Zip unavailable, using miniz.");
-   return create_cbz_with_miniz(hwnd, image_folder, cbz_file);
+   if (useCBR)
+   {
+      if (!create_cbr_archive(hwnd, extracted_dir, archive_name))
+         return;
+
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Completed");
+   }
+   else
+   {
+      if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
+         return;
+
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
+   }
 }
-
-void process_file(HWND hwnd, const wchar_t *file_path)
-{
-    wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
-
-    // Get file name (e.g., "005 - Daj Daj Daj.cbr")
-    const wchar_t *file_name = wcsrchr(file_path, L'\\');
-    if (file_name)
-        file_name++; // Skip the slash
-    else
-        file_name = file_path;
-
-    // Build extracted_dir by stripping .cbr/.cbz extension
-    wchar_t base[MAX_PATH];
-    wcscpy(base, file_name);
-    wchar_t *ext = wcsrchr(base, L'.');
-    if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
-        *ext = L'\0';
-
-    swprintf(extracted_dir, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
-    swprintf(archive_name, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
-
-    if (g_StopProcessing)
-        return;
-
-    ArchiveType type = detect_archive_type(file_path);
-    BOOL extracted = FALSE;
-
-    if (type == ARCHIVE_CBR)
-    {
-        BOOL useExternalTool = FALSE;
-        if (wcslen(WINRAR_PATH) > 0)
-        {
-            DWORD attrib = GetFileAttributesW(WINRAR_PATH);
-            if (attrib != INVALID_FILE_ATTRIBUTES)
-            {
-                const wchar_t *exeName = wcsrchr(WINRAR_PATH, L'\\');
-                if (exeName && (wcsicmp(exeName + 1, L"winrar.exe") == 0 || wcsicmp(exeName + 1, L"unrar.exe") == 0))
-                    useExternalTool = TRUE;
-            }
-        }
-
-        if (useExternalTool)
-        {
-            extracted = extract_cbr(hwnd, file_path, extracted_dir);
-        }
-        else
-        {
-            extracted = extract_unrar_dll(hwnd, file_path, extracted_dir);
-        }
-    }
-    else if (type == ARCHIVE_CBZ)
-    {
-        extracted = extract_cbz(hwnd, file_path, extracted_dir);
-    }
-
-    if (!extracted)
-        return;
-
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
-
-    if (g_StopProcessing)
-        return;
-
-    if (wcslen(IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
-        (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-    {
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
-        if (!fallback_optimize_images(hwnd, extracted_dir))
-            return;
-    }
-    else
-    {
-        if (!optimize_images(hwnd, extracted_dir))
-            return;
-    }
-
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
-
-    if (g_StopProcessing)
-        return;
-
-    if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
-        return;
-
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
-}
-
 
 void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
 {
@@ -850,7 +628,7 @@ void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
 }
 
 // Start Processing
-void StartProcessing(HWND hwnd, HWND hListBox)
+void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox)
 {
    ShowWindow(hTerminalProcessingLabel, SW_SHOW);
    ShowWindow(hTerminalProcessingText, SW_SHOW);
@@ -875,7 +653,7 @@ void StartProcessing(HWND hwnd, HWND hListBox)
       swprintf(progress, sizeof(progress), L"%d/%d", processed + 1, total);
       SendStatus(hwnd, WM_UPDATE_PROCESSING_TEXT, L"", progress);
 
-      process_file(hwnd, file_path);
+      process_file(hwnd, hOutputType, file_path);
       SendMessage(hListBox, LB_DELETESTRING, 0, 0);
 
       processed++;
@@ -893,11 +671,19 @@ void BrowseFolder(HWND hwnd, wchar_t *targetPath)
    BROWSEINFO bi = {0};
    bi.hwndOwner = hwnd;
    bi.lpszTitle = L"Select a folder:";
+   bi.ulFlags = BIF_NEWDIALOGSTYLE | BIF_RETURNONLYFSDIRS;
+
+   // Required for BIF_NEWDIALOGSTYLE on older systems
+   OleInitialize(NULL);
+
    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
    if (pidl != NULL)
    {
       SHGetPathFromIDListW(pidl, targetPath);
+      CoTaskMemFree(pidl);
    }
+
+   OleUninitialize();
 }
 
 void BrowseFile(HWND hwnd, wchar_t *targetPath)

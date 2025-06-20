@@ -20,14 +20,11 @@ BOOL find_folder_with_images(const wchar_t *basePath, wchar_t *outPath, int dept
 void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target);
 void delete_folder_recursive(const wchar_t *path);
 void replace_all(wchar_t *str, const wchar_t *old_sub, const wchar_t *new_sub);
-BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir);
 BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder);
 BOOL optimize_images(HWND hwnd,const wchar_t *image_folder);
-BOOL create_cbz_with_miniz(HWND hwnd, const wchar_t *folder, const wchar_t *output_cbz);
-BOOL create_cbz_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *archive_name);
-void process_file(HWND hwnd,const wchar_t *file_path);
+void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path);
 void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop);
-void StartProcessing(HWND hwnd, HWND hListBox);
+void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox);
 void BrowseFolder(HWND hwnd, wchar_t *targetPath);
 void BrowseFile(HWND hwnd, wchar_t *targetPath);
 void OpenFileDialog(HWND hwnd, HWND hListBox);

@@ -51,9 +51,12 @@ typedef struct {
     unsigned int Reserved2[4];
 } RARHeaderDataEx;
 
+#define UNRAR_DLL_PATH L"external\\UnRAR64.dll"
+
 // Status callback (optional - safe to remove if not used elsewhere)
 extern void SendStatus(HWND hwnd, UINT msg, const wchar_t *prefix, const wchar_t *message);
 extern void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target);
 
 BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir);
 BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *dest_folder);
+BOOL create_cbr_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *archive_name);

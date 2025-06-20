@@ -70,6 +70,8 @@
    "*.rh": "c",
    "uxtheme.h": "c",
    "windows.h": "c",
-   "d2d1.h": "c"
+   "d2d1.h": "c",
+   "gui.h": "c",
+   "functions.h": "c"
 }
 }

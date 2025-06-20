@@ -424,16 +424,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hOutputTypeLabel = CreateWindowW(L"STATIC", L"Format:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hwnd, NULL, NULL, NULL);
       SendMessageW(hOutputTypeLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
       hOutputType = CreateWindowExW(
-          0L,                                                    // dwExStyle
-          L"COMBOBOX",                                           // lpClassName
-          NULL,                                                  // lpWindowName
-          WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST, // dwStyle
-          460, 280, 120, 100,                                    // x, y, width, height
-          hwnd,                                                  // hWndParent
-          NULL,                                                  // hMenu
-          g_hInstance,                                           // hInstance
-          NULL                                                   // lpParam
-      );
+          0L,
+          L"COMBOBOX",
+          NULL,
+          WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
+          460, 280, 120, 100,
+          hwnd,
+          (HMENU)ID_OUTPUT_TYPE, // 👈 Add the control ID here
+          g_hInstance,
+          NULL);
 
       SendMessageW(hOutputType, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
@@ -471,9 +470,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hFilesGroup, 10, 10, rect.right - 380, rect.bottom - 175, TRUE);
       MoveWindow(hListBox, 20, 70, rect.right - 400, rect.bottom - 240, TRUE);
       MoveWindow(hTerminalGroup, 10, rect.bottom - 150, rect.right - 380, 100, TRUE);
-      MoveWindow(hTerminalProcessingLabel, 20, rect.bottom - 118, 100, 20, TRUE);
-      MoveWindow(hTerminalProcessingText, 120, rect.bottom - 118, 100, 20, TRUE);
-      MoveWindow(hTerminalText, 20, rect.bottom - 85, rect.right - 400, 20, TRUE);
+      MoveWindow(hTerminalProcessingLabel, 20, rect.bottom - 125, 100, 20, TRUE);
+      MoveWindow(hTerminalProcessingText, 120, rect.bottom - 125, 100, 20, TRUE);
+      MoveWindow(hTerminalText, 20, rect.bottom - 100, rect.right - 400, 50, TRUE);
       MoveWindow(hStartButton, rect.right - 460, rect.bottom - 40, 70, 30, TRUE);
       MoveWindow(hStopButton, rect.right - 560, rect.bottom - 40, 70, 30, TRUE);
       // MoveWindow(hStartButton, 20, rect.bottom - 50, 120, 30, TRUE);
@@ -855,7 +854,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
    wc.lpszClassName = L"ResizableWindowClass";
    wc.hInstance = hInstance;
    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-   //wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1); // To change BCKG and test transparency of components
+   // wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1); // To change BCKG and test transparency of components
 
    // **Set both large and small icons**
    wc.hIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 32, 32, LR_SHARED);

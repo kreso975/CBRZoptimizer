@@ -18,3 +18,12 @@ main.c is CMD version but not finished
 Created Makefile that compiles Windows version, run it in Terminal :
 mingw32-make
 
+
+
+
+--
+hi, today we are going to continue working on my pure C Window app for windows CBR and CBZ optimizer and converter.
+File structure windows.c holds all GUI logic, function.h function.c hold all functions regarding rar yip image optimization 
+and some functions that GUI relies on. then resource.h, resources.rc , app loads config.ini as settings how to use functionalities. 
+We are using miniz built in C for work wit zip, it can also be set to use external app like 7zip. For rar external Unrar or winrar. 
+Image optimiyitaion internaly when external is not set we use STB libraries. Exernal if set is ImageMagick.

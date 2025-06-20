@@ -1,6 +1,8 @@
 #include "functions.h"
 #include "gui.h"
 #include "resource.h"
+#include "rar_handle.h"
+
 
 #include "src/miniz/miniz.h"
 
@@ -311,66 +313,6 @@ BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
    flatten_and_clean_folder(baseFolder, baseFolder);
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
-   wcscpy(final_dir, baseFolder);
-   return TRUE;
-}
-
-BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
-{
-   wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], command[MAX_PATH];
-   wcscpy(cleanDir, file_path);
-
-   wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && _wcsicmp(ext, L".cbr") == 0)
-      *ext = L'\0';
-
-   swprintf(baseFolder, MAX_PATH, L"%s\\%s", TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
-
-   if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
-   {
-      if (!CreateDirectoryW(baseFolder, NULL))
-      {
-         MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
-         return FALSE;
-      }
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
-   }
-
-   if (wcslen(WINRAR_PATH) == 0)
-   {
-      MessageBoxW(hwnd, L"WINRAR_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ WINRAR_PATH is not set.");
-      return FALSE;
-   }
-
-   DWORD attrib = GetFileAttributesW(WINRAR_PATH);
-   if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY))
-   {
-      MessageBoxW(hwnd, L"The specified WINRAR_PATH does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
-      return FALSE;
-   }
-
-   swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" \"%s\"", WINRAR_PATH, file_path, baseFolder);
-   STARTUPINFOW si = {sizeof(si)};
-   si.dwFlags = STARTF_USESHOWWINDOW;
-   si.wShowWindow = SW_HIDE;
-   PROCESS_INFORMATION pi;
-
-   if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ Failed to launch WinRAR.");
-      return FALSE;
-   }
-
-   WaitForSingleObject(pi.hProcess, INFINITE);
-   CloseHandle(pi.hProcess);
-   CloseHandle(pi.hThread);
-
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
-
-   flatten_and_clean_folder(baseFolder, baseFolder); // ✅ Corrected call
-
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ Extraction complete.");
    wcscpy(final_dir, baseFolder);
    return TRUE;
 }
@@ -773,101 +715,139 @@ fallback:
 
 void process_file(HWND hwnd, const wchar_t *file_path)
 {
-   wchar_t extracted_dir[512], archive_name[512];
+    wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
 
-   swprintf(extracted_dir, MAX_PATH, L"D:\\Downloads\\TMPVideo\\%s", wcsrchr(file_path, L'\\') + 1);
-   swprintf(archive_name, MAX_PATH, L"D:\\Downloads\\TMPVideo\\%s", wcsrchr(file_path, L'\\') + 1);
+    // Get file name (e.g., "005 - Daj Daj Daj.cbr")
+    const wchar_t *file_name = wcsrchr(file_path, L'\\');
+    if (file_name)
+        file_name++; // Skip the slash
+    else
+        file_name = file_path;
 
-   if (g_StopProcessing)
-      return;
+    // Build extracted_dir by stripping .cbr/.cbz extension
+    wchar_t base[MAX_PATH];
+    wcscpy(base, file_name);
+    wchar_t *ext = wcsrchr(base, L'.');
+    if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
+        *ext = L'\0';
 
-   ArchiveType type = detect_archive_type(file_path);
-   BOOL extracted = FALSE;
+    swprintf(extracted_dir, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
+    swprintf(archive_name, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
 
-   if (type == ARCHIVE_CBR)
-      extracted = extract_cbr(hwnd, file_path, extracted_dir);
-   else if (type == ARCHIVE_CBZ)
-      extracted = extract_cbr(hwnd, file_path, extracted_dir);
+    if (g_StopProcessing)
+        return;
 
-   if (!extracted)
-      return;
+    ArchiveType type = detect_archive_type(file_path);
+    BOOL extracted = FALSE;
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
+    if (type == ARCHIVE_CBR)
+    {
+        BOOL useExternalTool = FALSE;
+        if (wcslen(WINRAR_PATH) > 0)
+        {
+            DWORD attrib = GetFileAttributesW(WINRAR_PATH);
+            if (attrib != INVALID_FILE_ATTRIBUTES)
+            {
+                const wchar_t *exeName = wcsrchr(WINRAR_PATH, L'\\');
+                if (exeName && (wcsicmp(exeName + 1, L"winrar.exe") == 0 || wcsicmp(exeName + 1, L"unrar.exe") == 0))
+                    useExternalTool = TRUE;
+            }
+        }
 
-   // Image optimization
-   if (g_StopProcessing)
-      return;
-   // Fallback early if IMAGEMAGICK_PATH is missing or invalid
-   if (wcslen(IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
-       (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
-      if (!fallback_optimize_images(hwnd, extracted_dir))
-         return;
-   }
-   else
-   {
-      if (!optimize_images(hwnd, extracted_dir))
-         return;
-   }
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
+        if (useExternalTool)
+        {
+            extracted = extract_cbr(hwnd, file_path, extracted_dir);
+        }
+        else
+        {
+            extracted = extract_unrar_dll(hwnd, file_path, extracted_dir);
+        }
+    }
+    else if (type == ARCHIVE_CBZ)
+    {
+        extracted = extract_cbz(hwnd, file_path, extracted_dir);
+    }
 
-   if (g_StopProcessing)
-      return;
-   if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
-      return;
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
+    if (!extracted)
+        return;
+
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
+
+    if (g_StopProcessing)
+        return;
+
+    if (wcslen(IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+        (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
+        if (!fallback_optimize_images(hwnd, extracted_dir))
+            return;
+    }
+    else
+    {
+        if (!optimize_images(hwnd, extracted_dir))
+            return;
+    }
+
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
+
+    if (g_StopProcessing)
+        return;
+
+    if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
+        return;
+
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
 }
 
 
 void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
 {
-    if (!IsWindow(hListBox) || !itemText || !*itemText)
-        return;
+   if (!IsWindow(hListBox) || !itemText || !*itemText)
+      return;
 
-    int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, -1, (LPARAM)itemText);
+   int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, -1, (LPARAM)itemText);
 
-    if (existingIndex == LB_ERR)
-    {
-        SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)itemText);
-    }
-    else
-    {
-        SendMessageW(hListBox, LB_SETSEL, FALSE, -1);                    // Deselect all
-        SendMessageW(hListBox, LB_SETSEL, TRUE, existingIndex);         // Select duplicate
-        SendMessageW(hListBox, LB_SETCARETINDEX, existingIndex, TRUE);  // Focus on it
+   if (existingIndex == LB_ERR)
+   {
+      SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)itemText);
+   }
+   else
+   {
+      SendMessageW(hListBox, LB_SETSEL, FALSE, -1);                  // Deselect all
+      SendMessageW(hListBox, LB_SETSEL, TRUE, existingIndex);        // Select duplicate
+      SendMessageW(hListBox, LB_SETCARETINDEX, existingIndex, TRUE); // Focus on it
 
-        SetForegroundWindow(hwndOwner);
-        MessageBeep(MB_ICONWARNING);
+      SetForegroundWindow(hwndOwner);
+      MessageBeep(MB_ICONWARNING);
 
-        MSGBOXPARAMSW mbp = {0};
-        mbp.cbSize = sizeof(MSGBOXPARAMSW);
-        mbp.hwndOwner = hwndOwner;
-        mbp.lpszText = L"This file is already in the list.";
-        mbp.lpszCaption = L"Duplicate Detected";
-        mbp.dwStyle = MB_OK | MB_ICONWARNING | MB_APPLMODAL;
-        mbp.dwLanguageId = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
-        MessageBoxIndirectW(&mbp);
-    }
+      MSGBOXPARAMSW mbp = {0};
+      mbp.cbSize = sizeof(MSGBOXPARAMSW);
+      mbp.hwndOwner = hwndOwner;
+      mbp.lpszText = L"This file is already in the list.";
+      mbp.lpszCaption = L"Duplicate Detected";
+      mbp.dwStyle = MB_OK | MB_ICONWARNING | MB_APPLMODAL;
+      mbp.dwLanguageId = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
+      MessageBoxIndirectW(&mbp);
+   }
 }
 
 // Process Dragged Files
 void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
 {
-    wchar_t filePath[MAX_PATH];
-    UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+   wchar_t filePath[MAX_PATH];
+   UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
 
-    for (UINT i = 0; i < fileCount; i++)
-    {
-        if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
-        {
-            AddUniqueToListBox(hwnd, hListBox, filePath);
-        }
-    }
+   for (UINT i = 0; i < fileCount; i++)
+   {
+      if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
+      {
+         AddUniqueToListBox(hwnd, hListBox, filePath);
+      }
+   }
 
-    DragFinish(hDrop);
+   DragFinish(hDrop);
 }
-
 
 // Start Processing
 void StartProcessing(HWND hwnd, HWND hListBox)
@@ -912,7 +892,7 @@ void BrowseFolder(HWND hwnd, wchar_t *targetPath)
 {
    BROWSEINFO bi = {0};
    bi.hwndOwner = hwnd;
-   bi.lpszTitle = "Select a folder:";
+   bi.lpszTitle = L"Select a folder:";
    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
    if (pidl != NULL)
    {
@@ -935,43 +915,42 @@ void BrowseFile(HWND hwnd, wchar_t *targetPath)
 
 void OpenFileDialog(HWND hwnd, HWND hListBox)
 {
-    OPENFILENAMEW ofn;
-    wchar_t fileNames[MAX_PATH * 50] = {0}; // Large buffer to hold multiple file paths
+   OPENFILENAMEW ofn;
+   wchar_t fileNames[MAX_PATH * 50] = {0}; // Large buffer to hold multiple file paths
 
-    ZeroMemory(&ofn, sizeof(ofn));
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hwnd;
-    ofn.lpstrFilter = L"CBR/CBZ/RAR/ZIP Files (*.cbr;*.cbz;*.rar;*.zip)\0*.cbr;*.cbz;*.rar;*.zip\0All Files\0*.*\0";
-    ofn.lpstrFile = fileNames;
-    ofn.nMaxFile = sizeof(fileNames);
-    ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+   ZeroMemory(&ofn, sizeof(ofn));
+   ofn.lStructSize = sizeof(ofn);
+   ofn.hwndOwner = hwnd;
+   ofn.lpstrFilter = L"CBR/CBZ/RAR/ZIP Files (*.cbr;*.cbz;*.rar;*.zip)\0*.cbr;*.cbz;*.rar;*.zip\0All Files\0*.*\0";
+   ofn.lpstrFile = fileNames;
+   ofn.nMaxFile = sizeof(fileNames);
+   ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
 
-    if (GetOpenFileNameW(&ofn))
-    {
-        wchar_t *p = fileNames + wcslen(fileNames) + 1;
+   if (GetOpenFileNameW(&ofn))
+   {
+      wchar_t *p = fileNames + wcslen(fileNames) + 1;
 
-        if (*p == L'\0')
-        {
-            // Single file selected
-            AddUniqueToListBox(hwnd, hListBox, fileNames);
-        }
-        else
-        {
-            // Multiple files selected
-            wchar_t folder[MAX_PATH];
-            wcscpy(folder, fileNames);
+      if (*p == L'\0')
+      {
+         // Single file selected
+         AddUniqueToListBox(hwnd, hListBox, fileNames);
+      }
+      else
+      {
+         // Multiple files selected
+         wchar_t folder[MAX_PATH];
+         wcscpy(folder, fileNames);
 
-            while (*p)
-            {
-                wchar_t fullPath[MAX_PATH];
-                swprintf(fullPath, MAX_PATH, L"%s\\%s", folder, p);
-                AddUniqueToListBox(hwnd, hListBox, fullPath);
-                p += wcslen(p) + 1;
-            }
-        }
-    }
+         while (*p)
+         {
+            wchar_t fullPath[MAX_PATH];
+            swprintf(fullPath, MAX_PATH, L"%s\\%s", folder, p);
+            AddUniqueToListBox(hwnd, hListBox, fullPath);
+            p += wcslen(p) + 1;
+         }
+      }
+   }
 }
-
 
 void RemoveSelectedItems(HWND hListBox)
 {

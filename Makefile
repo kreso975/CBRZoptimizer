@@ -1,17 +1,18 @@
-CC = gcc
+CC = x86_64-w64-mingw32-gcc
 RC = windres
 CFLAGS = -mwindows -finput-charset=UTF-8 -fexec-charset=UTF-8
 CFLAGS += -DUNICODE -D_UNICODE -municode
 CFLAGS += -fwide-exec-charset=UCS-2LE
+CFLAGS += -Iexternal
 
 # Linker libraries (include uxtheme)
-LIBS = -lmsimg32 -lcomctl32 -luxtheme -lversion
+LIBS = -lmsimg32 -lcomctl32 -luxtheme -lversion -lshlwapi
 
 BIN_DIR = bin
 MANIFEST = CBRZoptimizer.exe.manifest
 
 MINIZ = src/miniz/miniz.c
-SRC = window.c functions.c aboutDialog.c $(MINIZ)
+SRC = window.c functions.c aboutDialog.c rar_handle.c $(MINIZ)
 OBJ = $(SRC:.c=.o)
 RES = resources.res
 
@@ -25,7 +26,7 @@ $(TARGET): $(OBJ) $(RES)
 	copy /Y "$(MANIFEST)" "$(BIN_DIR)\\"
 
 %.o: %.c
-	$(CC) -c $< -o $@
+	$(CC) -c $< -o $@ $(CFLAGS)
 
 resources.res: resources.rc $(MANIFEST)
 	$(RC) -O coff -i resources.rc -o $@

@@ -21,7 +21,6 @@ void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target);
 void delete_folder_recursive(const wchar_t *path);
 void replace_all(wchar_t *str, const wchar_t *old_sub, const wchar_t *new_sub);
 BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir);
-BOOL extract_cbr(HWND hwnd,const wchar_t *file_path, wchar_t *extracted_dir);
 BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder);
 BOOL optimize_images(HWND hwnd,const wchar_t *image_folder);
 BOOL create_cbz_with_miniz(HWND hwnd, const wchar_t *folder, const wchar_t *output_cbz);

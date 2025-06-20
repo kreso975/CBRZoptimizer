@@ -4,32 +4,33 @@
 // Version Information
 //
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,0,1,0
- PRODUCTVERSION 0,0,1,0
- FILEFLAGSMASK 0x3fL
- FILEFLAGS 0x0L
- FILEOS 0x40004L
- FILETYPE 0x1L
- FILESUBTYPE 0x0L
+FILEVERSION 0,0,1,0
+PRODUCTVERSION 0,0,1,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
 {
- BLOCK "StringFileInfo"
- {
-   BLOCK "040904B0"
-   {
-     VALUE "CompanyName",      "Stergo"
-     VALUE "FileDescription",  "CBR & CBZ Optimizer"
-     VALUE "FileVersion",      "0.0.1.0"
-     VALUE "InternalName",     "CBRZoptimizer"
-     VALUE "OriginalFilename", "CBRZoptimizer.exe"
-     VALUE "ProductName",      "CBRZoptimizer"
-     VALUE "ProductVersion",   "0.0.1.0"
-     VALUE "LegalCopyright",   "© 2025 Stergo. All rights reserved."
-   }
- }
- BLOCK "VarFileInfo"
- {
-   VALUE "Translation", 0x0409, 1200
- }
+BLOCK "StringFileInfo"
+{
+  BLOCK "040904E4"  // Change from 04B0 → 04E4 (Windows Latin 1 / Western European)
+  {
+    VALUE "CompanyName",      "Stergo"
+    VALUE "FileDescription",  "CBR & CBZ Optimizer"
+    VALUE "FileVersion",      "0.0.1.0"
+    VALUE "InternalName",     "CBRZoptimizer"
+    VALUE "OriginalFilename", "CBRZoptimizer.exe"
+    VALUE "ProductName",      "CBRZoptimizer"
+    VALUE "ProductVersion",   "0.0.1.0"
+    VALUE "LegalCopyright",   "© 2025 Stergo. All rights reserved."
+  }
+}
+
+BLOCK "VarFileInfo"
+{
+  VALUE "Translation", 0x0409, 0x04E4
+}
 }
 
 //

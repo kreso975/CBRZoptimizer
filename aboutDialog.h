@@ -4,5 +4,6 @@
 #include <windows.h>
 
 void ShowAboutWindow(HWND hwndOwner, HINSTANCE hInst);
+void GetFileVersionStr(wchar_t* buffer, DWORD bufferSize);
 
 #endif

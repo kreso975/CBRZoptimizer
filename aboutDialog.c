@@ -22,32 +22,22 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
          SendMessageW(hIconCtrl, STM_SETIMAGE, IMAGE_ICON, (LPARAM)hIcon);
       }
 
-      CreateWindowW(L"STATIC", L"CBRZ Optimizer",
-                    WS_CHILD | WS_VISIBLE,
-                    140, 20, 200, 20,
-                    hWnd, NULL, NULL, NULL);
+      CreateWindowW(L"STATIC", L"CBRZ Optimizer", WS_CHILD | WS_VISIBLE, 140, 20, 200, 20, hWnd, NULL, NULL, NULL);
 
-      HWND hwndAppVersionStatic = CreateWindowW(L"STATIC", L"v0.1.0",
-                    WS_CHILD | WS_VISIBLE,
-                    170, 50, 200, 20,
-                    hWnd, NULL, NULL, NULL);
+      HWND hwndAppVersionStatic = CreateWindowW(L"STATIC", L"v0.1.0", WS_CHILD | WS_VISIBLE, 170, 50, 200, 20, hWnd, NULL, NULL, NULL);
 
-      HWND hwndCopyRightStatic =CreateWindowW(L"STATIC", L"© 2025 by Krešimir Kokanović", 
-                    WS_CHILD | WS_VISIBLE,
-                    120, 75, 200, 20,
-                    hWnd, NULL, NULL, NULL);
+      HWND hwndCopyRightStatic = CreateWindowW(L"STATIC", L"© 2025 by Krešimir Kokanović", WS_CHILD | WS_VISIBLE, 120, 75, 200, 20, hWnd, NULL, NULL, NULL);
 
       LOGFONT lf = {0};
       GetObject((HFONT)GetStockObject(DEFAULT_GUI_FONT), sizeof(LOGFONT), &lf);
-      lf.lfHeight = -12;     // Negative = height in pixels; positive = point size (sort of)
+      lf.lfHeight = -12;       // Negative = height in pixels; positive = point size (sort of)
       lf.lfWeight = FW_NORMAL; // FW_NORMAL for regular weight
       // lf.lfItalic = TRUE; // uncomment for italic
 
       HFONT hAboutFont = CreateFontIndirect(&lf);
-      
+
       SendMessageW(hwndCopyRightStatic, WM_SETFONT, (WPARAM)hAboutFont, TRUE);
       SendMessageW(hwndAppVersionStatic, WM_SETFONT, (WPARAM)hAboutFont, TRUE);
-
 
       CreateWindowW(L"BUTTON", L"OK",
                     WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
@@ -78,8 +68,7 @@ void ShowAboutWindow(HWND hwndOwner, HINSTANCE hInst)
    wc.lpfnWndProc = AboutWndProc;
    wc.hInstance = hInst;
    wc.lpszClassName = CLASS_NAME;
-   wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1); // System dialog gray
-
+   wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1); // Dialog-like gray
 
    RegisterClassW(&wc);
 
@@ -92,6 +81,9 @@ void ShowAboutWindow(HWND hwndOwner, HINSTANCE hInst)
    int x = rcOwner.left + ((rcOwner.right - rcOwner.left) - width) / 2;
    int y = rcOwner.top + ((rcOwner.bottom - rcOwner.top) - height) / 2;
 
+   // Disable the main window to simulate modal behavior
+   EnableWindow(hwndOwner, FALSE);
+
    HWND hWnd = CreateWindowExW(
        WS_EX_DLGMODALFRAME,
        CLASS_NAME, L"About",
@@ -102,11 +94,16 @@ void ShowAboutWindow(HWND hwndOwner, HINSTANCE hInst)
    ShowWindow(hWnd, SW_SHOW);
    UpdateWindow(hWnd);
 
-   // Modal-style message loop
    MSG msg;
    while (IsWindow(hWnd) && GetMessageW(&msg, NULL, 0, 0))
    {
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
    }
+
+   // Re-enable the main window when done
+   EnableWindow(hwndOwner, TRUE);
+   SetActiveWindow(hwndOwner);
 }
+
+

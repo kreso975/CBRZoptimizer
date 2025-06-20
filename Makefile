@@ -5,7 +5,7 @@ CFLAGS += -DUNICODE -D_UNICODE -municode
 CFLAGS += -fwide-exec-charset=UCS-2LE
 
 # Linker libraries (include uxtheme)
-LIBS = -lmsimg32 -lcomctl32 -luxtheme
+LIBS = -lmsimg32 -lcomctl32 -luxtheme -lversion
 
 BIN_DIR = bin
 MANIFEST = CBRZoptimizer.exe.manifest

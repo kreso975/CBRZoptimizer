@@ -72,6 +72,7 @@
    "windows.h": "c",
    "d2d1.h": "c",
    "gui.h": "c",
-   "functions.h": "c"
+   "functions.h": "c",
+   "zip_handle.h": "c"
 }
 }

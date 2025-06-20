@@ -3,8 +3,7 @@
 #include <stdio.h>   // For swprintf, etc.
 #include <string.h>
 
-#include "src/miniz/miniz.h"
-
+#include "miniz.h"
 #include "functions.h"
 #include "gui.h"
 #include "zip_handle.h"

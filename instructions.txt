@@ -19,6 +19,27 @@ Created Makefile that compiles Windows version, run it in Terminal :
 mingw32-make
 
 
+/CBRZoptimizer
+├── src/
+│   ├── aboutDialog.c
+│   ├── aboutDialog.h
+│   ├── functions.c
+│   ├── functions.h
+│   ├── image_handle.c
+│   ├── image_handle.h
+│   ├── rar_handle.c
+│   ├── rar_handle.h
+│   ├── zip_handle.c
+│   ├── zip_handle.h
+│   └── stb/           # Already there
+│   └── miniz/         # Already there
+├── window.c
+├── window.h
+├── main.c             # Optional entry point if you separate wWinMain
+├── resource.h
+├── resources.rc
+├── Makefile
+└── README.md
 
 
 --

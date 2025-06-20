@@ -49,7 +49,6 @@ wchar_t IMAGE_QUALITY[8];
 wchar_t IMAGE_DPI[8];
 
 LabelCheckboxPair controls[] = {
-    {L"Extract files", L"hOutputRunExtract", 430, &hOutputRunExtract, &hOutputRunExtractLabel},
     {L"Image optimization", L"hOutputRunImageOptimizer", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel},
     {L"Compress folder", L"hOutputRunCompressor", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel},
     {L"Keep extracted folders", L"hOutputKeepExtracted", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel}};
@@ -449,10 +448,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       }
 
-      load_config_values(hTmpFolder, hOutputFolder, hWinrarPath,
-                         hSevenZipPath, hImageMagickPath, hImageDpi,
-                         hImageSize, hImageQualityValue, hImageQualitySlider,
-                         hOutputRunExtract, hOutputRunImageOptimizer,
+      load_config_values(hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageDpi,
+                         hImageSize, hImageQualityValue, hImageQualitySlider, hOutputRunImageOptimizer, 
                          hOutputRunCompressor, hOutputKeepExtracted, hOutputType, ARRAYSIZE(controls));
 
       SetWindowTextW(hImageQualityValue, IMAGE_QUALITY);
@@ -472,7 +469,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hTerminalGroup, 10, rect.bottom - 150, rect.right - 380, 100, TRUE);
       MoveWindow(hTerminalProcessingLabel, 20, rect.bottom - 125, 100, 20, TRUE);
       MoveWindow(hTerminalProcessingText, 120, rect.bottom - 125, 100, 20, TRUE);
-      MoveWindow(hTerminalText, 20, rect.bottom - 100, rect.right - 400, 50, TRUE);
+      MoveWindow(hTerminalText, 20, rect.bottom - 100, rect.right - 400, 46, TRUE);
       MoveWindow(hStartButton, rect.right - 460, rect.bottom - 40, 70, 30, TRUE);
       MoveWindow(hStopButton, rect.right - 560, rect.bottom - 40, 70, 30, TRUE);
       // MoveWindow(hStartButton, 20, rect.bottom - 50, 120, 30, TRUE);
@@ -515,12 +512,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // **Output Settings Fields**
       MoveWindow(hOutputTypeLabel, rect.right - 350, 430, 80, 20, TRUE);
       MoveWindow(hOutputType, rect.right - 280, 425, 120, 20, TRUE);
-      MoveWindow(hOutputRunExtract, rect.right - 150, 460, 20, 20, TRUE);
-      MoveWindow(hOutputRunExtractLabel, rect.right - 130, 462, 100, 20, TRUE);
       MoveWindow(hOutputRunImageOptimizer, rect.right - 350, 460, 20, 20, TRUE);
       MoveWindow(hOutputRunImageOptimizerLabel, rect.right - 330, 462, 140, 20, TRUE);
-      MoveWindow(hOutputRunCompressor, rect.right - 150, 480, 20, 20, TRUE);
-      MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 482, 110, 20, TRUE);
+      MoveWindow(hOutputRunCompressor, rect.right - 150, 460, 20, 20, TRUE);
+      MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 462, 110, 20, TRUE);
       MoveWindow(hOutputKeepExtracted, rect.right - 350, 480, 20, 20, TRUE);
       MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 482, 150, 20, TRUE);
 

@@ -4,7 +4,9 @@
       "name": "MinGW64",
       "includePath": [
         "${workspaceFolder}/**",
-        "D:/MyApps/ImageMagick/include"
+        "D:/MyApps/ImageMagick/include",
+        "${workspaceFolder}/src",
+        "${workspaceFolder}/external"
       ],
       "defines": [
         "_DEBUG",

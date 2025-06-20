@@ -2,20 +2,11 @@
 #include <wchar.h>
 #include <stdio.h>
 
+#include "aboutDialog.h"
+
 #define IDC_ABOUT_ICON 101
 #define IDC_ABOUT_OK 102
 
-typedef struct
-{
-   wchar_t CompanyName[128];
-   wchar_t FileDescription[128];
-   wchar_t FileVersion[64];
-   wchar_t InternalName[128];
-   wchar_t OriginalFilename[128];
-   wchar_t ProductName[128];
-   wchar_t ProductVersion[64];
-   wchar_t LegalCopyright[256];
-} AppVersionInfo;
 
 void GetAppVersionFields(AppVersionInfo *info)
 {

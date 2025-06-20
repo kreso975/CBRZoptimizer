@@ -1,7 +1,7 @@
-// #include "src/miniz/miniz.h"
 
 #include <windows.h>
-#include <shlobj.h> // For SHFileOperation
+#include <shlobj.h>  // For SHFileOperation
+#include <shlwapi.h> // If not already present
 #include <commdlg.h>
 #include <commctrl.h>
 #include <stdio.h>
@@ -15,13 +15,7 @@
 #include "resource.h"
 #include "rar_handle.h"
 #include "zip_handle.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "src/stb/stb_image.h"
-#include "src/stb/stb_image_write.h"
-#include "src/stb/stb_image_resize2.h"
+#include "image_handle.h"
 
 HBITMAP LoadBMP(const wchar_t *filename)
 {
@@ -81,6 +75,26 @@ BOOL is_zip_archive(const wchar_t *file_path)
    fclose(file);
 
    return (read == 4 && signature[0] == 'P' && signature[1] == 'K');
+}
+
+// Helper to validate if WINRAR_PATH is set and points to winrar.exe
+BOOL is_valid_winrar()
+{
+   const wchar_t *exe = wcsrchr(WINRAR_PATH, L'\\');
+   return wcslen(WINRAR_PATH) > 0 &&
+          GetFileAttributesW(WINRAR_PATH) != INVALID_FILE_ATTRIBUTES &&
+          exe && _wcsicmp(exe + 1, L"winrar.exe") == 0;
+}
+
+// Helper to clean filename (strip path + .cbr/.cbz)
+void get_clean_name(const wchar_t *file_path, wchar_t *base)
+{
+   const wchar_t *file_name = wcsrchr(file_path, L'\\');
+   file_name = file_name ? file_name + 1 : file_path;
+   wcscpy(base, file_name);
+   wchar_t *ext = wcsrchr(base, L'.');
+   if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
+      *ext = L'\0';
 }
 
 void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info)
@@ -226,261 +240,12 @@ void replace_all(wchar_t *str, const wchar_t *old_sub, const wchar_t *new_sub)
    wcscpy(str, buffer);
 }
 
-typedef struct
-{
-   wchar_t image_path[MAX_PATH];
-   HWND hwnd;
-   int target_height;
-} ImageTask;
-
-// STB safe write callback
-void stb_write_func(void *context, void *data, int size)
-{
-   FILE *fp = (FILE *)context;
-   fwrite(data, 1, size, fp);
-}
-
-DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
-{
-   ImageTask *task = (ImageTask *)lpParam;
-
-   wchar_t *pathW = task->image_path;
-   char utf8_path[MAX_PATH];
-   WideCharToMultiByte(CP_UTF8, 0, pathW, -1, utf8_path, MAX_PATH, NULL, NULL);
-
-   // Open image with Win32 API
-   HANDLE hFile = CreateFileW(pathW, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-   if (hFile == INVALID_HANDLE_VALUE)
-   {
-      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Unable to open file.");
-      free(task);
-      return 1;
-   }
-
-   DWORD fileSize = GetFileSize(hFile, NULL);
-   BYTE *buffer = malloc(fileSize);
-   if (!buffer)
-   {
-      CloseHandle(hFile);
-      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
-      free(task);
-      return 1;
-   }
-
-   DWORD bytesRead;
-   ReadFile(hFile, buffer, fileSize, &bytesRead, NULL);
-   CloseHandle(hFile);
-
-   int w, h, c;
-   unsigned char *input = stbi_load_from_memory(buffer, fileSize, &w, &h, &c, 3);
-   free(buffer);
-
-   if (!input)
-   {
-      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Failed to decode image.");
-      free(task);
-      return 1;
-   }
-
-   int newH = task->target_height > 0 ? task->target_height : 1;
-   int newW = max(1, w * newH / h);
-
-   unsigned char *resized = malloc(newW * newH * 3);
-   if (!resized)
-   {
-      stbi_image_free(input);
-      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
-      free(task);
-      return 1;
-   }
-
-   stbir_resize_uint8_linear(input, w, h, 0, resized, newW, newH, 0, STBIR_RGB);
-   stbi_image_free(input);
-
-   const wchar_t *extW = wcsrchr(pathW, L'.');
-   int result = 0;
-
-   FILE *fp = _wfopen(pathW, L"wb");
-   if (fp)
-   {
-      if (extW && _wcsicmp(extW, L".jpg") == 0)
-      {
-         result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(IMAGE_QUALITY));
-      }
-      else if (extW && _wcsicmp(extW, L".png") == 0)
-      {
-         result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, resized, newW * 3);
-      }
-      fclose(fp);
-   }
-
-   free(resized);
-
-   SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ",
-              result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");
-
-   free(task);
-   return 0;
-}
-
-// Fallback Image Optimization using STB
-BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
-{
-   if (g_StopProcessing)
-      return FALSE;
-
-   SYSTEM_INFO sysinfo;
-   GetSystemInfo(&sysinfo);
-   DWORD numCPU = sysinfo.dwNumberOfProcessors;
-
-   DWORD max_threads = max(1, min(numCPU * 2, 64));
-   const wchar_t *exts[] = {L"jpg", L"png"};
-   HANDLE *threads = malloc(sizeof(HANDLE) * max_threads);
-   int thread_count = 0;
-   wchar_t search_path[MAX_PATH], image_path[MAX_PATH];
-
-   for (int i = 0; i < 2; i++)
-   {
-      swprintf(search_path, MAX_PATH, L"%s\\*.%s", folder, exts[i]);
-      WIN32_FIND_DATAW ffd;
-      HANDLE hFind = FindFirstFileW(search_path, &ffd);
-      if (hFind == INVALID_HANDLE_VALUE)
-         continue;
-
-      do
-      {
-         if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-            continue;
-
-         if (g_StopProcessing)
-            break;
-
-         swprintf(image_path, MAX_PATH, L"%s\\%s", folder, ffd.cFileName);
-
-         ImageTask *task = malloc(sizeof(ImageTask));
-         if (!task)
-            continue;
-
-         wcscpy(task->image_path, image_path);
-         task->hwnd = hwnd;
-         task->target_height = _wtoi(IMAGE_SIZE);
-
-         threads[thread_count++] = CreateThread(NULL, 0, OptimizeImageThread, task, 0, NULL);
-
-         if (thread_count == max_threads)
-         {
-            WaitForMultipleObjects(thread_count, threads, TRUE, INFINITE);
-            for (int t = 0; t < thread_count; t++)
-               CloseHandle(threads[t]);
-            thread_count = 0;
-         }
-
-      } while (FindNextFileW(hFind, &ffd));
-
-      FindClose(hFind);
-      if (g_StopProcessing)
-         break;
-   }
-
-   if (thread_count > 0)
-   {
-      WaitForMultipleObjects(thread_count, threads, TRUE, INFINITE);
-      for (int t = 0; t < thread_count; t++)
-         CloseHandle(threads[t]);
-   }
-
-   free(threads);
-
-   if (!g_StopProcessing)
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"✅ All formats processed.");
-   else
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"🛑 Processing canceled.");
-
-   return !g_StopProcessing;
-}
-
-// Optimize Images
-BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
-{
-   wchar_t command[MAX_PATH], buffer[4096];
-   DWORD bytesRead;
-   HANDLE hReadPipe, hWritePipe;
-   SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
-   STARTUPINFOW si = {.cb = sizeof(si)};
-   PROCESS_INFORMATION pi;
-
-   TrimTrailingWhitespace(IMAGEMAGICK_PATH);
-
-   // Fallback early if IMAGEMAGICK_PATH is missing or invalid
-   if (wcslen(IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
-       (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
-      return fallback_optimize_images(hwnd, image_folder);
-   }
-
-   const wchar_t *exts[] = {L"jpg", L"png"};
-   MessageBoxW(hwnd, L"Running external tool: Enter", L"Image optimization", MB_OK | MB_ICONERROR);
-   for (int i = 0; i < 2; i++)
-   {
-      if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"Pipe creation failed. Using STB fallback.");
-         return fallback_optimize_images(hwnd, image_folder);
-      }
-
-      si.hStdOutput = hWritePipe;
-      si.hStdError = hWritePipe;
-      si.wShowWindow = SW_HIDE;
-      si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-
-      swprintf(command, MAX_PATH, L"\"%s\" mogrify -resize %s -quality %s \"%s\\*.%s\"",
-               IMAGEMAGICK_PATH, IMAGE_SIZE, IMAGE_QUALITY, image_folder, exts[i]);
-      MessageBoxW(hwnd, command, L"Image optimization", MB_OK | MB_ICONERROR);
-
-      if (!CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
-      {
-         CloseHandle(hWritePipe);
-         CloseHandle(hReadPipe);
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"Failed to execute. Falling back to STB.");
-         return fallback_optimize_images(hwnd, image_folder);
-      }
-
-      CloseHandle(hWritePipe);
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", command);
-
-      if (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0)
-      {
-         buffer[bytesRead] = '\0';
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", buffer);
-      }
-      else
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"No output captured.");
-      }
-
-      CloseHandle(hReadPipe);
-      CloseHandle(pi.hProcess);
-      CloseHandle(pi.hThread);
-   }
-
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"✔ All formats optimized.");
-   return TRUE;
-}
-
 void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 {
-   wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
-
-   const wchar_t *file_name = wcsrchr(file_path, L'\\');
-   file_name = file_name ? file_name + 1 : file_path;
-
    wchar_t base[MAX_PATH];
-   wcscpy(base, file_name);
-   wchar_t *ext = wcsrchr(base, L'.');
-   if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
-      *ext = L'\0';
+   get_clean_name(file_path, base);
 
+   wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
    swprintf(extracted_dir, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
    swprintf(archive_name, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
 
@@ -492,26 +257,9 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 
    if (type == ARCHIVE_CBR)
    {
-      BOOL useExternalTool = FALSE;
-      if (wcslen(WINRAR_PATH) > 0)
-      {
-         DWORD attrib = GetFileAttributesW(WINRAR_PATH);
-         if (attrib != INVALID_FILE_ATTRIBUTES)
-         {
-            const wchar_t *exeName = wcsrchr(WINRAR_PATH, L'\\');
-            if (exeName && (wcsicmp(exeName + 1, L"winrar.exe") == 0 || wcsicmp(exeName + 1, L"unrar.exe") == 0))
-               useExternalTool = TRUE;
-         }
-      }
-
-      if (useExternalTool)
-      {
-         extracted = extract_cbr(hwnd, file_path, extracted_dir);
-      }
-      else
-      {
-         extracted = extract_unrar_dll(hwnd, file_path, extracted_dir);
-      }
+      extracted = is_valid_winrar()
+                      ? extract_cbr(hwnd, file_path, extracted_dir)
+                      : extract_unrar_dll(hwnd, file_path, extracted_dir);
    }
    else if (type == ARCHIVE_CBZ)
    {
@@ -520,13 +268,13 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 
    if (!extracted)
       return;
-
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
-
    if (g_StopProcessing)
       return;
 
-   if (wcslen(IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+   // Image optimization
+   if (wcslen(IMAGEMAGICK_PATH) == 0 ||
+       GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
        (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
    {
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
@@ -540,91 +288,33 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    }
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
-
    if (g_StopProcessing)
       return;
 
-   // 💡 Decide output format based on dropdown and original type
-   BOOL useCBR = FALSE;
+   // Output format decision
+   wchar_t selectedText[32] = L"";
    int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
-   wchar_t selectedText[32];
    SendMessageW(hOutputType, CB_GETLBTEXT, selected, (LPARAM)selectedText);
 
-   // Check if WinRAR is present and valid
-   const wchar_t *exeName = wcsrchr(WINRAR_PATH, L'\\');
-   BOOL hasValidWinRAR = (wcslen(WINRAR_PATH) > 0 &&
-                          GetFileAttributesW(WINRAR_PATH) != INVALID_FILE_ATTRIBUTES &&
-                          exeName && _wcsicmp(exeName + 1, L"winrar.exe") == 0);
-
-   // Determine whether to use CBR output
-   if ((_wcsicmp(selectedText, L"CBR") == 0) || (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
+   BOOL useCBR = FALSE;
+   if ((_wcsicmp(selectedText, L"CBR") == 0) ||
+       (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
    {
-      if (hasValidWinRAR)
-         useCBR = TRUE;
+      useCBR = is_valid_winrar();
    }
 
    if (useCBR)
    {
       if (!create_cbr_archive(hwnd, extracted_dir, archive_name))
          return;
-
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Completed");
    }
    else
    {
       if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
          return;
-
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
    }
-}
-
-void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
-{
-   if (!IsWindow(hListBox) || !itemText || !*itemText)
-      return;
-
-   int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, -1, (LPARAM)itemText);
-
-   if (existingIndex == LB_ERR)
-   {
-      SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)itemText);
-   }
-   else
-   {
-      SendMessageW(hListBox, LB_SETSEL, FALSE, -1);                  // Deselect all
-      SendMessageW(hListBox, LB_SETSEL, TRUE, existingIndex);        // Select duplicate
-      SendMessageW(hListBox, LB_SETCARETINDEX, existingIndex, TRUE); // Focus on it
-
-      SetForegroundWindow(hwndOwner);
-      MessageBeep(MB_ICONWARNING);
-
-      MSGBOXPARAMSW mbp = {0};
-      mbp.cbSize = sizeof(MSGBOXPARAMSW);
-      mbp.hwndOwner = hwndOwner;
-      mbp.lpszText = L"This file is already in the list.";
-      mbp.lpszCaption = L"Duplicate Detected";
-      mbp.dwStyle = MB_OK | MB_ICONWARNING | MB_APPLMODAL;
-      mbp.dwLanguageId = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
-      MessageBoxIndirectW(&mbp);
-   }
-}
-
-// Process Dragged Files
-void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
-{
-   wchar_t filePath[MAX_PATH];
-   UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
-
-   for (UINT i = 0; i < fileCount; i++)
-   {
-      if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
-      {
-         AddUniqueToListBox(hwnd, hListBox, filePath);
-      }
-   }
-
-   DragFinish(hDrop);
 }
 
 // Start Processing
@@ -738,6 +428,54 @@ void OpenFileDialog(HWND hwnd, HWND hListBox)
    }
 }
 
+void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
+{
+   if (!IsWindow(hListBox) || !itemText || !*itemText)
+      return;
+
+   int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, -1, (LPARAM)itemText);
+
+   if (existingIndex == LB_ERR)
+   {
+      SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)itemText);
+   }
+   else
+   {
+      SendMessageW(hListBox, LB_SETSEL, FALSE, -1);                  // Deselect all
+      SendMessageW(hListBox, LB_SETSEL, TRUE, existingIndex);        // Select duplicate
+      SendMessageW(hListBox, LB_SETCARETINDEX, existingIndex, TRUE); // Focus on it
+
+      SetForegroundWindow(hwndOwner);
+      MessageBeep(MB_ICONWARNING);
+
+      MSGBOXPARAMSW mbp = {0};
+      mbp.cbSize = sizeof(MSGBOXPARAMSW);
+      mbp.hwndOwner = hwndOwner;
+      mbp.lpszText = L"This file is already in the list.";
+      mbp.lpszCaption = L"Duplicate Detected";
+      mbp.dwStyle = MB_OK | MB_ICONWARNING | MB_APPLMODAL;
+      mbp.dwLanguageId = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
+      MessageBoxIndirectW(&mbp);
+   }
+}
+
+// Process Dragged Files
+void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
+{
+   wchar_t filePath[MAX_PATH];
+   UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+
+   for (UINT i = 0; i < fileCount; i++)
+   {
+      if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
+      {
+         AddUniqueToListBox(hwnd, hListBox, filePath);
+      }
+   }
+
+   DragFinish(hDrop);
+}
+
 void RemoveSelectedItems(HWND hListBox)
 {
    int selectedCount = SendMessageW(hListBox, LB_GETSELCOUNT, 0, 0); // Get number of selected items
@@ -789,11 +527,9 @@ void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath)
    }
 }
 
-void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath,
-                        HWND hSevenZipPath, HWND hImageMagickPath, HWND hImageDpi,
-                        HWND hImageSize, HWND hImageQualityValue, HWND hImageQualitySlider,
-                        HWND hOutputRunExtract, HWND hOutputRunImageOptimizer,
-                        HWND hOutputRunCompressor, HWND hOutputKeepExtracted, HWND hOutputType,
+void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath, HWND hSevenZipPath, HWND hImageMagickPath,
+                        HWND hImageDpi, HWND hImageSize, HWND hImageQualityValue, HWND hImageQualitySlider,
+                        HWND hOutputRunImageOptimizer, HWND hOutputRunCompressor, HWND hOutputKeepExtracted, HWND hOutputType,
                         int controlCount)
 {
    wchar_t buffer[256];

@@ -4,6 +4,10 @@ CFLAGS = -mwindows -finput-charset=UTF-8 -fexec-charset=UTF-8
 CFLAGS += -DUNICODE -D_UNICODE -municode
 CFLAGS += -fwide-exec-charset=UCS-2LE
 CFLAGS += -Iexternal
+CFLAGS += -Isrc
+CFLAGS += -Isrc/miniz
+CFLAGS += -Isrc/stb
+CFLAGS += -I.
 
 # Linker libraries (include uxtheme)
 LIBS = -lmsimg32 -lcomctl32 -luxtheme -lversion -lshlwapi -lole32
@@ -12,7 +16,7 @@ BIN_DIR = bin
 MANIFEST = CBRZoptimizer.exe.manifest
 
 MINIZ = src/miniz/miniz.c
-SRC = window.c functions.c aboutDialog.c rar_handle.c zip_handle.c $(MINIZ)
+SRC = window.c src/functions.c src/aboutDialog.c src/rar_handle.c src/zip_handle.c src/image_handle.c $(MINIZ)
 OBJ = $(SRC:.c=.o)
 RES = resources.res
 

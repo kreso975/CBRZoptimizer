@@ -1,4 +1,0 @@
-SECTIONS
-{
-  .rsrc READ WRITE : {}
-}

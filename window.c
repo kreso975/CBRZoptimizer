@@ -26,7 +26,7 @@ HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
 
 WNDPROC gOriginalLabelProc = NULL;
 
-HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart;
+HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
 
 HWND hListBox, hStartButton, hStopButton, hAddButton, hRemoveButton, hSettingsWnd;
 HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageResize;
@@ -69,6 +69,7 @@ void AdjustLayout(HWND hwnd)
 
    // Keep buttons at the bottom
    SetWindowPos(hStartButton, NULL, 120, rcClient.bottom - 40, 100, 30, SWP_NOZORDER);
+   SetWindowPos(hStopButton, NULL, 220, rcClient.bottom - 40, 100, 30, SWP_NOZORDER);
 }
 
 WNDPROC oldListBoxProc; // Global variable to store the original ListBox procedure
@@ -138,6 +139,7 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 BOOL isHoverRemove = FALSE;
 BOOL isHoverAdd = FALSE;
 BOOL isHoverStart = FALSE;
+BOOL isHoverStop = FALSE;
 BOOL isHoverTmp = FALSE;
 BOOL isHoverOutput = FALSE;
 BOOL isHoverWinrar = FALSE;
@@ -160,6 +162,9 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hoverFlag = &isHoverAdd;
       break;
    case ID_START_BUTTON:
+      hoverFlag = &isHoverStart;
+      break;
+   case ID_STOP_BUTTON:
       hoverFlag = &isHoverStart;
       break;
    case ID_TMP_FOLDER_BROWSE:
@@ -338,9 +343,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          SendMessageW(hListBox, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
 
       hStartButton = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-                                   20, 230, 120, 30, hwnd, (HMENU)ID_START_BUTTON, NULL, NULL);
+                                   20, 230, 70, 30, hwnd, (HMENU)ID_START_BUTTON, NULL, NULL);
 
-      hButtonStart = LoadBMP(L"icons/go_logo_icon_30.bmp");
+      hButtonStart = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_START));
+      hButtonStop = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_STOP));
+
       if (!hButtonStart)
          MessageBoxW(hwnd, L"Failed to load start image!", L"Error", MB_OK | MB_ICONERROR);
       else
@@ -349,8 +356,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       SetWindowLongPtr(hStartButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hStartButton, GWLP_WNDPROC));
       SetWindowLongPtr(hStartButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
 
-      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                  20, 230, 60, 30, hwnd, (HMENU)ID_STOP_BUTTON, NULL, NULL);
+      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+                                  20, 230, 70, 30, hwnd, (HMENU)ID_STOP_BUTTON, NULL, NULL);
+
+      if (!hButtonStop)
+         MessageBoxW(hwnd, L"Failed to load stop image!", L"Error", MB_OK | MB_ICONERROR);
+      else
+         SendMessageW(hStopButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonStop);
+
+      SetWindowLongPtr(hStopButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hStopButton, GWLP_WNDPROC));
+      SetWindowLongPtr(hStopButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
 
       // **Settings Group (Right)**
       hSettingsGroup = CreateWindowW(L"BUTTON", L"Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -741,6 +756,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          bmpH = 30;
          isHover = isHoverStart;
       }
+      else if (lpdis->CtlID == ID_STOP_BUTTON)
+      {
+         hBmp = hButtonStop;
+         bmpW = 70;
+         bmpH = 30;
+         isHover = isHoverStart;
+      }
       else if (lpdis->CtlID == ID_TMP_FOLDER_BROWSE || lpdis->CtlID == ID_OUTPUT_FOLDER_BROWSE ||
                lpdis->CtlID == ID_IMAGEMAGICK_PATH_BROWSE || lpdis->CtlID == ID_SEVEN_ZIP_PATH_BROWSE ||
                lpdis->CtlID == ID_WINRAR_PATH_BROWSE)
@@ -775,7 +797,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          HGDIOBJ oldScaledBmp = SelectObject(hdcScaled, hScaledBmp);
 
          // Scale while respecting original size
-         StretchBlt(hdcScaled, 0, 0, bmpW, bmpH, hdcMem, 0, 0, (lpdis->CtlID == ID_START_BUTTON ? 70 : 32), (lpdis->CtlID == ID_START_BUTTON ? 30 : 32), SRCCOPY);
+         StretchBlt(hdcScaled, 0, 0, bmpW, bmpH, hdcMem, 0, 0, (lpdis->CtlID == ID_START_BUTTON || lpdis->CtlID == ID_STOP_BUTTON ? 70 : 32),
+                    (lpdis->CtlID == ID_START_BUTTON || lpdis->CtlID == ID_STOP_BUTTON ? 30 : 32), SRCCOPY);
 
          // Transparent rendering
          TransparentBlt(lpdis->hDC, x, y, bmpW, bmpH, hdcScaled, 0, 0, bmpW, bmpH, RGB(255, 255, 255));

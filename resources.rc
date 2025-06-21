@@ -37,6 +37,8 @@ BLOCK "VarFileInfo"
 // Application Icon
 //
 IDI_ICON1 ICON "icons/comic.ico"
-IDB_BUTTON_PLUS BITMAP "icons/plus-32b.bmp"
+IDB_BUTTON_PLUS BITMAP "icons/plus-32d.bmp"
 IDB_BUTTON_MINUS BITMAP "icons/minus-32b.bmp"
 IDB_BUTTON_ADD BITMAP "icons/new_add_insert_file_32.bmp"
+IDB_BUTTON_START BITMAP "icons/start_icon_30.bmp"
+IDB_BUTTON_STOP BITMAP "icons/stop_icon_30e.bmp"

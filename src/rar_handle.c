@@ -36,6 +36,7 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
    }
 
    HMODULE hUnrar = LoadLibraryW(UNRAR_DLL_PATH);
+   
    if (!hUnrar)
    {
       DWORD err = GetLastError();

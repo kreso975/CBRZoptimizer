@@ -51,7 +51,7 @@ typedef struct {
     unsigned int Reserved2[4];
 } RARHeaderDataEx;
 
-#define UNRAR_DLL_PATH L"external\\UnRAR64.dll"
+#define UNRAR_DLL_PATH L".\\UnRAR64.dll"
 
 // Status callback (optional - safe to remove if not used elsewhere)
 extern void SendStatus(HWND hwnd, UINT msg, const wchar_t *prefix, const wchar_t *message);

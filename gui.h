@@ -21,6 +21,8 @@ extern wchar_t IMAGEMAGICK_PATH[MAX_PATH];
 extern wchar_t IMAGE_SIZE[];
 extern wchar_t IMAGE_QUALITY[];
 extern wchar_t IMAGE_DPI[];
-
+extern BOOL g_RunImageOptimizer;
+extern BOOL g_RunCompressor;
+extern BOOL g_KeepExtracted;
 
 #endif // GUI_H

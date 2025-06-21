@@ -3,10 +3,7 @@
 #include <stdio.h>
 
 #include "aboutDialog.h"
-
-#define IDC_ABOUT_ICON 101
-#define IDC_ABOUT_OK 102
-
+#include "resource.h"
 
 void GetAppVersionFields(AppVersionInfo *info)
 {
@@ -72,15 +69,22 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
    switch (msg)
    {
    case WM_CREATE:
-      hIcon = (HICON)LoadImageW(NULL, L"icons/comic-64.ico", IMAGE_ICON, 64, 64, LR_LOADFROMFILE | LR_SHARED);
+      hIcon = (HICON)LoadImageW(
+          GetModuleHandleW(NULL),
+          MAKEINTRESOURCEW(IDI_ICON1),
+          IMAGE_ICON,
+          64, 64,
+          LR_DEFAULTCOLOR | LR_SHARED);
+
       if (hIcon)
       {
          HWND hIconCtrl = CreateWindowW(
              L"STATIC", NULL,
              WS_CHILD | WS_VISIBLE | SS_ICON,
              20, 20, 64, 64,
-             hWnd, (HMENU)IDC_ABOUT_ICON,
+             hWnd, NULL,
              (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+
          SendMessageW(hIconCtrl, STM_SETIMAGE, IMAGE_ICON, (LPARAM)hIcon);
       }
 

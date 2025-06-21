@@ -209,35 +209,33 @@ void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target)
 
 void delete_folder_recursive(const wchar_t *path)
 {
-   wchar_t temp[MAX_PATH];
-   swprintf(temp, sizeof(temp), L"%s\\", path); // Ensure trailing backslash
+    if (!path || wcslen(path) == 0)
+        return;
 
-   // Double null-terminate the string as required by SHFileOperation
-   temp[wcslen(temp) + 1] = L'\0';
+    // Prepare buffer with double null-termination
+    wchar_t temp[MAX_PATH + 2] = {0};
+    wcsncpy(temp, path, MAX_PATH);
+    size_t len = wcslen(temp);
 
-   SHFILEOPSTRUCTW op = {0};
-   op.wFunc = FO_DELETE;
-   op.pFrom = temp;
-   op.fFlags = FOF_NO_UI | FOF_SILENT | FOF_NOCONFIRMATION;
+    if (len > 0 && temp[len - 1] != L'\\')
+    {
+        temp[len] = L'\\';
+        temp[len + 1] = L'\0';
+    }
 
-   SHFileOperationW(&op);
-}
+    SHFILEOPSTRUCTW fileOp = {0};
+    fileOp.wFunc = FO_DELETE;
+    fileOp.pFrom = temp; // double null-terminated
+    fileOp.fFlags = FOF_NO_UI | FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR;
 
-void replace_all(wchar_t *str, const wchar_t *old_sub, const wchar_t *new_sub)
-{
-   wchar_t buffer[4096];
-   wchar_t *pos, *curr = str;
-   int old_len = wcslen(old_sub), new_len = wcslen(new_sub);
-   buffer[0] = L'\0';
+    int result = SHFileOperationW(&fileOp);
 
-   while ((pos = wcsstr(curr, old_sub)) != NULL)
-   {
-      wcsncat(buffer, curr, pos - curr);
-      wcscat(buffer, new_sub);
-      curr = pos + old_len;
-   }
-   wcscat(buffer, curr);
-   wcscpy(str, buffer);
+    // Optional: Handle errors (result == 0 means success)
+    if (result != 0)
+    {
+        // You can log or fallback here if deletion failed
+        // MessageBoxW(NULL, L"Failed to delete folder.", L"Error", MB_OK | MB_ICONERROR);
+    }
 }
 
 void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
@@ -272,48 +270,61 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    if (g_StopProcessing)
       return;
 
-   // Image optimization
-   if (wcslen(IMAGEMAGICK_PATH) == 0 ||
-       GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
-       (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
-      if (!fallback_optimize_images(hwnd, extracted_dir))
-         return;
-   }
-   else
-   {
-      if (!optimize_images(hwnd, extracted_dir))
-         return;
-   }
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
-   if (g_StopProcessing)
-      return;
+   // Image optimization
+   if (g_RunImageOptimizer)
+   {
+      if (wcslen(IMAGEMAGICK_PATH) == 0 ||
+          GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+          (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+      {
+         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
+         if (!fallback_optimize_images(hwnd, extracted_dir))
+            return;
+      }
+      else
+      {
+         if (!optimize_images(hwnd, extracted_dir))
+            return;
+      }
+
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
+      if (g_StopProcessing)
+         return;
+   }
 
    // Output format decision
-   wchar_t selectedText[32] = L"";
-   int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
-   SendMessageW(hOutputType, CB_GETLBTEXT, selected, (LPARAM)selectedText);
-
-   BOOL useCBR = FALSE;
-   if ((_wcsicmp(selectedText, L"CBR") == 0) ||
-       (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
+   if (g_RunCompressor)
    {
-      useCBR = is_valid_winrar();
+      wchar_t selectedText[32] = L"";
+      int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
+      SendMessageW(hOutputType, CB_GETLBTEXT, selected, (LPARAM)selectedText);
+
+      BOOL useCBR = FALSE;
+      if ((_wcsicmp(selectedText, L"CBR") == 0) ||
+          (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
+      {
+         useCBR = is_valid_winrar();
+      }
+
+      if (useCBR)
+      {
+         if (!create_cbr_archive(hwnd, extracted_dir, archive_name))
+            return;
+         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Completed");
+      }
+      else
+      {
+         if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
+            return;
+         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
+      }
    }
 
-   if (useCBR)
+   // REMOVE EXTRACTED FOLDER
+   if (!g_KeepExtracted)
    {
-      if (!create_cbr_archive(hwnd, extracted_dir, archive_name))
-         return;
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Completed");
-   }
-   else
-   {
-      if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
-         return;
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
+      delete_folder_recursive(extracted_dir);
    }
 }
 
@@ -586,6 +597,13 @@ void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath, H
       GetPrivateProfileStringW(L"Output", controls[i].configKey, L"false", buffer, sizeof(buffer), iniPath);
       SendMessageW(*controls[i].hCheckbox, BM_SETCHECK,
                    (wcscmp(buffer, L"true") == 0) ? BST_CHECKED : BST_UNCHECKED, 0);
+
+      if (wcscmp(controls[i].configKey, L"hOutputRunImageOptimizer") == 0)
+         g_RunImageOptimizer = (wcscmp(buffer, L"true") == 0);
+      else if (wcscmp(controls[i].configKey, L"hOutputRunCompressor") == 0)
+         g_RunCompressor = (wcscmp(buffer, L"true") == 0);
+      else if (wcscmp(controls[i].configKey, L"hOutputKeepExtracted") == 0)
+         g_KeepExtracted = (wcscmp(buffer, L"true") == 0);
    }
 
    // Output type dropdown behavior

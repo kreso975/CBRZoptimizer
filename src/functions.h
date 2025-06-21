@@ -21,7 +21,6 @@ void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t 
 BOOL find_folder_with_images(const wchar_t *basePath, wchar_t *outPath, int depth);
 void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target);
 void delete_folder_recursive(const wchar_t *path);
-void replace_all(wchar_t *str, const wchar_t *old_sub, const wchar_t *new_sub);
 
 void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path);
 void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox);

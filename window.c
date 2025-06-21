@@ -47,6 +47,9 @@ wchar_t SEVEN_ZIP_PATH[MAX_PATH];
 wchar_t IMAGE_SIZE[16];
 wchar_t IMAGE_QUALITY[8];
 wchar_t IMAGE_DPI[8];
+BOOL g_RunImageOptimizer = TRUE;
+BOOL g_RunCompressor = TRUE;
+BOOL g_KeepExtracted = TRUE;
 
 LabelCheckboxPair controls[] = {
     {L"Image optimization", L"hOutputRunImageOptimizer", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel},
@@ -92,33 +95,42 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       HWND hCheckbox = (HWND)GetProp(hwnd, L"CheckboxHandle");
       if (hCheckbox)
       {
-         LRESULT state = SendMessage(hCheckbox, BM_GETCHECK, 0, 0);
+         LRESULT state = SendMessageW(hCheckbox, BM_GETCHECK, 0, 0);
          LRESULT newState = (state == BST_CHECKED) ? BST_UNCHECKED : BST_CHECKED;
-         SendMessage(hCheckbox, BM_SETCHECK, newState, 0);
+         SendMessageW(hCheckbox, BM_SETCHECK, newState, 0);
 
          // Immediately save to config.ini here
          wchar_t iniPath[MAX_PATH];
          GetModuleFileNameW(NULL, iniPath, MAX_PATH);
          wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
          if (lastSlash)
-            *(lastSlash + 1) = '\0';
+            *(lastSlash + 1) = L'\0';
          wcscat(iniPath, L"config.ini");
 
-         extern LabelCheckboxPair controls[]; // Make sure LabelProc sees the array
+         extern LabelCheckboxPair controls[];
          extern const int controlCount;
+         extern BOOL g_RunImageOptimizer, g_RunCompressor, g_KeepExtracted;
 
          for (int i = 0; i < controlCount; ++i)
          {
             if (hCheckbox == *controls[i].hCheckbox)
             {
-               WritePrivateProfileStringW(L"Output", controls[i].configKey, (newState == BST_CHECKED) ? L"true" : L"false", iniPath);
+               const wchar_t *key = controls[i].configKey;
+               const wchar_t *value = (newState == BST_CHECKED) ? L"true" : L"false";
+               WritePrivateProfileStringW(L"Output", key, value, iniPath);
+
+               if (wcscmp(key, L"hOutputRunImageOptimizer") == 0)
+                  g_RunImageOptimizer = (newState == BST_CHECKED);
+               else if (wcscmp(key, L"hOutputRunCompressor") == 0)
+                  g_RunCompressor = (newState == BST_CHECKED);
+               else if (wcscmp(key, L"hOutputKeepExtracted") == 0)
+                  g_KeepExtracted = (newState == BST_CHECKED);
                break;
             }
          }
       }
    }
 
-   // Fall through to original label drawing behavior
    WNDPROC orig = (WNDPROC)GetProp(hwnd, L"OrigProc");
    return CallWindowProc(orig ? orig : DefWindowProc, hwnd, msg, wParam, lParam);
 }
@@ -283,8 +295,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
           70, 30, 32, 32, hwnd, (HMENU)ID_ADD_BUTTON, NULL, NULL);
 
       // Load BMP images
-      hButtonPlus = LoadBMP(L"icons/plus-32b.bmp");
-      hButtonMinus = LoadBMP(L"icons/minus-32b.bmp");
+      hButtonPlus = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_PLUS));
+      hButtonMinus = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_MINUS));
 
       if (!hButtonPlus)
          MessageBoxW(hwnd, L"Failed to load plus image!", L"Error", MB_OK | MB_ICONERROR);
@@ -344,7 +356,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hSettingsGroup = CreateWindowW(L"BUTTON", L"Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                      320, 10, 480, 210, hwnd, NULL, NULL, NULL);
 
-      hButtonBrowse = LoadBMP(L"icons/new_add_insert_file_32.bmp");
+      hButtonBrowse = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_ADD));
 
       typedef struct
       {
@@ -362,11 +374,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       } EditBrowseControl;
 
       EditBrowseControl inputs[] = {
-          {L"Temp Folder:", TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, L"icons/new_add_insert_file_32.bmp"},
-          {L"Output Folder:", OUTPUT_FOLDER, 60, 100, 200, ID_OUTPUT_FOLDER_BROWSE, &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, NULL, NULL},
-          {L"WinRAR Path:", WINRAR_PATH, 90, 100, 200, ID_WINRAR_PATH_BROWSE, &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, NULL, NULL},
-          {L"7-Zip Path:", SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, NULL, NULL},
-          {L"ImageMagick:", IMAGEMAGICK_PATH, 150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE, &hImageMagickLabel, &hImageMagickPath, &hImageMagickBrowse, NULL, NULL}};
+          {L"Temp Folder:", TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, NULL},
+          {L"Output Folder:", OUTPUT_FOLDER, 60, 100, 200, ID_OUTPUT_FOLDER_BROWSE, &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, &hButtonBrowse, NULL},
+          {L"WinRAR Path:", WINRAR_PATH, 90, 100, 200, ID_WINRAR_PATH_BROWSE, &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, &hButtonBrowse, NULL},
+          {L"7-Zip Path:", SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL},
+          {L"ImageMagick:", IMAGEMAGICK_PATH, 150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE, &hImageMagickLabel, &hImageMagickPath, &hImageMagickBrowse, &hButtonBrowse, NULL}};
 
       for (int i = 0; i < ARRAYSIZE(inputs); ++i)
       {
@@ -374,9 +386,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          *inputs[i].hEdit = CreateWindowW(L"EDIT", inputs[i].defaultText, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 120, inputs[i].y, inputs[i].editWidth, 20, hwnd, NULL, NULL, NULL);
          *inputs[i].hBrowse = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 320, inputs[i].y, 32, 32, hwnd, (HMENU)(UINT_PTR)inputs[i].browseId, NULL, NULL);
 
-         if (inputs[i].bmpPath && inputs[i].hBitmap)
+         if (inputs[i].hBitmap && *inputs[i].hBitmap)
          {
-            *inputs[i].hBitmap = (HBITMAP)LoadImageW(NULL, inputs[i].bmpPath, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+            SendMessageW(*inputs[i].hBrowse, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)*inputs[i].hBitmap);
          }
 
          if (*inputs[i].hBrowse)
@@ -449,7 +461,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
 
       load_config_values(hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageDpi,
-                         hImageSize, hImageQualityValue, hImageQualitySlider, hOutputRunImageOptimizer, 
+                         hImageSize, hImageQualityValue, hImageQualitySlider, hOutputRunImageOptimizer,
                          hOutputRunCompressor, hOutputKeepExtracted, hOutputType, ARRAYSIZE(controls));
 
       SetWindowTextW(hImageQualityValue, IMAGE_QUALITY);
@@ -620,14 +632,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
 
       // Save checkbox state when any of them is toggled
+      // Save checkbox state and update runtime flags
       for (int i = 0; i < controlCount; ++i)
       {
          if ((HWND)lParam == *controls[i].hCheckbox && HIWORD(wParam) == BN_CLICKED)
          {
             LRESULT checked = SendMessageW(*controls[i].hCheckbox, BM_GETCHECK, 0, 0);
-            WritePrivateProfileStringW(L"Output", controls[i].configKey,
-                                       (checked == BST_CHECKED) ? L"true" : L"false",
-                                       iniPath);
+            const wchar_t *value = (checked == BST_CHECKED) ? L"true" : L"false";
+
+            WritePrivateProfileStringW(L"Output", controls[i].configKey, value, iniPath);
+
+            // Update the corresponding runtime toggle
+            if (wcscmp(controls[i].configKey, L"hOutputRunImageOptimizer") == 0)
+               g_RunImageOptimizer = (checked == BST_CHECKED);
+            else if (wcscmp(controls[i].configKey, L"hOutputRunCompressor") == 0)
+               g_RunCompressor = (checked == BST_CHECKED);
+            else if (wcscmp(controls[i].configKey, L"hOutputKeepExtracted") == 0)
+               g_KeepExtracted = (checked == BST_CHECKED);
+
             break; // handled the toggle, done
          }
       }

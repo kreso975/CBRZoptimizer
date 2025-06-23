@@ -19,12 +19,12 @@
 #include <uxtheme.h>
 #pragma comment(lib, "uxtheme.lib")
 
+AppConfig g_config;
+
 volatile BOOL g_StopProcessing = FALSE;
 HINSTANCE g_hInstance;
 
 HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
-
-WNDPROC gOriginalLabelProc = NULL;
 
 HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
 
@@ -33,30 +33,52 @@ HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hI
 HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse;
 HWND hFilesGroup, hTerminalGroup, hSettingsGroup, hImageSettingsGroup, hOutputGroup;
 HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
-HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hImageMagickLabel, hImageQualityLabel, hImageQualityValue, hImageDpiLabel, hImageSizeLabel;
-HWND hImageQualitySlider, hImageDpi, hImageSize;
+HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel;
+HWND hImageTypeLabel, hImageResizeToLabel, hImageMagickLabel, hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
+HWND hImageType, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
 HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
 HWND hMenuBar, hFileMenu, hHelpMenu; // **Added Menu Handles**
 
-wchar_t TMP_FOLDER[MAX_PATH];
-wchar_t OUTPUT_FOLDER[MAX_PATH];
-wchar_t WINRAR_PATH[MAX_PATH];
-wchar_t IMAGEMAGICK_PATH[MAX_PATH];
-wchar_t SEVEN_ZIP_PATH[MAX_PATH];
-wchar_t IMAGE_SIZE[16];
+wchar_t IMAGE_SIZE_HEIGHT[16];
+wchar_t IMAGE_SIZE_WIDTH[16];
 wchar_t IMAGE_QUALITY[8];
-wchar_t IMAGE_DPI[8];
-BOOL g_RunImageOptimizer = TRUE;
-BOOL g_RunCompressor = TRUE;
-BOOL g_KeepExtracted = TRUE;
+wchar_t IMAGE_TYPE[10];
+
+// define + initialize all defaults in one shot
+AppConfig g_config = {
+    // Paths default to empty strings
+    .TMP_FOLDER = L"",
+    .OUTPUT_FOLDER = L"",
+    .WINRAR_PATH = L"",
+    .IMAGEMAGICK_PATH = L"",
+    .SEVEN_ZIP_PATH = L"",
+
+    // Image defaults
+    .IMAGE_TYPE = L"",
+    .resizeTo = FALSE,
+    .keepAspectRatio = FALSE,
+    .IMAGE_SIZE_WIDTH = L"",
+    .IMAGE_SIZE_HEIGHT = L"",
+    .IMAGE_QUALITY = L"",
+
+    // Output defaults
+    .runImageOptimizer = TRUE,
+    .runCompressor = TRUE,
+    .keepExtracted = TRUE};
 
 LabelCheckboxPair controls[] = {
     {L"Image optimization", L"hOutputRunImageOptimizer", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel},
     {L"Compress folder", L"hOutputRunCompressor", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel},
-    {L"Keep extracted folders", L"hOutputKeepExtracted", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel}};
+    {L"Keep extracted folders", L"hOutputKeepExtracted", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel},
+    {L"Resize image:", L"hImageResizeTo", 490, &hImageResizeTo, &hImageResizeToLabel},
+    {L"Keep Aspect Ratio", L"hhImageKeepAspectRatio", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel}};
 
 const int controlCount = sizeof(controls) / sizeof(controls[0]);
+
+const ImageTypeEntry g_ImageTypeOptions[] = {
+    {L"Portrait", IMAGE_TYPE_PORTRAIT},
+    {L"Landscape", IMAGE_TYPE_LANDSCAPE}};
 
 // Adjust UI elements dynamically when resizing
 void AdjustLayout(HWND hwnd)
@@ -70,6 +92,58 @@ void AdjustLayout(HWND hwnd)
    // Keep buttons at the bottom
    SetWindowPos(hStartButton, NULL, 120, rcClient.bottom - 40, 100, 30, SWP_NOZORDER);
    SetWindowPos(hStopButton, NULL, 220, rcClient.bottom - 40, 100, 30, SWP_NOZORDER);
+}
+
+void ToggleResizeImageCheckbox()
+{
+   // Enable/disable Keep Aspect Ratio controls based on ResizeTo
+   EnableWindow(hImageKeepAspectRatioLabel, g_config.resizeTo);
+   EnableWindow(hImageKeepAspectRatio, g_config.resizeTo);
+
+   if (!g_config.resizeTo)
+   {
+      // Resize is OFF → disable everything else
+      EnableWindow(hImageSizeWidthLabel, FALSE);
+      EnableWindow(hImageSizeWidth, FALSE);
+      EnableWindow(hImageSizeHeightLabel, FALSE);
+      EnableWindow(hImageSizeHeight, FALSE);
+      return;
+   }
+
+   // Resize is ON
+   if (g_config.keepAspectRatio)
+   {
+      if (wcscmp(IMAGE_TYPE, L"Portrait") == 0)
+      {
+         EnableWindow(hImageSizeWidthLabel, FALSE);
+         EnableWindow(hImageSizeWidth, FALSE);
+         EnableWindow(hImageSizeHeightLabel, TRUE);
+         EnableWindow(hImageSizeHeight, TRUE);
+      }
+      else if (wcscmp(IMAGE_TYPE, L"Landscape") == 0)
+      {
+         EnableWindow(hImageSizeWidthLabel, TRUE);
+         EnableWindow(hImageSizeWidth, TRUE);
+         EnableWindow(hImageSizeHeightLabel, FALSE);
+         EnableWindow(hImageSizeHeight, FALSE);
+      }
+      else
+      {
+         // Unknown label → disable both
+         EnableWindow(hImageSizeWidthLabel, FALSE);
+         EnableWindow(hImageSizeWidth, FALSE);
+         EnableWindow(hImageSizeHeightLabel, FALSE);
+         EnableWindow(hImageSizeHeight, FALSE);
+      }
+   }
+   else
+   {
+      // Aspect Ratio is OFF → enable both
+      EnableWindow(hImageSizeWidthLabel, TRUE);
+      EnableWindow(hImageSizeWidth, TRUE);
+      EnableWindow(hImageSizeHeightLabel, TRUE);
+      EnableWindow(hImageSizeHeight, TRUE);
+   }
 }
 
 WNDPROC oldListBoxProc; // Global variable to store the original ListBox procedure
@@ -110,7 +184,6 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
          extern LabelCheckboxPair controls[];
          extern const int controlCount;
-         extern BOOL g_RunImageOptimizer, g_RunCompressor, g_KeepExtracted;
 
          for (int i = 0; i < controlCount; ++i)
          {
@@ -121,13 +194,25 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                WritePrivateProfileStringW(L"Output", key, value, iniPath);
 
                if (wcscmp(key, L"hOutputRunImageOptimizer") == 0)
-                  g_RunImageOptimizer = (newState == BST_CHECKED);
+                  g_config.runImageOptimizer = (newState == BST_CHECKED);
                else if (wcscmp(key, L"hOutputRunCompressor") == 0)
-                  g_RunCompressor = (newState == BST_CHECKED);
+                  g_config.runCompressor = (newState == BST_CHECKED);
                else if (wcscmp(key, L"hOutputKeepExtracted") == 0)
-                  g_KeepExtracted = (newState == BST_CHECKED);
+                  g_config.keepExtracted = (newState == BST_CHECKED);
                break;
             }
+         }
+
+         if (hwnd == hImageResizeToLabel)
+         {
+            g_config.resizeTo = !g_config.resizeTo; // Flip the state first
+            ToggleResizeImageCheckbox();
+         }
+
+         if (hwnd == hImageKeepAspectRatioLabel)
+         {
+            g_config.keepAspectRatio = !g_config.keepAspectRatio; // Flip the state first
+            ToggleResizeImageCheckbox();
          }
       }
    }
@@ -165,7 +250,7 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hoverFlag = &isHoverStart;
       break;
    case ID_STOP_BUTTON:
-      hoverFlag = &isHoverStart;
+      hoverFlag = &isHoverStop;
       break;
    case ID_TMP_FOLDER_BROWSE:
       hoverFlag = &isHoverTmp;
@@ -211,23 +296,79 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    return 0;
 }
 
-BOOL isBrowseButtonHovered(UINT ctlId)
+void load_config_values()
 {
-   switch (ctlId)
+   wchar_t buffer[MAX_PATH];
+
+   // 🔍 Construct full path to config.ini
+   wchar_t iniPath[MAX_PATH];
+   GetModuleFileNameW(NULL, iniPath, MAX_PATH);
+   wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
+   if (lastSlash)
+      *(lastSlash + 1) = L'\0'; // Trim to folder path
+   wcscat(iniPath, L"config.ini");
+
+   typedef struct
    {
-   case ID_TMP_FOLDER_BROWSE:
-      return isHoverTmp;
-   case ID_OUTPUT_FOLDER_BROWSE:
-      return isHoverOutput;
-   case ID_WINRAR_PATH_BROWSE:
-      return isHoverWinrar;
-   case ID_SEVEN_ZIP_PATH_BROWSE:
-      return isHoverSevenZip;
-   case ID_IMAGEMAGICK_PATH_BROWSE:
-      return isHoverImageMagick;
-   default:
-      return FALSE;
+      const wchar_t *section;
+      const wchar_t *key;
+      HWND *hwnd;      // pointer to the HWND variable
+      wchar_t *target; // where to store the value (inside g_config)
+      DWORD size;      // buffer size in wchar_t (not bytes)
+   } ConfigBinding;
+
+   ConfigBinding bindings[] = {
+       {L"Paths", L"TMP_FOLDER", &hTmpFolder, g_config.TMP_FOLDER, MAX_PATH},
+       {L"Paths", L"OUTPUT_FOLDER", &hOutputFolder, g_config.OUTPUT_FOLDER, MAX_PATH},
+       {L"Paths", L"WINRAR_PATH", &hWinrarPath, g_config.WINRAR_PATH, MAX_PATH},
+       {L"Paths", L"SEVEN_ZIP_PATH", &hSevenZipPath, g_config.SEVEN_ZIP_PATH, MAX_PATH},
+       {L"Paths", L"IMAGEMAGICK_PATH", &hImageMagickPath, g_config.IMAGEMAGICK_PATH, MAX_PATH},
+       {L"Image", L"IMAGE_SIZE_WIDTH", &hImageSizeWidth, g_config.IMAGE_SIZE_WIDTH, IMG_DIM_LEN},
+       {L"Image", L"IMAGE_SIZE_HEIGHT", &hImageSizeHeight, g_config.IMAGE_SIZE_HEIGHT, IMG_DIM_LEN},
+       {L"Image", L"IMAGE_QUALITY", &hImageQualityValue, g_config.IMAGE_QUALITY, QUALITY_LEN}};
+
+   for (int i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i)
+   {
+      const ConfigBinding *b = &bindings[i];
+      GetPrivateProfileStringW(b->section, b->key, L"", buffer, MAX_PATH, iniPath);
+
+      if (b->hwnd && *b->hwnd)
+         SetWindowTextW(*b->hwnd, buffer);
+
+      if (b->target)
+      {
+         wcsncpy(b->target, buffer, b->size - 1);
+         b->target[b->size - 1] = L'\0';
+      }
+
+      // Hook: handle IMAGE_QUALITY slider update
+      if (wcscmp(b->key, L"IMAGE_QUALITY") == 0)
+      {
+         SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
+      }
    }
+
+   // Output options
+   for (int i = 0; i < controlCount; ++i)
+   {
+      GetPrivateProfileStringW(L"Output", controls[i].configKey, L"false", buffer, sizeof(buffer), iniPath);
+      SendMessageW(*controls[i].hCheckbox, BM_SETCHECK,
+                   (wcscmp(buffer, L"true") == 0) ? BST_CHECKED : BST_UNCHECKED, 0);
+
+      if (wcscmp(controls[i].configKey, L"hOutputRunImageOptimizer") == 0)
+         g_config.runImageOptimizer = (wcscmp(buffer, L"true") == 0);
+      else if (wcscmp(controls[i].configKey, L"hOutputRunCompressor") == 0)
+         g_config.runCompressor = (wcscmp(buffer, L"true") == 0);
+      else if (wcscmp(controls[i].configKey, L"hOutputKeepExtracted") == 0)
+         g_config.keepExtracted = (wcscmp(buffer, L"true") == 0);
+      else if (wcscmp(controls[i].configKey, L"hImageResizeTo") == 0)
+         g_config.resizeTo = (wcscmp(buffer, L"true") == 0);
+      else if (wcscmp(controls[i].configKey, L"hImageKeepAspectRatio") == 0)
+         g_config.keepAspectRatio = (wcscmp(buffer, L"true") == 0);
+   }
+
+   // Output type dropdown behavior
+   update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -320,8 +461,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       SetWindowLongPtr(hAddButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
 
       // **Listbox settings**
-      hListBox = CreateWindowW(L"LISTBOX", NULL,
-                               WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_EXTENDEDSEL | LBS_NOTIFY,
+      hListBox = CreateWindowW(L"LISTBOX", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_EXTENDEDSEL | LBS_NOTIFY,
                                20, 70, 270, 150, hwnd, (HMENU)ID_LISTBOX, NULL, NULL);
       if (hListBox)
          SendMessageW(hListBox, WM_SETFONT, (WPARAM)hFontInput, TRUE);
@@ -389,11 +529,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       } EditBrowseControl;
 
       EditBrowseControl inputs[] = {
-          {L"Temp Folder:", TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, NULL},
-          {L"Output Folder:", OUTPUT_FOLDER, 60, 100, 200, ID_OUTPUT_FOLDER_BROWSE, &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, &hButtonBrowse, NULL},
-          {L"WinRAR Path:", WINRAR_PATH, 90, 100, 200, ID_WINRAR_PATH_BROWSE, &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, &hButtonBrowse, NULL},
-          {L"7-Zip Path:", SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL},
-          {L"ImageMagick:", IMAGEMAGICK_PATH, 150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE, &hImageMagickLabel, &hImageMagickPath, &hImageMagickBrowse, &hButtonBrowse, NULL}};
+          {L"Temp Folder:", g_config.TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, NULL},
+          {L"Output Folder:", g_config.OUTPUT_FOLDER, 60, 100, 200, ID_OUTPUT_FOLDER_BROWSE, &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, &hButtonBrowse, NULL},
+          {L"WinRAR Path:", g_config.WINRAR_PATH, 90, 100, 200, ID_WINRAR_PATH_BROWSE, &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, &hButtonBrowse, NULL},
+          {L"7-Zip Path:", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL},
+          {L"ImageMagick:", g_config.IMAGEMAGICK_PATH, 150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE, &hImageMagickLabel, &hImageMagickPath, &hImageMagickBrowse, &hButtonBrowse, NULL}};
 
       for (int i = 0; i < ARRAYSIZE(inputs); ++i)
       {
@@ -425,23 +565,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hImageQualitySlider = CreateWindowW(L"msctls_trackbar32", NULL, WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
                                           460, 210, 220, 30, hwnd, (HMENU)ID_IMAGE_QUALITY_SLIDER, NULL, NULL);
 
-      hImageDpiLabel = CreateWindowW(L"STATIC", L"Image DPI:", WS_CHILD | WS_VISIBLE, 330, 250, 120, 20, hwnd, NULL, NULL, NULL);
-      SendMessageW(hImageDpiLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
-      hImageDpi = CreateWindowW(L"EDIT", IMAGE_DPI, WS_CHILD | WS_VISIBLE | WS_BORDER,
-                                460, 250, 120, 20, hwnd, NULL, NULL, NULL);
-      if (hImageDpi)
-         SendMessageW(hImageDpi, WM_SETFONT, (WPARAM)hFontInput, TRUE);
-
-      hImageSizeLabel = CreateWindowW(L"STATIC", L"Image Size:", WS_CHILD | WS_VISIBLE, 330, 280, 120, 20, hwnd, NULL, NULL, NULL);
-      SendMessageW(hImageSizeLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
-      hImageSize = CreateWindowW(L"EDIT", IMAGE_SIZE, WS_CHILD | WS_VISIBLE | WS_BORDER,
-                                 460, 280, 120, 20, hwnd, NULL, NULL, NULL);
-      if (hImageSize)
-         SendMessageW(hImageSize, WM_SETFONT, (WPARAM)hFontInput, TRUE);
-
       SendMessageW(hImageQualitySlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
       SendMessageW(hImageQualitySlider, TBM_SETTICFREQ, 5, 0);
       SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(IMAGE_QUALITY));
+
+      hImageTypeLabel = CreateWindowW(L"STATIC", L"Orientation:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hImageTypeLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+      hImageType = CreateWindowExW(0L, L"COMBOBOX", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
+                                   460, 280, 120, 100, hwnd,
+                                   (HMENU)ID_IMAGE_TYPE, // 👈 Add the control ID here
+                                   g_hInstance, NULL);
+
+      SendMessageW(hImageType, WM_SETFONT, (WPARAM)hFontInput, TRUE);
+
+      for (int i = 0; i < IMAGE_TYPE_COUNT; ++i)
+         SendMessageW(hImageType, CB_ADDSTRING, 0, (LPARAM)g_ImageTypeOptions[i].label);
+
+      // Optional: set default to first entry
+      SendMessageW(hImageType, CB_SETCURSEL, 0, 0);
+      // Update IMAGE_TYPE global from struct
+      wcsncpy(IMAGE_TYPE, g_ImageTypeOptions[0].label, sizeof(IMAGE_TYPE) / sizeof(wchar_t) - 1);
+      IMAGE_TYPE[sizeof(IMAGE_TYPE) / sizeof(wchar_t) - 1] = L'\0'; // Null-terminate
+
+      hImageSizeWidthLabel = CreateWindowW(L"STATIC", L"Width:", WS_CHILD | WS_VISIBLE, 330, 280, 60, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hImageSizeWidthLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+      hImageSizeWidth = CreateWindowW(L"EDIT", IMAGE_SIZE_WIDTH, WS_CHILD | WS_VISIBLE | WS_BORDER,
+                                      460, 280, 80, 20, hwnd, NULL, NULL, NULL);
+      if (hImageSizeWidth)
+         SendMessageW(hImageSizeWidth, WM_SETFONT, (WPARAM)hFontInput, TRUE);
+
+      hImageSizeHeightLabel = CreateWindowW(L"STATIC", L"Height:", WS_CHILD | WS_VISIBLE, 330, 280, 60, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hImageSizeHeightLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+      hImageSizeHeight = CreateWindowW(L"EDIT", IMAGE_SIZE_HEIGHT, WS_CHILD | WS_VISIBLE | WS_BORDER,
+                                       460, 280, 80, 20, hwnd, NULL, NULL, NULL);
+      if (hImageSizeHeight)
+         SendMessageW(hImageSizeHeight, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       // **Output Group (Right)**
       hOutputGroup = CreateWindowW(L"BUTTON", L"Output", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -449,16 +607,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       hOutputTypeLabel = CreateWindowW(L"STATIC", L"Format:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hwnd, NULL, NULL, NULL);
       SendMessageW(hOutputTypeLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
-      hOutputType = CreateWindowExW(
-          0L,
-          L"COMBOBOX",
-          NULL,
-          WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
-          460, 280, 120, 100,
-          hwnd,
-          (HMENU)ID_OUTPUT_TYPE, // 👈 Add the control ID here
-          g_hInstance,
-          NULL);
+      hOutputType = CreateWindowExW(0L, L"COMBOBOX", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
+                                    460, 280, 120, 100, hwnd, (HMENU)ID_OUTPUT_TYPE, // 👈 Add the control ID here
+                                    g_hInstance, NULL);
 
       SendMessageW(hOutputType, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
@@ -475,12 +626,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       }
 
-      load_config_values(hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageDpi,
-                         hImageSize, hImageQualityValue, hImageQualitySlider, hOutputRunImageOptimizer,
-                         hOutputRunCompressor, hOutputKeepExtracted, hOutputType, ARRAYSIZE(controls));
-
-      SetWindowTextW(hImageQualityValue, IMAGE_QUALITY);
-
+      load_config_values();
+      ToggleResizeImageCheckbox();
       InvalidateRect(hwnd, NULL, TRUE); // Ensure background updates
       UpdateWindow(hwnd);               // Force immediate redraw
       break;
@@ -531,12 +678,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hImageQualityLabel, rect.right - 350, 240, 100, 20, TRUE);
       MoveWindow(hImageQualityValue, rect.right - 250, 240, 100, 20, TRUE);
       MoveWindow(hImageQualitySlider, rect.right - 350, 265, 330, 30, TRUE);
-      MoveWindow(hImageDpiLabel, rect.right - 350, 320, 90, 20, TRUE);
-      MoveWindow(hImageDpi, rect.right - 240, 320, 120, 20, TRUE);
-      MoveWindow(hImageSizeLabel, rect.right - 350, 350, 90, 20, TRUE);
-      MoveWindow(hImageSize, rect.right - 240, 350, 120, 20, TRUE);
+      MoveWindow(hImageTypeLabel, rect.right - 350, 310, 90, 20, TRUE);
+      MoveWindow(hImageType, rect.right - 270, 305, 120, 20, TRUE);
 
-      // **Output Settings Fields**
+      MoveWindow(hImageResizeTo, rect.right - 350, 340, 20, 20, TRUE);
+      MoveWindow(hImageResizeToLabel, rect.right - 330, 342, 80, 20, TRUE);
+
+      MoveWindow(hImageSizeWidthLabel, rect.right - 245, 340, 80, 20, TRUE);
+      MoveWindow(hImageSizeWidth, rect.right - 205, 340, 50, 20, TRUE);
+      MoveWindow(hImageSizeHeightLabel, rect.right - 130, 340, 50, 20, TRUE);
+      MoveWindow(hImageSizeHeight, rect.right - 85, 340, 50, 20, TRUE);
+
+      MoveWindow(hImageKeepAspectRatio, rect.right - 350, 365, 20, 20, TRUE);
+      MoveWindow(hImageKeepAspectRatioLabel, rect.right - 330, 367, 200, 20, TRUE);
+
       MoveWindow(hOutputTypeLabel, rect.right - 350, 430, 80, 20, TRUE);
       MoveWindow(hOutputType, rect.right - 280, 425, 120, 20, TRUE);
       MoveWindow(hOutputRunImageOptimizer, rect.right - 350, 460, 20, 20, TRUE);
@@ -559,62 +714,62 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       if (LOWORD(wParam) == ID_TMP_FOLDER_BROWSE)
       {
-         BrowseFolder(hwnd, TMP_FOLDER);
-         WritePrivateProfileStringW(L"Paths", L"TMP_FOLDER", TMP_FOLDER, iniPath);
-         SetWindowTextW(hTmpFolder, TMP_FOLDER);
+         BrowseFolder(hwnd, g_config.TMP_FOLDER);
+         WritePrivateProfileStringW(L"Paths", L"TMP_FOLDER", g_config.TMP_FOLDER, iniPath);
+         SetWindowTextW(hTmpFolder, g_config.TMP_FOLDER);
       }
       else if (LOWORD(wParam) == ID_OUTPUT_FOLDER_BROWSE)
       {
-         BrowseFolder(hwnd, OUTPUT_FOLDER);
-         WritePrivateProfileStringW(L"Paths", L"OUTPUT_FOLDER", OUTPUT_FOLDER, iniPath);
-         SetWindowTextW(hOutputFolder, OUTPUT_FOLDER);
+         BrowseFolder(hwnd, g_config.OUTPUT_FOLDER);
+         WritePrivateProfileStringW(L"Paths", L"OUTPUT_FOLDER", g_config.OUTPUT_FOLDER, iniPath);
+         SetWindowTextW(hOutputFolder, g_config.OUTPUT_FOLDER);
       }
       else if (LOWORD(wParam) == ID_WINRAR_PATH_BROWSE)
       {
-         BrowseFile(hwnd, WINRAR_PATH);
-         WritePrivateProfileStringW(L"Paths", L"WINRAR_PATH", WINRAR_PATH, iniPath);
-         SetWindowTextW(hWinrarPath, WINRAR_PATH);
-         update_output_type_dropdown(hOutputType, WINRAR_PATH); // clean, direct
+         BrowseFile(hwnd, g_config.WINRAR_PATH);
+         WritePrivateProfileStringW(L"Paths", L"WINRAR_PATH", g_config.WINRAR_PATH, iniPath);
+         SetWindowTextW(hWinrarPath, g_config.WINRAR_PATH);
+         update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH); // clean, direct
       }
       else if (LOWORD(wParam) == ID_SEVEN_ZIP_PATH_BROWSE)
       {
-         BrowseFile(hwnd, SEVEN_ZIP_PATH);
-         WritePrivateProfileStringW(L"Paths", L"SEVEN_ZIP_PATH", SEVEN_ZIP_PATH, iniPath);
-         SetWindowTextW(hSevenZipPath, SEVEN_ZIP_PATH);
+         BrowseFile(hwnd, g_config.SEVEN_ZIP_PATH);
+         WritePrivateProfileStringW(L"Paths", L"SEVEN_ZIP_PATH", g_config.SEVEN_ZIP_PATH, iniPath);
+         SetWindowTextW(hSevenZipPath, g_config.SEVEN_ZIP_PATH);
       }
       else if (LOWORD(wParam) == ID_IMAGEMAGICK_PATH_BROWSE)
       {
-         BrowseFile(hwnd, IMAGEMAGICK_PATH);
-         WritePrivateProfileStringW(L"Paths", L"IMAGEMAGICK_PATH", IMAGEMAGICK_PATH, iniPath);
-         SetWindowTextW(hImageMagickPath, IMAGEMAGICK_PATH);
+         BrowseFile(hwnd, g_config.IMAGEMAGICK_PATH);
+         WritePrivateProfileStringW(L"Paths", L"IMAGEMAGICK_PATH", g_config.IMAGEMAGICK_PATH, iniPath);
+         SetWindowTextW(hImageMagickPath, g_config.IMAGEMAGICK_PATH);
       }
       else if (HIWORD(wParam) == EN_KILLFOCUS)
       {
          if ((HWND)lParam == hTmpFolder)
          {
-            GetWindowTextW(hTmpFolder, TMP_FOLDER, MAX_PATH);
+            GetWindowTextW(hTmpFolder, g_config.TMP_FOLDER, MAX_PATH);
             WritePrivateProfileStringW(L"Paths", L"TMP_FOLDER", L"", iniPath);
          }
          else if ((HWND)lParam == hOutputFolder)
          {
-            GetWindowTextW(hOutputFolder, OUTPUT_FOLDER, MAX_PATH);
+            GetWindowTextW(hOutputFolder, g_config.OUTPUT_FOLDER, MAX_PATH);
             WritePrivateProfileStringW(L"Paths", L"OUTPUT_FOLDER", L"", iniPath);
          }
          else if ((HWND)lParam == hWinrarPath)
          {
-            GetWindowTextW(hWinrarPath, WINRAR_PATH, MAX_PATH);
+            GetWindowTextW(hWinrarPath, g_config.WINRAR_PATH, MAX_PATH);
             WritePrivateProfileStringW(L"Paths", L"WINRAR_PATH", L"", iniPath);
 
-            update_output_type_dropdown(hOutputType, WINRAR_PATH); // clean, direct
+            update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH); // clean, direct
          }
          else if ((HWND)lParam == hSevenZipPath)
          {
-            GetWindowTextW(hSevenZipPath, SEVEN_ZIP_PATH, MAX_PATH);
+            GetWindowTextW(hSevenZipPath, g_config.SEVEN_ZIP_PATH, MAX_PATH);
             WritePrivateProfileStringW(L"Paths", L"SEVEN_ZIP_PATH", L"", iniPath);
          }
          else if ((HWND)lParam == hImageMagickPath)
          {
-            GetWindowTextW(hImageMagickPath, IMAGEMAGICK_PATH, MAX_PATH);
+            GetWindowTextW(hImageMagickPath, g_config.IMAGEMAGICK_PATH, MAX_PATH);
             WritePrivateProfileStringW(L"Paths", L"IMAGEMAGICK_PATH", L"", iniPath);
          }
       }
@@ -645,6 +800,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       {
          DestroyWindow(hwnd);
       }
+      else if (LOWORD(wParam) == ID_IMAGE_RESIZE_TO && HIWORD(wParam) == BN_CLICKED)
+      {
+         g_config.resizeTo = !g_config.resizeTo;
+         ToggleResizeImageCheckbox();
+      }
+      else if (LOWORD(wParam) == ID_IMAGE_KEEP_ASPECT_RATIO && HIWORD(wParam) == BN_CLICKED)
+      {
+         g_config.keepAspectRatio = !g_config.keepAspectRatio;
+         ToggleResizeImageCheckbox();
+      }
+      else if (LOWORD(wParam) == ID_IMAGE_TYPE && HIWORD(wParam) == CBN_SELCHANGE)
+      {
+         int selectedIndex = (int)SendMessageW(hImageType, CB_GETCURSEL, 0, 0);
+         if (selectedIndex != CB_ERR && selectedIndex < IMAGE_TYPE_COUNT)
+         {
+            // Copy the label from the struct array into global IMAGE_TYPE buffer
+            wcsncpy(IMAGE_TYPE, g_ImageTypeOptions[selectedIndex].label, sizeof(IMAGE_TYPE) / sizeof(wchar_t) - 1);
+            IMAGE_TYPE[sizeof(IMAGE_TYPE) / sizeof(wchar_t) - 1] = L'\0'; // Ensure null-termination
+            ToggleResizeImageCheckbox();                                  // React to change
+         }
+      }
 
       // Save checkbox state when any of them is toggled
       // Save checkbox state and update runtime flags
@@ -659,11 +835,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             // Update the corresponding runtime toggle
             if (wcscmp(controls[i].configKey, L"hOutputRunImageOptimizer") == 0)
-               g_RunImageOptimizer = (checked == BST_CHECKED);
+            {
+               OutputDebugStringW(L"Inside Image optimizer Check");
+               g_config.runImageOptimizer = (checked == BST_CHECKED);
+            }
             else if (wcscmp(controls[i].configKey, L"hOutputRunCompressor") == 0)
-               g_RunCompressor = (checked == BST_CHECKED);
+            {
+               OutputDebugStringW(L"Inside Compressor Check");
+               g_config.runCompressor = (checked == BST_CHECKED);
+            }
             else if (wcscmp(controls[i].configKey, L"hOutputKeepExtracted") == 0)
-               g_KeepExtracted = (checked == BST_CHECKED);
+            {
+               g_config.keepExtracted = (checked == BST_CHECKED);
+            }
+            else if (wcscmp(controls[i].configKey, L"hImageResizeTo") == 0)
+            {
+               g_config.resizeTo = (checked == BST_CHECKED);
+               ToggleResizeImageCheckbox();
+            }
+            else if (wcscmp(controls[i].configKey, L"hImageKeepAspectRatio") == 0)
+            {
+               g_config.keepAspectRatio = (checked == BST_CHECKED);
+               ToggleResizeImageCheckbox();
+            }
 
             break; // handled the toggle, done
          }
@@ -761,7 +955,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          hBmp = hButtonStop;
          bmpW = 70;
          bmpH = 30;
-         isHover = isHoverStart;
+         isHover = isHoverStop;
       }
       else if (lpdis->CtlID == ID_TMP_FOLDER_BROWSE || lpdis->CtlID == ID_OUTPUT_FOLDER_BROWSE ||
                lpdis->CtlID == ID_IMAGEMAGICK_PATH_BROWSE || lpdis->CtlID == ID_SEVEN_ZIP_PATH_BROWSE ||
@@ -770,7 +964,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          hBmp = hButtonBrowse;
          bmpW = 26;
          bmpH = 26;
-         isHover = isBrowseButtonHovered(lpdis->CtlID);
+         switch (lpdis->CtlID)
+         {
+         case ID_TMP_FOLDER_BROWSE:
+            isHover = isHoverTmp;
+            break;
+         case ID_OUTPUT_FOLDER_BROWSE:
+            isHover = isHoverOutput;
+            break;
+         case ID_WINRAR_PATH_BROWSE:
+            isHover = isHoverWinrar;
+            break;
+         case ID_SEVEN_ZIP_PATH_BROWSE:
+            isHover = isHoverSevenZip;
+            break;
+         case ID_IMAGEMAGICK_PATH_BROWSE:
+            isHover = isHoverImageMagick;
+            break;
+         }
       }
 
       if (hBmp)
@@ -820,7 +1031,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       HWND hStatic = (HWND)lParam;
 
       // List of transparent controls
-      HWND transparentControls[] = {hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hImageMagickLabel, hImageQualityLabel, hImageDpiLabel};
+      HWND transparentControls[] = {hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hImageMagickLabel, hImageQualityLabel};
       int transparentCount = sizeof(transparentControls) / sizeof(transparentControls[0]);
 
       // Check if the control is in the transparency list

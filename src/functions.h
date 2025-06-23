@@ -2,17 +2,19 @@
 
 #include <windows.h>
 
+typedef enum {
+    IMAGE_TYPE_PORTRAIT = 0,
+    IMAGE_TYPE_LANDSCAPE = 1,
+    IMAGE_TYPE_COUNT
+} ImageType;
 
 typedef struct {
-    const wchar_t  *labelText;
-    const wchar_t  *configKey;
-    int y;
-    HWND *hCheckbox;
-    HWND *hLabel;
-} LabelCheckboxPair;
+    const wchar_t *label;
+    ImageType type;
+} ImageTypeEntry;
 
-extern LabelCheckboxPair controls[];
-extern const int controlCount;
+extern const ImageTypeEntry g_ImageTypeOptions[];
+
 
 BOOL is_zip_archive(const wchar_t *file_path);
 BOOL is_valid_winrar();
@@ -32,10 +34,7 @@ void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop);
 void RemoveSelectedItems(HWND hListBox);
 HBITMAP LoadBMP(const wchar_t *filename);
 void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath);
-void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath, HWND hSevenZipPath, HWND hImageMagickPath, 
-                        HWND hImageDpi, HWND hImageSize, HWND hImageQualityValue, HWND hImageQualitySlider,
-                        HWND hOutputRunImageOptimizer, HWND hOutputRunCompressor, HWND hOutputKeepExtracted, HWND hOutputType,
-                        int controlCount);
+
 
 
 DWORD WINAPI ProcessingThread(LPVOID lpParam);

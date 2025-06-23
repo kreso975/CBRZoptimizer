@@ -80,9 +80,9 @@ BOOL is_zip_archive(const wchar_t *file_path)
 // Helper to validate if WINRAR_PATH is set and points to winrar.exe
 BOOL is_valid_winrar()
 {
-   const wchar_t *exe = wcsrchr(WINRAR_PATH, L'\\');
-   return wcslen(WINRAR_PATH) > 0 &&
-          GetFileAttributesW(WINRAR_PATH) != INVALID_FILE_ATTRIBUTES &&
+   const wchar_t *exe = wcsrchr(g_config.WINRAR_PATH, L'\\');
+   return wcslen(g_config.WINRAR_PATH) > 0 &&
+          GetFileAttributesW(g_config.WINRAR_PATH) != INVALID_FILE_ATTRIBUTES &&
           exe && _wcsicmp(exe + 1, L"winrar.exe") == 0;
 }
 
@@ -244,8 +244,8 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    get_clean_name(file_path, base);
 
    wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
-   swprintf(extracted_dir, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
-   swprintf(archive_name, MAX_PATH, L"%s\\%s", TMP_FOLDER, base);
+   swprintf(extracted_dir, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
+   swprintf(archive_name, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
 
    if (g_StopProcessing)
       return;
@@ -272,18 +272,20 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 
 
    // Image optimization
-   if (g_RunImageOptimizer)
+   if (g_config.runImageOptimizer)
    {
-      if (wcslen(IMAGEMAGICK_PATH) == 0 ||
-          GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
-          (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+      if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 ||
+          GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+          (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
       {
+         OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer3: ON\n" : L"ImageOptimizer3: OFF\n");
          SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
          if (!fallback_optimize_images(hwnd, extracted_dir))
             return;
       }
       else
       {
+         OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer4: ON\n" : L"ImageOptimizer4: OFF\n");
          if (!optimize_images(hwnd, extracted_dir))
             return;
       }
@@ -294,7 +296,7 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    }
 
    // Output format decision
-   if (g_RunCompressor)
+   if (g_config.runCompressor)
    {
       wchar_t selectedText[32] = L"";
       int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
@@ -322,7 +324,7 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    }
 
    // REMOVE EXTRACTED FOLDER
-   if (!g_KeepExtracted)
+   if (!g_config.keepExtracted)
    {
       delete_folder_recursive(extracted_dir);
    }
@@ -536,76 +538,4 @@ void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath)
       // No WinRAR, so select "CBZ" which is index 0
       SendMessageW(hOutputType, CB_SETCURSEL, 0, 0);
    }
-}
-
-void load_config_values(HWND hTmpFolder, HWND hOutputFolder, HWND hWinrarPath, HWND hSevenZipPath, HWND hImageMagickPath,
-                        HWND hImageDpi, HWND hImageSize, HWND hImageQualityValue, HWND hImageQualitySlider,
-                        HWND hOutputRunImageOptimizer, HWND hOutputRunCompressor, HWND hOutputKeepExtracted, HWND hOutputType,
-                        int controlCount)
-{
-   wchar_t buffer[256];
-
-   // 🔍 Construct full path to config.ini
-   wchar_t iniPath[MAX_PATH];
-   GetModuleFileNameW(NULL, iniPath, MAX_PATH);
-   wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
-   if (lastSlash)
-      *(lastSlash + 1) = L'\0'; // Trim to folder path
-   wcscat(iniPath, L"config.ini");
-
-   // Paths
-   GetPrivateProfileStringW(L"Paths", L"TMP_FOLDER", L"", buffer, sizeof(buffer), iniPath);
-   SetWindowTextW(hTmpFolder, buffer);
-   wcscpy(TMP_FOLDER, buffer);
-
-   GetPrivateProfileStringW(L"Paths", L"OUTPUT_FOLDER", L"", buffer, sizeof(buffer), iniPath);
-   SetWindowTextW(hOutputFolder, buffer);
-   wcscpy(OUTPUT_FOLDER, buffer);
-
-   GetPrivateProfileStringW(L"Paths", L"WINRAR_PATH", L"", buffer, sizeof(buffer), iniPath);
-   SetWindowTextW(hWinrarPath, buffer);
-   wcscpy(WINRAR_PATH, buffer);
-
-   GetPrivateProfileStringW(L"Paths", L"SEVEN_ZIP_PATH", L"", buffer, sizeof(buffer), iniPath);
-   SetWindowTextW(hSevenZipPath, buffer);
-   wcscpy(SEVEN_ZIP_PATH, buffer);
-
-   GetPrivateProfileStringW(L"Paths", L"IMAGEMAGICK_PATH", L"", buffer, sizeof(buffer), iniPath);
-   SetWindowTextW(hImageMagickPath, buffer);
-   wcscpy(IMAGEMAGICK_PATH, buffer);
-
-   // Image
-   GetPrivateProfileStringW(L"Image", L"IMAGE_DPI", L"", buffer, sizeof(buffer), iniPath);
-   SetWindowTextW(hImageDpi, buffer);
-   wcscpy(IMAGE_DPI, buffer);
-
-   GetPrivateProfileStringW(L"Image", L"IMAGE_SIZE", L"", buffer, sizeof(buffer), iniPath);
-   SetWindowTextW(hImageSize, buffer);
-   wcscpy(IMAGE_SIZE, buffer);
-
-   // Image Quality
-   GetPrivateProfileStringW(L"Image", L"IMAGE_QUALITY", L"35", buffer, sizeof(buffer), iniPath);
-   SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
-
-   // Also update the label showing the current image quality
-   SetWindowTextW(hImageQualityValue, buffer);
-   wcscpy(IMAGE_QUALITY, buffer); // Optional: keep IMAGE_QUALITY in sync
-
-   // Output options
-   for (int i = 0; i < controlCount; ++i)
-   {
-      GetPrivateProfileStringW(L"Output", controls[i].configKey, L"false", buffer, sizeof(buffer), iniPath);
-      SendMessageW(*controls[i].hCheckbox, BM_SETCHECK,
-                   (wcscmp(buffer, L"true") == 0) ? BST_CHECKED : BST_UNCHECKED, 0);
-
-      if (wcscmp(controls[i].configKey, L"hOutputRunImageOptimizer") == 0)
-         g_RunImageOptimizer = (wcscmp(buffer, L"true") == 0);
-      else if (wcscmp(controls[i].configKey, L"hOutputRunCompressor") == 0)
-         g_RunCompressor = (wcscmp(buffer, L"true") == 0);
-      else if (wcscmp(controls[i].configKey, L"hOutputKeepExtracted") == 0)
-         g_KeepExtracted = (wcscmp(buffer, L"true") == 0);
-   }
-
-   // Output type dropdown behavior
-   update_output_type_dropdown(hOutputType, WINRAR_PATH);
 }

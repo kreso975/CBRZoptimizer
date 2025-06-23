@@ -17,7 +17,7 @@ BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
    if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
       *ext = L'\0';
 
-   swprintf(baseFolder, MAX_PATH, L"%s\\%s", TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
+   swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
    {
@@ -153,13 +153,13 @@ BOOL create_cbz_with_miniz(HWND hwnd, const wchar_t *folder, const wchar_t *outp
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"Archive finalized successfully.");
 
-   if (OUTPUT_FOLDER[0] != L'\0')
+   if (g_config.OUTPUT_FOLDER[0] != L'\0')
    {
       const wchar_t *cbz_name = wcsrchr(output_cbz, L'\\');
       cbz_name = cbz_name ? cbz_name + 1 : output_cbz;
 
       wchar_t dest_cbzW[MAX_PATH];
-      swprintf(dest_cbzW, MAX_PATH, L"%s\\%s", OUTPUT_FOLDER, cbz_name);
+      swprintf(dest_cbzW, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbz_name);
 
       MoveFileW(output_cbz, dest_cbzW);
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"✔ Archive moved to OUTPUT_FOLDER.");
@@ -189,9 +189,9 @@ BOOL create_cbz_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *a
    swprintf(zip_file, MAX_PATH, L"%s.zip", cleanName);
    swprintf(cbz_file, MAX_PATH, L"%s.cbz", cleanName);
 
-   if (wcslen(SEVEN_ZIP_PATH) > 0)
+   if (wcslen(g_config.SEVEN_ZIP_PATH) > 0)
    {
-      DWORD attrib = GetFileAttributesW(SEVEN_ZIP_PATH);
+      DWORD attrib = GetFileAttributesW(g_config.SEVEN_ZIP_PATH);
       if (!(attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY)))
       {
          if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
@@ -205,7 +205,7 @@ BOOL create_cbz_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *a
          si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
 
          swprintf(command, 1024, L"\"%s\" a -mx9 \"%s\" \"%s\"",
-                  SEVEN_ZIP_PATH, zip_file, image_folder);
+                  g_config.SEVEN_ZIP_PATH, zip_file, image_folder);
 
          if (CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW,
                             NULL, NULL, &si, &pi))
@@ -228,13 +228,13 @@ BOOL create_cbz_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *a
             MoveFileW(zip_file, cbz_file);
             SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Renaming from .zip to .cbz");
 
-            if (OUTPUT_FOLDER[0] != L'\0')
+            if (g_config.OUTPUT_FOLDER[0] != L'\0')
             {
                const wchar_t *cbz_name = wcsrchr(cbz_file, L'\\');
                cbz_name = cbz_name ? cbz_name + 1 : cbz_file;
 
                wchar_t dest_cbz[MAX_PATH];
-               swprintf(dest_cbz, MAX_PATH, L"%s\\%s", OUTPUT_FOLDER, cbz_name);
+               swprintf(dest_cbz, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbz_name);
                MoveFileW(cbz_file, dest_cbz);
 
                SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"✔ Archive moved to OUTPUT_FOLDER.");

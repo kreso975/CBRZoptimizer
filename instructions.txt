@@ -34,8 +34,7 @@ mingw32-make
 │   └── stb/           # Already there
 │   └── miniz/         # Already there
 ├── window.c
-├── window.h
-├── main.c             # Optional entry point if you separate wWinMain
+├── gui.h             
 ├── resource.h
 ├── resources.rc
 ├── Makefile

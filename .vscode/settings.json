@@ -73,6 +73,7 @@
    "d2d1.h": "c",
    "gui.h": "c",
    "functions.h": "c",
-   "zip_handle.h": "c"
+   "zip_handle.h": "c",
+   "rar_handle.h": "c"
 }
 }

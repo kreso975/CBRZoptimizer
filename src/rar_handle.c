@@ -23,7 +23,7 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
    if (ext && _wcsicmp(ext, L".cbr") == 0)
       *ext = L'\0';
 
-   swprintf(baseFolder, MAX_PATH, L"%s\\%s", TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
+   swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
    {
@@ -105,7 +105,7 @@ BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
    if (ext && _wcsicmp(ext, L".cbr") == 0)
       *ext = L'\0';
 
-   swprintf(baseFolder, MAX_PATH, L"%s\\%s", TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
+   swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
    {
@@ -117,21 +117,21 @@ BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
    }
 
-   if (wcslen(WINRAR_PATH) == 0)
+   if (wcslen(g_config.WINRAR_PATH) == 0)
    {
       MessageBoxW(hwnd, L"WINRAR_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ WINRAR_PATH is not set.");
       return FALSE;
    }
 
-   DWORD attrib = GetFileAttributesW(WINRAR_PATH);
+   DWORD attrib = GetFileAttributesW(g_config.WINRAR_PATH);
    if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY))
    {
       MessageBoxW(hwnd, L"The specified WINRAR_PATH does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
       return FALSE;
    }
 
-   swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" \"%s\"", WINRAR_PATH, file_path, baseFolder);
+   swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" \"%s\"", g_config.WINRAR_PATH, file_path, baseFolder);
    STARTUPINFOW si = {sizeof(si)};
    si.dwFlags = STARTF_USESHOWWINDOW;
    si.wShowWindow = SW_HIDE;
@@ -167,15 +167,15 @@ BOOL create_cbr_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *a
     swprintf(rar_file, MAX_PATH, L"%s.rar", cleanName);
     swprintf(cbr_file, MAX_PATH, L"%s.cbr", cleanName);
 
-    if (wcslen(WINRAR_PATH) == 0 ||
-        GetFileAttributesW(WINRAR_PATH) == INVALID_FILE_ATTRIBUTES ||
-        (GetFileAttributesW(WINRAR_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+    if (wcslen(g_config.WINRAR_PATH) == 0 ||
+        GetFileAttributesW(g_config.WINRAR_PATH) == INVALID_FILE_ATTRIBUTES ||
+        (GetFileAttributesW(g_config.WINRAR_PATH) & FILE_ATTRIBUTE_DIRECTORY))
     {
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"❌ WINRAR_PATH is invalid or not set.");
         return FALSE;
     }
 
-    swprintf(command, 1024, L"\"%s\" a -m5 -ep1 -r \"%s\" \"%s\\*\"", WINRAR_PATH, rar_file, image_folder);
+    swprintf(command, 1024, L"\"%s\" a -m5 -ep1 -r \"%s\" \"%s\\*\"", g_config.WINRAR_PATH, rar_file, image_folder);
 
     STARTUPINFOW si = {sizeof(STARTUPINFOW)};
     si.dwFlags = STARTF_USESHOWWINDOW;
@@ -195,13 +195,13 @@ BOOL create_cbr_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *a
     MoveFileW(rar_file, cbr_file);
     SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Renamed .rar to .cbr");
 
-    if (OUTPUT_FOLDER[0] != L'\0')
+    if (g_config.OUTPUT_FOLDER[0] != L'\0')
     {
         const wchar_t *cbr_name = wcsrchr(cbr_file, L'\\');
         cbr_name = cbr_name ? cbr_name + 1 : cbr_file;
 
         wchar_t dest_cbr[MAX_PATH];
-        swprintf(dest_cbr, MAX_PATH, L"%s\\%s", OUTPUT_FOLDER, cbr_name);
+        swprintf(dest_cbr, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbr_name);
         MoveFileW(cbr_file, dest_cbr);
 
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"✔ Archive moved to OUTPUT_FOLDER.");

@@ -152,7 +152,7 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 
          wcscpy(task->image_path, image_path);
          task->hwnd = hwnd;
-         task->target_height = _wtoi(IMAGE_SIZE);
+         task->target_height = _wtoi(IMAGE_SIZE_HEIGHT);
 
          threads[thread_count++] = CreateThread(NULL, 0, OptimizeImageThread, task, 0, NULL);
 
@@ -198,18 +198,19 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
    STARTUPINFOW si = {.cb = sizeof(si)};
    PROCESS_INFORMATION pi;
 
-   TrimTrailingWhitespace(IMAGEMAGICK_PATH);
+   TrimTrailingWhitespace(g_config.IMAGEMAGICK_PATH);
 
    // Fallback early if IMAGEMAGICK_PATH is missing or invalid
-   if (wcslen(IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
-       (GetFileAttributesW(IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+   if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+       (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
    {
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
+      OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer1: ON\n" : L"ImageOptimizer1: OFF\n");
       return fallback_optimize_images(hwnd, image_folder);
    }
 
    const wchar_t *exts[] = {L"jpg", L"png"};
-   MessageBoxW(hwnd, L"Running external tool: Enter", L"Image optimization", MB_OK | MB_ICONERROR);
+   OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
    for (int i = 0; i < 2; i++)
    {
       if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
@@ -224,8 +225,7 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
       si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
 
       swprintf(command, MAX_PATH, L"\"%s\" mogrify -resize %s -quality %s \"%s\\*.%s\"",
-               IMAGEMAGICK_PATH, IMAGE_SIZE, IMAGE_QUALITY, image_folder, exts[i]);
-      MessageBoxW(hwnd, command, L"Image optimization", MB_OK | MB_ICONERROR);
+               g_config.IMAGEMAGICK_PATH, IMAGE_SIZE_HEIGHT, IMAGE_QUALITY, image_folder, exts[i]);
 
       if (!CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
       {

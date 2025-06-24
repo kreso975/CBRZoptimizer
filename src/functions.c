@@ -22,6 +22,23 @@ HBITMAP LoadBMP(const wchar_t *filename)
    return (HBITMAP)LoadImageW(NULL, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
 }
 
+
+// Disable all controls in the "FilesGroup"
+//EnableGroupElements(L"FilesGroup", FALSE);
+
+// Later, re-enable them
+//EnableGroupElements(L"FilesGroup", TRUE);
+
+void EnableGroupElements(LPCWSTR groupName, BOOL enable)
+{
+    for (int i = 0; i < groupElementsCount; ++i) {
+        if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr) {
+            EnableWindow(*groupElements[i].hwndPtr, enable);
+        }
+    }
+}
+
+
 DWORD WINAPI ProcessingThread(LPVOID lpParam)
 {
    HWND hwnd = (HWND)lpParam;
@@ -334,9 +351,6 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 // Start Processing
 void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox)
 {
-   ShowWindow(hTerminalProcessingLabel, SW_SHOW);
-   ShowWindow(hTerminalProcessingText, SW_SHOW);
-
    int total = SendMessage(hListBox, LB_GETCOUNT, 0, 0);
    int processed = 0;
 
@@ -366,8 +380,7 @@ void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox)
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"DONE", L"");
    MessageBeep(MB_ICONINFORMATION); // play warning sound
    MessageBoxW(hwnd, L"Processing Complete!", L"Info", MB_OK);
-   ShowWindow(hTerminalProcessingLabel, SW_HIDE);
-   ShowWindow(hTerminalProcessingText, SW_HIDE);
+   PostMessage(hwnd, WM_PROCESSING_DONE, 0, 0);
 }
 
 void BrowseFolder(HWND hwnd, wchar_t *targetPath)

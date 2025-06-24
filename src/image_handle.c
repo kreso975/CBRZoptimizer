@@ -337,7 +337,6 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
                image_folder,
                exts[i]);
       OutputDebugStringW(command);
-      MessageBoxW(NULL, command, L"ImageMagick Command", MB_OK | MB_ICONINFORMATION);
 
       if (!CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
       {

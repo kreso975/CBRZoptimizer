@@ -28,17 +28,26 @@ HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
 
 HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
 
+// Main controls
 HWND hListBox, hStartButton, hStopButton, hAddButton, hRemoveButton, hSettingsWnd;
+// Paths
 HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageResize;
 HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse;
+// Groups
 HWND hFilesGroup, hTerminalGroup, hSettingsGroup, hImageSettingsGroup, hOutputGroup;
+// Terminal
 HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
+// Labels
 HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel;
-HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hImageMagickLabel, hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
+HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hImageMagickLabel;
+HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
+// Image settings
 HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
+// Output options
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
 HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
-HWND hMenuBar, hFileMenu, hHelpMenu; // **Added Menu Handles**
+// Menu
+HWND hMenuBar, hFileMenu, hHelpMenu;
 
 // define + initialize all defaults in one shot
 AppConfig g_config = {
@@ -73,22 +82,63 @@ LabelCheckboxPair controls[] = {
 
 const int controlCount = sizeof(controls) / sizeof(controls[0]);
 
+GUIHandleEntry groupElements[] = {
+    {L"ListBox", L"FilesGroup", &hListBox},
+    {L"AddButton", L"FilesGroup", &hAddButton},
+    {L"RemoveButton", L"FilesGroup", &hRemoveButton},
+
+    {L"TmpFolder", L"PathsGroup", &hTmpFolder},
+    {L"TmpFolder Label", L"PathsGroup", &hTmpFolderLabel},
+    {L"OutputFolder", L"PathsGroup", &hOutputFolder},
+    {L"OutputFolder", L"PathsGroup", &hOutputFolderLabel},
+    {L"WinRAR Path", L"PathsGroup", &hWinrarPath},
+    {L"WinRAR Path", L"PathsGroup", &hWinrarLabel},
+    {L"7-Zip Path", L"PathsGroup", &hSevenZipPath},
+    {L"7-Zip Path", L"PathsGroup", &hSevenZipLabel},
+    {L"ImageMagick Path", L"PathsGroup", &hImageMagickPath},
+    {L"ImageMagick Path", L"PathsGroup", &hImageMagickLabel},
+
+    {L"Image Resize", L"ImageGroup", &hImageResize},
+    {L"ImageTypeLabel", L"ImageGroup", &hImageTypeLabel},
+    {L"hImageAllowUpscalingLabel", L"ImageGroup", &hImageAllowUpscalingLabel},
+    {L"hImageResizeToLabel", L"ImageGroup", &hImageResizeToLabel},
+    {L"hImageQualityLabel", L"ImageGroup", &hImageQualityLabel},
+    {L"hImageQualityValue", L"ImageGroup", &hImageQualityValue},
+    {L"hImageSizeWidthLabel", L"ImageGroup", &hImageSizeWidthLabel},
+    {L"hImageSizeHeightLabel", L"ImageGroup", &hImageSizeHeightLabel},
+    {L"hImageKeepAspectRatioLabel", L"ImageGroup", &hImageKeepAspectRatioLabel},
+    {L"hImageKeepAspectRatio", L"ImageGroup", &hImageKeepAspectRatio},
+    {L"hImageType", L"ImageGroup", &hImageType},
+    {L"hImageAllowUpscaling", L"ImageGroup", &hImageAllowUpscaling},
+    {L"hImageResizeTo", L"ImageGroup", &hImageResizeTo},
+    {L"hImageQualitySlider", L"ImageGroup", &hImageQualitySlider},
+    {L"hImageSizeWidth", L"ImageGroup", &hImageSizeWidth},
+    {L"hImageSizeHeight", L"ImageGroup", &hImageSizeHeight},
+
+    {L"hOutputKeepExtractedLabel", L"OutputGroup", &hOutputKeepExtractedLabel},
+    {L"hOutputKeepExtracted", L"OutputGroup", &hOutputKeepExtracted},
+    {L"hOutputRunExtractLabel", L"OutputGroup", &hOutputRunExtractLabel},
+    {L"hOutputRunExtract", L"OutputGroup", &hOutputRunExtract},
+    {L"hOutputType", L"OutputGroup", &hOutputType},
+    {L"hOutputTypeLabel", L"OutputGroup", &hOutputTypeLabel},
+    {L"hOutputRunImageOptimizer", L"OutputGroup", &hOutputRunImageOptimizer},
+    {L"hOutputRunImageOptimizerLabel", L"OutputGroup", &hOutputRunImageOptimizerLabel},
+    {L"hOutputRunCompressor", L"OutputGroup", &hOutputRunCompressor},
+    {L"hOutputRunCompressorLabel", L"OutputGroup", &hOutputRunCompressorLabel}};
+
+int groupElementsCount = sizeof(groupElements) / sizeof(groupElements[0]);
+
 const ImageTypeEntry g_ImageTypeOptions[] = {
     {L"Portrait", IMAGE_TYPE_PORTRAIT},
     {L"Landscape", IMAGE_TYPE_LANDSCAPE}};
 
-// Adjust UI elements dynamically when resizing
+// Refresh Window after disabling
 void AdjustLayout(HWND hwnd)
 {
-   RECT rcClient;
-   GetClientRect(hwnd, &rcClient);
-
-   // Resize ListBox to fit window
-   SetWindowPos(hListBox, NULL, 10, 10, rcClient.right - 20, rcClient.bottom - 200, SWP_NOZORDER);
-
-   // Keep buttons at the bottom
-   SetWindowPos(hStartButton, NULL, 120, rcClient.bottom - 40, 100, 30, SWP_NOZORDER);
-   SetWindowPos(hStopButton, NULL, 220, rcClient.bottom - 40, 100, 30, SWP_NOZORDER);
+   RECT rect;
+   GetWindowRect(hwnd, &rect);
+   SetWindowPos(hwnd, NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+                SWP_NOZORDER | SWP_NOMOVE | SWP_NOCOPYBITS | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
 void ToggleResizeImageCheckbox()
@@ -217,6 +267,16 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          if (hwnd == hImageResizeToLabel || hwnd == hImageKeepAspectRatioLabel)
          {
             ToggleResizeImageCheckbox();
+         }
+         // Handle label-triggered logic
+         if (hwnd == hOutputRunImageOptimizerLabel)
+         {
+            EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer);
+            if (g_config.runImageOptimizer)
+            {
+               ToggleResizeImageCheckbox();
+               AdjustLayout(hwnd);
+            }
          }
       }
    }
@@ -382,6 +442,8 @@ void load_config_values()
    }
 
    update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
+
+   EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -509,7 +571,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       SetWindowLongPtr(hStartButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hStartButton, GWLP_WNDPROC));
       SetWindowLongPtr(hStartButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
 
-      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | BS_OWNERDRAW,
                                   20, 230, 70, 30, hwnd, (HMENU)ID_STOP_BUTTON, NULL, NULL);
 
       if (!hButtonStop)
@@ -660,7 +722,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hTerminalProcessingText, 120, rect.bottom - 125, 100, 20, TRUE);
       MoveWindow(hTerminalText, 20, rect.bottom - 100, rect.right - 400, 46, TRUE);
       MoveWindow(hStartButton, rect.right - 460, rect.bottom - 40, 70, 30, TRUE);
-      MoveWindow(hStopButton, rect.right - 560, rect.bottom - 40, 70, 30, TRUE);
+      MoveWindow(hStopButton, rect.right - 460, rect.bottom - 40, 70, 30, TRUE);
       // MoveWindow(hStartButton, 20, rect.bottom - 50, 120, 30, TRUE);
 
       // **Keep Right Section Fixed, Move Elements Together**
@@ -807,6 +869,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       else if (LOWORD(wParam) == ID_START_BUTTON)
       {
          g_StopProcessing = FALSE;
+         ShowWindow(hStartButton, SW_HIDE);
+         ShowWindow(hStopButton, SW_SHOW);
+         ShowWindow(hTerminalProcessingLabel, SW_SHOW);
+         ShowWindow(hTerminalProcessingText, SW_SHOW);
+         EnableGroupElements(L"FilesGroup", FALSE);
+         EnableGroupElements(L"OutputGroup", FALSE);
+         EnableGroupElements(L"PathsGroup", FALSE);
+         EnableGroupElements(L"ImageGroup", FALSE);
          CreateThread(NULL, 0, ProcessingThread, hwnd, 0, NULL);
       }
 
@@ -868,6 +938,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                ToggleResizeImageCheckbox();
             }
+            if (wcscmp(key, L"hOutputRunImageOptimizer") == 0)
+            {
+               EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer);
+               if (g_config.runImageOptimizer)
+               {
+                  ToggleResizeImageCheckbox();
+                  AdjustLayout(hwnd);
+               }
+                        }
 
             break; // processed the toggle
          }
@@ -1076,6 +1155,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
       break;
 
+   case WM_PROCESSING_DONE:
+      ShowWindow(hStartButton, SW_SHOW);
+      ShowWindow(hStopButton, SW_HIDE);
+      ShowWindow(hTerminalProcessingLabel, SW_HIDE);
+      ShowWindow(hTerminalProcessingText, SW_HIDE);
+      EnableGroupElements(L"FilesGroup", TRUE);
+      EnableGroupElements(L"OutputGroup", TRUE);
+      EnableGroupElements(L"PathsGroup", TRUE);
+      EnableGroupElements(L"ImageGroup", TRUE);
+      ToggleResizeImageCheckbox(); // I dont know why but it must be called. somehow it losses values
+      AdjustLayout(hwnd);
+      break;
+
    case WM_UPDATE_TERMINAL_TEXT:
    {
       const wchar_t *msg = (const wchar_t *)lParam;
@@ -1083,6 +1175,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       free((void *)msg);
       return 0;
    }
+   break;
 
    case WM_UPDATE_PROCESSING_TEXT:
    {

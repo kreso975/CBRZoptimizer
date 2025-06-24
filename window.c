@@ -46,8 +46,6 @@ HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hIma
 // Output options
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
 HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
-// Menu
-HWND hMenuBar;
 
 // define + initialize all defaults in one shot
 AppConfig g_config = {

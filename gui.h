@@ -66,16 +66,9 @@ extern GUIHandleEntry groupElements[];
 extern int groupElementsCount;
 
 void EnableGroupElements(LPCWSTR groupName, BOOL enable);
-
 int MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type);
 
-LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam);
 void AdjustLayout(HWND hwnd);
 void ToggleResizeImageCheckbox(void);
-LRESULT CALLBACK ListBoxProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-
 
 #endif // GUI_H

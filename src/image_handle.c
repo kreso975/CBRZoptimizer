@@ -31,164 +31,242 @@ void stb_write_func(void *context, void *data, int size)
 
 DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
 {
-   ImageTask *task = (ImageTask *)lpParam;
+    ImageTask *task = (ImageTask *)lpParam;
 
-   wchar_t *pathW = task->image_path;
-   char utf8_path[MAX_PATH];
-   WideCharToMultiByte(CP_UTF8, 0, pathW, -1, utf8_path, MAX_PATH, NULL, NULL);
+    wchar_t *pathW = task->image_path;
+    char utf8_path[MAX_PATH];
+    WideCharToMultiByte(CP_UTF8, 0, pathW, -1, utf8_path, MAX_PATH, NULL, NULL);
 
-   // Open image with Win32 API
-   HANDLE hFile = CreateFileW(pathW, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-   if (hFile == INVALID_HANDLE_VALUE)
-   {
-      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Unable to open file.");
-      free(task);
-      return 1;
-   }
+    HANDLE hFile = CreateFileW(pathW, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Unable to open file.");
+        free(task);
+        return 1;
+    }
 
-   DWORD fileSize = GetFileSize(hFile, NULL);
-   BYTE *buffer = malloc(fileSize);
-   if (!buffer)
-   {
-      CloseHandle(hFile);
-      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
-      free(task);
-      return 1;
-   }
+    DWORD fileSize = GetFileSize(hFile, NULL);
+    BYTE *buffer = malloc(fileSize);
+    if (!buffer)
+    {
+        CloseHandle(hFile);
+        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
+        free(task);
+        return 1;
+    }
 
-   DWORD bytesRead;
-   ReadFile(hFile, buffer, fileSize, &bytesRead, NULL);
-   CloseHandle(hFile);
+    DWORD bytesRead;
+    ReadFile(hFile, buffer, fileSize, &bytesRead, NULL);
+    CloseHandle(hFile);
 
-   int w, h, c;
-   unsigned char *input = stbi_load_from_memory(buffer, fileSize, &w, &h, &c, 3);
-   free(buffer);
+    int w, h, c;
+    unsigned char *input = stbi_load_from_memory(buffer, fileSize, &w, &h, &c, 3);
+    free(buffer);
 
-   if (!input)
-   {
-      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Failed to decode image.");
-      free(task);
-      return 1;
-   }
+    if (!input)
+    {
+        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Failed to decode image.");
+        free(task);
+        return 1;
+    }
 
-   int newH = task->target_height > 0 ? task->target_height : 1;
-   int newW = max(1, w * newH / h);
+    BOOL should_resize = TRUE;
+    int newW = w;
+    int newH = h;
 
-   unsigned char *resized = malloc(newW * newH * 3);
-   if (!resized)
-   {
-      stbi_image_free(input);
-      SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
-      free(task);
-      return 1;
-   }
+    // Prevent upscaling if disallowed
+    if (!task->allow_upscale)
+    {
+        if (task->keep_aspect)
+        {
+            if ((wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && h <= task->target_height) ||
+                (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && w <= task->target_width))
+            {
+                should_resize = FALSE;
+            }
+        }
+        else
+        {
+            if (w <= task->target_width && h <= task->target_height)
+                should_resize = FALSE;
+        }
+    }
 
-   stbir_resize_uint8_linear(input, w, h, 0, resized, newW, newH, 0, STBIR_RGB);
-   stbi_image_free(input);
+    // Skip resize if dimensions already match and aspect doesn't matter
+    if (!task->keep_aspect && w == task->target_width && h == task->target_height)
+        should_resize = FALSE;
 
-   const wchar_t *extW = wcsrchr(pathW, L'.');
-   int result = 0;
+    if (!should_resize)
+    {
+        OutputDebugStringW(L"[STB] Skipping resize: upscaling not allowed or unnecessary\n");
+        stbi_image_free(input);
+        free(task);
+        return 0;
+    }
 
-   FILE *fp = _wfopen(pathW, L"wb");
-   if (fp)
-   {
-      if (extW && _wcsicmp(extW, L".jpg") == 0)
-      {
-         result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(g_config.IMAGE_QUALITY));
-      }
-      else if (extW && _wcsicmp(extW, L".png") == 0)
-      {
-         result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, resized, newW * 3);
-      }
-      fclose(fp);
-   }
+    // Calculate new dimensions
+    if (task->keep_aspect)
+    {
+        float aspect = (float)w / (float)h;
 
-   free(resized);
+        if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && task->target_height > 0)
+        {
+            newH = task->target_height;
+            newW = max(1, (int)(newH * aspect));
+        }
+        else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && task->target_width > 0)
+        {
+            newW = task->target_width;
+            newH = max(1, (int)(newW / aspect));
+        }
+        else if (task->target_width > 0 && task->target_height > 0)
+        {
+            float scaleW = (float)task->target_width / w;
+            float scaleH = (float)task->target_height / h;
+            float scale = (scaleW < scaleH) ? scaleW : scaleH;
+            newW = max(1, (int)(w * scale));
+            newH = max(1, (int)(h * scale));
+        }
+    }
+    else
+    {
+        newW = task->target_width;
+        newH = task->target_height;
+    }
 
-   SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ",
-              result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");
+    unsigned char *resized = malloc(newW * newH * 3);
+    if (!resized)
+    {
+        stbi_image_free(input);
+        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
+        free(task);
+        return 1;
+    }
 
-   free(task);
-   return 0;
+    stbir_resize_uint8_linear(input, w, h, 0, resized, newW, newH, 0, STBIR_RGB);
+    stbi_image_free(input);
+
+    const wchar_t *extW = wcsrchr(pathW, L'.');
+    int result = 0;
+
+    FILE *fp = _wfopen(pathW, L"wb");
+    if (fp)
+    {
+        if (extW && _wcsicmp(extW, L".jpg") == 0)
+        {
+            result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(g_config.IMAGE_QUALITY));
+        }
+        else if (extW && _wcsicmp(extW, L".png") == 0)
+        {
+            result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, resized, newW * 3);
+        }
+        fclose(fp);
+    }
+
+    free(resized);
+
+    SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ",
+               result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");
+
+    free(task);
+    return 0;
 }
+
 
 // Fallback Image Optimization using STB
 BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 {
-   if (g_StopProcessing)
-      return FALSE;
+    if (g_StopProcessing)
+        return FALSE;
 
-   SYSTEM_INFO sysinfo;
-   GetSystemInfo(&sysinfo);
-   DWORD numCPU = sysinfo.dwNumberOfProcessors;
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    DWORD numCPU = sysinfo.dwNumberOfProcessors;
+    DWORD max_threads = max(1, min(numCPU * 2, 64));
 
-   DWORD max_threads = max(1, min(numCPU * 2, 64));
-   const wchar_t *exts[] = {L"jpg", L"png"};
-   HANDLE *threads = malloc(sizeof(HANDLE) * max_threads);
-   int thread_count = 0;
-   wchar_t search_path[MAX_PATH], image_path[MAX_PATH];
+    const wchar_t *exts[] = {L"jpg", L"png"};
+    HANDLE *threads = malloc(sizeof(HANDLE) * max_threads);
+    int thread_count = 0;
 
-   for (int i = 0; i < 2; i++)
-   {
-      swprintf(search_path, MAX_PATH, L"%s\\*.%s", folder, exts[i]);
-      WIN32_FIND_DATAW ffd;
-      HANDLE hFind = FindFirstFileW(search_path, &ffd);
-      if (hFind == INVALID_HANDLE_VALUE)
-         continue;
+    wchar_t search_path[MAX_PATH], image_path[MAX_PATH];
 
-      do
-      {
-         if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    int target_width = _wtoi(g_config.IMAGE_SIZE_WIDTH);
+    int target_height = _wtoi(g_config.IMAGE_SIZE_HEIGHT);
+    BOOL keep_aspect = g_config.keepAspectRatio;
+    BOOL allow_upscale = g_config.allowUpscaling;
+
+    // Debug: dump global config into Output
+    wchar_t dbg[256];
+    swprintf(dbg, _countof(dbg),
+             L"[STB] ResizeTo: %d | Width: %d | Height: %d | Aspect: %d | Upscale: %d\n",
+             g_config.resizeTo, target_width, target_height,
+             keep_aspect, allow_upscale);
+    OutputDebugStringW(dbg);
+
+    for (int i = 0; i < 2; i++)
+    {
+        swprintf(search_path, MAX_PATH, L"%s\\*.%s", folder, exts[i]);
+
+        WIN32_FIND_DATAW ffd;
+        HANDLE hFind = FindFirstFileW(search_path, &ffd);
+        if (hFind == INVALID_HANDLE_VALUE)
             continue;
 
-         if (g_StopProcessing)
+        do
+        {
+            if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                continue;
+
+            if (g_StopProcessing)
+                break;
+
+            swprintf(image_path, MAX_PATH, L"%s\\%s", folder, ffd.cFileName);
+
+            ImageTask *task = malloc(sizeof(ImageTask));
+            if (!task)
+                continue;
+
+            wcscpy(task->image_path, image_path);
+            task->hwnd = hwnd;
+            task->target_width = target_width;
+            task->target_height = target_height;
+            task->keep_aspect = keep_aspect;
+            task->allow_upscale = allow_upscale;
+
+            threads[thread_count++] = CreateThread(NULL, 0, OptimizeImageThread, task, 0, NULL);
+
+            if (thread_count == max_threads)
+            {
+                WaitForMultipleObjects(thread_count, threads, TRUE, INFINITE);
+                for (int t = 0; t < thread_count; t++)
+                    CloseHandle(threads[t]);
+                thread_count = 0;
+            }
+
+        } while (FindNextFileW(hFind, &ffd));
+
+        FindClose(hFind);
+        if (g_StopProcessing)
             break;
+    }
 
-         swprintf(image_path, MAX_PATH, L"%s\\%s", folder, ffd.cFileName);
+    if (thread_count > 0)
+    {
+        WaitForMultipleObjects(thread_count, threads, TRUE, INFINITE);
+        for (int t = 0; t < thread_count; t++)
+            CloseHandle(threads[t]);
+    }
 
-         ImageTask *task = malloc(sizeof(ImageTask));
-         if (!task)
-            continue;
+    free(threads);
 
-         wcscpy(task->image_path, image_path);
-         task->hwnd = hwnd;
-         task->target_height = _wtoi(g_config.IMAGE_SIZE_HEIGHT);
-         OutputDebugStringW(g_config.IMAGE_SIZE_HEIGHT);
-         OutputDebugStringW(g_config.IMAGE_SIZE_WIDTH);
+    if (!g_StopProcessing)
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"✅ All formats processed.");
+    else
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"🛑 Processing canceled.");
 
-         threads[thread_count++] = CreateThread(NULL, 0, OptimizeImageThread, task, 0, NULL);
-
-         if (thread_count == max_threads)
-         {
-            WaitForMultipleObjects(thread_count, threads, TRUE, INFINITE);
-            for (int t = 0; t < thread_count; t++)
-               CloseHandle(threads[t]);
-            thread_count = 0;
-         }
-
-      } while (FindNextFileW(hFind, &ffd));
-
-      FindClose(hFind);
-      if (g_StopProcessing)
-         break;
-   }
-
-   if (thread_count > 0)
-   {
-      WaitForMultipleObjects(thread_count, threads, TRUE, INFINITE);
-      for (int t = 0; t < thread_count; t++)
-         CloseHandle(threads[t]);
-   }
-
-   free(threads);
-
-   if (!g_StopProcessing)
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"✅ All formats processed.");
-   else
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"🛑 Processing canceled.");
-
-   return !g_StopProcessing;
+    return !g_StopProcessing;
 }
+
 
 // Optimize Images
 BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)

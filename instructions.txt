@@ -47,3 +47,17 @@ File structure windows.c holds all GUI logic, function.h function.c hold all fun
 and some functions that GUI relies on. then resource.h, resources.rc , app loads config.ini as settings how to use functionalities. 
 We are using miniz built in C for work wit zip, it can also be set to use external app like 7zip. For rar external Unrar or winrar. 
 Image optimiyitaion internaly when external is not set we use STB libraries. Exernal if set is ImageMagick.
+
+
+app now has: Config-driven flexibility
+             Cross-tool consistency (ImageMagick + STB)
+             Clear separation of UI/data logic
+             Upscale/aspect logic that behaves intelligently
+             And debug logging that leaves no mystery behind
+
+A couple little niceties to consider before going public:
+
+🧼 INI schema validation or auto-repair (e.g., warning on bad entries)
+🕹️ Tray icon or system integration (if it's long-running)
+📖 README with screenshots, setup guide, and sample config.ini
+✅ Presets or profile support: maybe a couple example config bundles?

@@ -5,9 +5,12 @@
 
 // Define this struct if it's not declared elsewhere:
 typedef struct {
-    HWND hwnd;
     wchar_t image_path[MAX_PATH];
+    HWND hwnd;
+    int target_width;
     int target_height;
+    BOOL keep_aspect;
+    BOOL allow_upscale;
 } ImageTask;
 
 extern void TrimTrailingWhitespace(wchar_t *str);

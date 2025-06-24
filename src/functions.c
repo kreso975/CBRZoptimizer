@@ -136,7 +136,7 @@ BOOL find_folder_with_images(const wchar_t *basePath, wchar_t *outPath, int dept
    wchar_t search[MAX_PATH];
    swprintf(search, MAX_PATH, L"%s\\*", basePath);
    // 📌 Track current folder
-   MessageBoxW(NULL, basePath, L"Scanning:", MB_OK);
+   //MessageBoxW(NULL, basePath, L"Scanning:", MB_OK);
 
    WIN32_FIND_DATAW ffd;
    HANDLE hFind = FindFirstFileW(search, &ffd);
@@ -172,7 +172,7 @@ BOOL find_folder_with_images(const wchar_t *basePath, wchar_t *outPath, int dept
             {
                wcscpy(outPath, basePath);
                // 📌 Confirm image found location
-               MessageBoxW(NULL, basePath, L"Found image folder:", MB_OK);
+               //MessageBoxW(NULL, basePath, L"Found image folder:", MB_OK);
                found = TRUE;
                break;
             }
@@ -363,7 +363,8 @@ void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox)
       if (g_StopProcessing)
       {
          SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"CANCELLED", L"");
-         MessageBoxW(hwnd, L"Processing was canceled.", L"Canceled", MB_OK | MB_ICONEXCLAMATION);
+         MessageBeep(MB_ICONEXCLAMATION); // play warning sound
+         MessageBoxCentered(hwnd, L"Processing was canceled.", L"Info", MB_OK | MB_ICONEXCLAMATION);
          return;
       }
 
@@ -379,7 +380,7 @@ void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox)
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"DONE", L"");
    MessageBeep(MB_ICONINFORMATION); // play warning sound
-   MessageBoxW(hwnd, L"Processing Complete!", L"Info", MB_OK);
+   MessageBoxCentered(hwnd, L"Processing Complete!", L"Info", MB_OK | MB_ICONINFORMATION);
    PostMessage(hwnd, WM_PROCESSING_DONE, 0, 0);
 }
 
@@ -474,15 +475,7 @@ void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
 
       SetForegroundWindow(hwndOwner);
       MessageBeep(MB_ICONWARNING);
-
-      MSGBOXPARAMSW mbp = {0};
-      mbp.cbSize = sizeof(MSGBOXPARAMSW);
-      mbp.hwndOwner = hwndOwner;
-      mbp.lpszText = L"This file is already in the list.";
-      mbp.lpszCaption = L"Duplicate Detected";
-      mbp.dwStyle = MB_OK | MB_ICONWARNING | MB_APPLMODAL;
-      mbp.dwLanguageId = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
-      MessageBoxIndirectW(&mbp);
+      MessageBoxCentered(hwndOwner, L"This file is already in the list.", L"Duplicate Detected", MB_OK | MB_ICONWARNING);
    }
 }
 

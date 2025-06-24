@@ -8,6 +8,13 @@ CFLAGS += -Isrc
 CFLAGS += -Isrc/miniz
 CFLAGS += -Isrc/stb
 CFLAGS += -I.
+# Strict
+CFLAGS += -Wall -Wextra -Wpedantic -Wformat=2 -Wcast-align -Wconversion
+CFLAGS += -Wnull-dereference -Wdouble-promotion -Wstrict-prototypes
+CFLAGS += -Wmissing-prototypes -Wshadow -Wpointer-arith -Wunused -Wuninitialized
+# Debug and no optimization
+//CFLAGS += -g -O0
+CFLAGS += -g -O3
 
 # Linker libraries (include uxtheme)
 LIBS = -lmsimg32 -lcomctl32 -luxtheme -lversion -lshlwapi -lole32

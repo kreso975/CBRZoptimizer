@@ -11,13 +11,13 @@
 #include <sys/stat.h>
 #include <direct.h>
 #include <stdbool.h>
+#include "window.h"
 #include "resource.h"
 #include "gui.h"
 #include "functions.h"
 #include "aboutDialog.h"
 
 #include <uxtheme.h>
-#pragma comment(lib, "uxtheme.lib")
 
 AppConfig g_config;
 
@@ -47,7 +47,7 @@ HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hIma
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
 HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
 // Menu
-HWND hMenuBar, hFileMenu, hHelpMenu;
+HWND hMenuBar;
 
 // define + initialize all defaults in one shot
 AppConfig g_config = {
@@ -131,6 +131,33 @@ int groupElementsCount = sizeof(groupElements) / sizeof(groupElements[0]);
 const ImageTypeEntry g_ImageTypeOptions[] = {
     {L"Portrait", IMAGE_TYPE_PORTRAIT},
     {L"Landscape", IMAGE_TYPE_LANDSCAPE}};
+
+static HHOOK hHook;
+LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+   if (nCode == HCBT_ACTIVATE)
+   {
+      HWND hMsgBox = (HWND)wParam;
+
+      RECT rcOwner, rcMsgBox;
+      GetWindowRect(GetParent(hMsgBox), &rcOwner);
+      GetWindowRect(hMsgBox, &rcMsgBox);
+
+      int x = rcOwner.left + ((rcOwner.right - rcOwner.left) - (rcMsgBox.right - rcMsgBox.left)) / 2;
+      int y = rcOwner.top + ((rcOwner.bottom - rcOwner.top) - (rcMsgBox.bottom - rcMsgBox.top)) / 2;
+
+      SetWindowPos(hMsgBox, NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
+      UnhookWindowsHookEx(hHook);
+   }
+
+   return CallNextHookEx(hHook, nCode, wParam, lParam);
+}
+
+int MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type)
+{
+   hHook = SetWindowsHookEx(WH_CBT, CBTProc, NULL, GetCurrentThreadId());
+   return MessageBoxW(hwnd, text, caption, type);
+}
 
 // Refresh Window after disabling
 void AdjustLayout(HWND hwnd)
@@ -223,7 +250,7 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       {
          LRESULT state = SendMessageW(hCheckbox, BM_GETCHECK, 0, 0);
          LRESULT newState = (state == BST_CHECKED) ? BST_UNCHECKED : BST_CHECKED;
-         SendMessageW(hCheckbox, BM_SETCHECK, newState, 0);
+         SendMessageW(hCheckbox, BM_SETCHECK, (WPARAM)newState, 0);
 
          // Build config path
          wchar_t iniPath[MAX_PATH];
@@ -281,7 +308,10 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
    }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
    WNDPROC orig = (WNDPROC)GetProp(hwnd, L"OrigProc");
+#pragma GCC diagnostic pop
    return CallWindowProc(orig ? orig : DefWindowProc, hwnd, msg, wParam, lParam);
 }
 
@@ -299,7 +329,7 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
    static TRACKMOUSEEVENT tme;
    int ctlId = GetDlgCtrlID(hwnd);
-   BOOL handled = FALSE;
+
    BOOL *hoverFlag = NULL;
 
    switch (ctlId)
@@ -360,7 +390,7 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    return 0;
 }
 
-void load_config_values()
+void load_config_values(void)
 {
    wchar_t buffer[MAX_PATH];
 
@@ -392,7 +422,7 @@ void load_config_values()
        {L"Image", L"IMAGE_QUALITY", &hImageQualityValue, g_config.IMAGE_QUALITY, QUALITY_LEN},
        {L"Image", L"IMAGE_TYPE", &hImageType, g_config.IMAGE_TYPE, IMAGE_TYPE_LEN}};
 
-   for (int i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i)
+   for (size_t i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i)
    {
       const ConfigBinding *b = &bindings[i];
       GetPrivateProfileStringW(b->section, b->key, L"", buffer, MAX_PATH, iniPath);
@@ -412,7 +442,7 @@ void load_config_values()
             {
                if (wcscmp(buffer, g_ImageTypeOptions[j].label) == 0)
                {
-                  SendMessageW(hImageType, CB_SETCURSEL, j, 0);
+                  SendMessageW(hImageType, CB_SETCURSEL, (WPARAM)j, 0);
                   break;
                }
             }
@@ -448,8 +478,6 @@ void load_config_values()
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-   PAINTSTRUCT ps;
-   HDC hdc;
    RECT rect;
 
    switch (msg)
@@ -475,7 +503,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Emoji");
 
-      HBRUSH hGrayBrush;
+      static HBRUSH hGrayBrush = NULL;
       hGrayBrush = CreateSolidBrush(RGB(192, 192, 192));
 
       int defaultWidth = 960;  // 800 * 1.2 (20% increase)
@@ -483,14 +511,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hwnd, 100, 100, defaultWidth, defaultHeight, TRUE);
 
       HMENU hMenu = CreateMenu();
-      HMENU hFileMenu = CreatePopupMenu();
-      HMENU hHelpMenu = CreatePopupMenu();
+      HMENU menuFile = CreatePopupMenu();
+      HMENU helpAboutMenu = CreatePopupMenu();
 
-      AppendMenuW(hFileMenu, MF_STRING, ID_FILE_EXIT, L"Exit");
-      AppendMenuW(hHelpMenu, MF_STRING, ID_HELP_ABOUT, L"About");
+      AppendMenuW(menuFile, MF_STRING, ID_FILE_EXIT, L"Exit");
+      AppendMenuW(helpAboutMenu, MF_STRING, ID_HELP_ABOUT, L"About");
 
-      AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, L"File");
-      AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hHelpMenu, L"Help");
+      AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)menuFile, L"File");
+      AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)helpAboutMenu, L"Help");
 
       // Correct way to right-align "Help"
       MENUITEMINFO mii = {0};
@@ -498,7 +526,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       mii.fMask = MIIM_FTYPE;
       mii.fType = MFT_RIGHTJUSTIFY;
 
-      SetMenuItemInfo(hMenu, GetMenuItemCount(hMenu) - 1, TRUE, &mii);
+      SetMenuItemInfo(hMenu, (UINT)(GetMenuItemCount(hMenu) - 1), TRUE, &mii);
 
       SetMenu(hwnd, hMenu);
 
@@ -520,12 +548,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hButtonMinus = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_MINUS));
 
       if (!hButtonPlus)
-         MessageBoxW(hwnd, L"Failed to load plus image!", L"Error", MB_OK | MB_ICONERROR);
+      {
+         MessageBeep(MB_ICONERROR); // Play error sound
+         MessageBoxCentered(hwnd, L"Failed to load plus image!", L"Error", MB_OK | MB_ICONERROR);
+      }
       else
          SendMessageW(hAddButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonPlus);
 
       if (!hButtonMinus)
-         MessageBoxW(hwnd, L"Failed to load minus image!", L"Error", MB_OK | MB_ICONERROR);
+      {
+         MessageBeep(MB_ICONERROR); // Play error sound
+         MessageBoxCentered(hwnd, L"Failed to load minus image!", L"Error", MB_OK | MB_ICONERROR);
+      }
       else
          SendMessageW(hRemoveButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonMinus);
 
@@ -564,7 +598,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hButtonStop = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_STOP));
 
       if (!hButtonStart)
-         MessageBoxW(hwnd, L"Failed to load start image!", L"Error", MB_OK | MB_ICONERROR);
+      {
+         MessageBeep(MB_ICONERROR); // Play error sound
+         MessageBoxCentered(hwnd, L"Failed to load start image!", L"Error", MB_OK | MB_ICONERROR);
+      }
       else
          SendMessageW(hStartButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonStart);
 
@@ -575,7 +612,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                                   20, 230, 70, 30, hwnd, (HMENU)ID_STOP_BUTTON, NULL, NULL);
 
       if (!hButtonStop)
-         MessageBoxW(hwnd, L"Failed to load stop image!", L"Error", MB_OK | MB_ICONERROR);
+      {
+         MessageBeep(MB_ICONERROR); // Play error sound
+         MessageBoxCentered(hwnd, L"Failed to load stop image!", L"Error", MB_OK | MB_ICONERROR);
+      }
       else
          SendMessageW(hStopButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonStop);
 
@@ -610,7 +650,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
           {L"7-Zip Path:", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL},
           {L"ImageMagick:", g_config.IMAGEMAGICK_PATH, 150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE, &hImageMagickLabel, &hImageMagickPath, &hImageMagickBrowse, &hButtonBrowse, NULL}};
 
-      for (int i = 0; i < ARRAYSIZE(inputs); ++i)
+      for (size_t i = 0; i < ARRAYSIZE(inputs); ++i)
       {
          *inputs[i].hLabel = CreateWindowW(L"STATIC", inputs[i].labelText, WS_CHILD | WS_VISIBLE, 20, inputs[i].y, inputs[i].labelWidth, 20, hwnd, NULL, NULL, NULL);
          *inputs[i].hEdit = CreateWindowW(L"EDIT", inputs[i].defaultText, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 120, inputs[i].y, inputs[i].editWidth, 20, hwnd, NULL, NULL, NULL);
@@ -688,7 +728,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       SendMessageW(hOutputType, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
-      for (int i = 0; i < ARRAYSIZE(controls); ++i)
+      for (size_t i = 0; i < ARRAYSIZE(controls); ++i)
       {
          *controls[i].hCheckbox = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 350, controls[i].y, 20, 20, hwnd, NULL, NULL, NULL);
          *controls[i].hLabel = CreateWindowW(L"STATIC", controls[i].labelText, WS_CHILD | WS_VISIBLE | SS_NOTIFY, 330, controls[i].y, 180, 20, hwnd, NULL, NULL, NULL);
@@ -697,7 +737,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
 
          WNDPROC orig = (WNDPROC)SetWindowLongPtr(*controls[i].hLabel, GWLP_WNDPROC, (LONG_PTR)LabelProc);
+         #pragma GCC diagnostic push
+         #pragma GCC diagnostic ignored "-Wpedantic"
          SetProp(*controls[i].hLabel, L"OrigProc", (HANDLE)orig);
+         #pragma GCC diagnostic pop
          SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       }
 
@@ -869,6 +912,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       else if (LOWORD(wParam) == ID_START_BUTTON)
       {
          g_StopProcessing = FALSE;
+         int count = (int)SendMessage(hListBox, LB_GETCOUNT, 0, 0);
+         if (count <= 0)
+         {
+            MessageBeep(MB_ICONINFORMATION);
+            MessageBoxCentered(hwnd, L"No Files selected!", L"Info", MB_OK | MB_ICONINFORMATION);
+            return 0;
+         }
+
          ShowWindow(hStartButton, SW_HIDE);
          ShowWindow(hStopButton, SW_SHOW);
          ShowWindow(hTerminalProcessingLabel, SW_SHOW);
@@ -946,7 +997,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                   ToggleResizeImageCheckbox();
                   AdjustLayout(hwnd);
                }
-                        }
+            }
 
             break; // processed the toggle
          }
@@ -960,41 +1011,42 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
    case ID_IMAGE_QUALITY_SLIDER:
    {
-      int sliderPos = SendMessageW(hImageQualitySlider, TBM_GETPOS, 0, 0);
+      int sliderPos = (int)SendMessageW(hImageQualitySlider, TBM_GETPOS, 0, 0);
 
-      // Update IMAGE_QUALITY string
       swprintf(g_config.IMAGE_QUALITY, 16, L"%d", sliderPos);
-
       SetWindowTextW(hImageQualityValue, g_config.IMAGE_QUALITY);
 
-      // Write to INI
-      wchar_t iniPath[MAX_PATH];
-      GetModuleFileNameW(NULL, iniPath, MAX_PATH);
-      wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
-      if (lastSlash)
-         *(lastSlash + 1) = '\0';
-      wcscat(iniPath, L"config.ini");
+      wchar_t configPath[MAX_PATH];
+      GetModuleFileNameW(NULL, configPath, MAX_PATH);
 
-      WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, iniPath);
+      wchar_t *slashPos = wcsrchr(configPath, L'\\');
+      if (slashPos)
+         *(slashPos + 1) = L'\0';
+
+      wcscat(configPath, L"config.ini");
+
+      WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, configPath);
    }
    break;
+
    case WM_HSCROLL:
    {
       if ((HWND)lParam == hImageQualitySlider)
       {
-         int sliderPos = SendMessageW(hImageQualitySlider, TBM_GETPOS, 0, 0);
+         int sliderPos = (int)SendMessageW(hImageQualitySlider, TBM_GETPOS, 0, 0);
          swprintf(g_config.IMAGE_QUALITY, 16, L"%d", sliderPos);
          SetWindowTextW(hImageQualityValue, g_config.IMAGE_QUALITY);
 
-         // Save to INI
-         wchar_t iniPath[MAX_PATH];
-         GetModuleFileNameW(NULL, iniPath, MAX_PATH);
-         wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
-         if (lastSlash)
-            *(lastSlash + 1) = '\0';
-         wcscat(iniPath, L"config.ini");
+         wchar_t configPath[MAX_PATH];
+         GetModuleFileNameW(NULL, configPath, MAX_PATH);
 
-         WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, iniPath);
+         wchar_t *slashPos = wcsrchr(configPath, L'\\');
+         if (slashPos)
+            *(slashPos + 1) = L'\0';
+
+         wcscat(configPath, L"config.ini");
+
+         WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, configPath);
       }
    }
    break;
@@ -1008,7 +1060,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       break;
 
    case WM_DESTROY:
-      DeleteObject(hGrayBrush);
+      if (hGrayBrush)
+         DeleteObject(hGrayBrush);
       PostQuitMessage(0);
       break;
 
@@ -1150,8 +1203,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       if (hwnd == hTmpFolder || hwnd == hOutputFolder || hwnd == hWinrarPath || hwnd == hSevenZipPath || hwnd == hImageMagickPath)
       {
          int textLength = GetWindowTextLength(hwnd);
-         SendMessage(hwnd, EM_SETSEL, textLength, textLength); // Move caret to end
-         SendMessage(hwnd, EM_SCROLLCARET, 0, 0);              // Ensure caret is visible
+         SendMessage(hwnd, EM_SETSEL, (WPARAM)textLength, (LPARAM)textLength); // Move caret to end
+         SendMessage(hwnd, EM_SCROLLCARET, 0, 0);                              // Ensure caret is visible
       }
       break;
 
@@ -1170,22 +1223,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
    case WM_UPDATE_TERMINAL_TEXT:
    {
-      const wchar_t *msg = (const wchar_t *)lParam;
-      SetWindowTextW(hTerminalText, msg);
-      free((void *)msg);
+      const wchar_t *statusMsg = (const wchar_t *)lParam;
+      SetWindowTextW(hTerminalText, statusMsg);
+      free((void *)statusMsg);
       return 0;
    }
    break;
 
    case WM_UPDATE_PROCESSING_TEXT:
    {
-      const wchar_t *msg = (const wchar_t *)lParam;
-      SetWindowTextW(hTerminalProcessingText, msg);
+      const wchar_t *textMsg = (const wchar_t *)lParam;
+      SetWindowTextW(hTerminalProcessingText, textMsg);
 
       InvalidateRect(hTerminalProcessingText, NULL, TRUE); // force repaint
       UpdateWindow(hTerminalProcessingText);               // redraw immediately
 
-      free((void *)msg);
+      free((void *)textMsg);
       return 0;
    }
    }
@@ -1194,6 +1247,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
+   (void)hPrevInstance; // Silence warnning - cannot be without it 16bi legacy
+
    g_hInstance = hInstance;
    INITCOMMONCONTROLSEX icex = {sizeof(icex), ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES};
    icex.dwICC = ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES | ICC_BAR_CLASSES;
@@ -1217,9 +1272,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
    if (!RegisterClassExW(&wc))
       return -1;
 
-   HWND hwnd = CreateWindowW(L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT,
-                             500, 400, NULL, NULL, hInstance, NULL);
+   //HWND hwnd = CreateWindowW(L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT,
+   //                          500, 400, NULL, NULL, hInstance, NULL);
+HWND hwnd = CreateWindowExW(
+    0,                          // dwExStyle
+    L"ResizableWindowClass",    // lpClassName
+    L"CBRZ Optimizer",          // lpWindowName
+    WS_OVERLAPPEDWINDOW | WS_THICKFRAME,
+    CW_USEDEFAULT, CW_USEDEFAULT,
+    500, 400,
+    NULL, NULL, hInstance, NULL);
 
+    
    SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)wc.hIcon);
    SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)wc.hIconSm);
 
@@ -1228,7 +1292,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
    if (!IsThemeActive())
    {
-      MessageBoxW(NULL, L"Visual styles are NOT active!", L"Theme Status", MB_OK | MB_ICONWARNING);
+      MessageBeep(MB_ICONWARNING); // Play error sound
+      MessageBoxCentered(hwnd, L"Visual styles are NOT active!", L"Theme Status", MB_OK | MB_ICONWARNING);
    }
 
    // **Handle dragged files when launching the .exe (Skip empty entries)**
@@ -1256,5 +1321,5 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
       DispatchMessage(&msg);
    }
 
-   return msg.wParam;
+   return (int)msg.wParam;
 }

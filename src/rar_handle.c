@@ -42,7 +42,8 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
       DWORD err = GetLastError();
       wchar_t msg[256];
       swprintf(msg, 256, L"❌ LoadLibraryW failed. Error code: %lu", err);
-      MessageBoxW(hwnd, msg, L"UnRAR.dll Load Failed", MB_OK | MB_ICONERROR);
+      MessageBeep(MB_ICONERROR); // Play error sound
+      MessageBoxCentered(hwnd, L"UnRAR.dll Load Failed", L"UnRAR.dll", MB_OK | MB_ICONERROR);
       return FALSE;
    }
 
@@ -68,7 +69,9 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
    HANDLE hArchive = fnRAROpenArchiveEx(&openArchive);
    if (!hArchive || openArchive.OpenResult != 0)
    {
-      MessageBoxW(hwnd, L"❌ Failed to open archive.", archive_path, MB_OK | MB_ICONERROR);
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"❌ Failed to open archive.", archive_path);
+      MessageBeep(MB_ICONERROR); // Play error sound
+      MessageBoxCentered(hwnd, L"Failed to open archive.", L"Archive Error", MB_OK | MB_ICONERROR);
       FreeLibrary(hUnrar);
       return FALSE;
    }
@@ -82,7 +85,9 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
 
       if (fnRARProcessFileW(hArchive, RAR_EXTRACT, baseFolder, NULL) != 0)
       {
-         MessageBoxW(hwnd, L"⚠️ Could not extract file:", header.FileNameW, MB_OK | MB_ICONWARNING);
+         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"⚠️ Could not extract file:", header.FileNameW);
+         MessageBeep(MB_ICONERROR); // Play error sound
+         MessageBoxCentered(hwnd, L"Could not extract file", L"Extract Error", MB_OK | MB_ICONERROR);
       }
    }
 
@@ -111,7 +116,9 @@ BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
    {
       if (!CreateDirectoryW(baseFolder, NULL))
       {
-         MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
+         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting fail: ", baseFolder);
+         MessageBeep(MB_ICONERROR); // Play error sound
+         MessageBoxCentered(hwnd, L"Failed to create extraction directory", L"Extract Error", MB_OK | MB_ICONERROR);
          return FALSE;
       }
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
@@ -119,15 +126,17 @@ BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 
    if (wcslen(g_config.WINRAR_PATH) == 0)
    {
-      MessageBoxW(hwnd, L"WINRAR_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ WINRAR_PATH is not set.");
+      MessageBeep(MB_ICONERROR); // Play error sound
+      MessageBoxCentered(hwnd, L"WINRAR_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
       return FALSE;
    }
 
    DWORD attrib = GetFileAttributesW(g_config.WINRAR_PATH);
    if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY))
    {
-      MessageBoxW(hwnd, L"The specified WINRAR_PATH does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
+      MessageBeep(MB_ICONERROR); // Play error sound
+      MessageBoxCentered(hwnd, L"The specified WINRAR_PATH does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
       return FALSE;
    }
 

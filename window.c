@@ -34,16 +34,11 @@ HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrow
 HWND hFilesGroup, hTerminalGroup, hSettingsGroup, hImageSettingsGroup, hOutputGroup;
 HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
 HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel;
-HWND hImageTypeLabel, hImageResizeToLabel, hImageMagickLabel, hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
-HWND hImageType, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
+HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hImageMagickLabel, hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
+HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
 HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
 HWND hMenuBar, hFileMenu, hHelpMenu; // **Added Menu Handles**
-
-wchar_t IMAGE_SIZE_HEIGHT[16];
-wchar_t IMAGE_SIZE_WIDTH[16];
-wchar_t IMAGE_QUALITY[8];
-wchar_t IMAGE_TYPE[10];
 
 // define + initialize all defaults in one shot
 AppConfig g_config = {
@@ -68,11 +63,13 @@ AppConfig g_config = {
     .keepExtracted = TRUE};
 
 LabelCheckboxPair controls[] = {
-    {L"Image optimization", L"hOutputRunImageOptimizer", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel},
-    {L"Compress folder", L"hOutputRunCompressor", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel},
-    {L"Keep extracted folders", L"hOutputKeepExtracted", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel},
-    {L"Resize image:", L"hImageResizeTo", 490, &hImageResizeTo, &hImageResizeToLabel},
-    {L"Keep Aspect Ratio", L"hhImageKeepAspectRatio", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel}};
+    {L"Image optimization", L"hOutputRunImageOptimizer", L"Output", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel, &g_config.runImageOptimizer},
+    {L"Compress folder", L"hOutputRunCompressor", L"Output", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel, &g_config.runCompressor},
+    {L"Keep extracted folders", L"hOutputKeepExtracted", L"Output", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel, &g_config.keepExtracted},
+
+    {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 490, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo},
+    {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio},
+    {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling}};
 
 const int controlCount = sizeof(controls) / sizeof(controls[0]);
 
@@ -99,6 +96,10 @@ void ToggleResizeImageCheckbox()
    // Enable/disable Keep Aspect Ratio controls based on ResizeTo
    EnableWindow(hImageKeepAspectRatioLabel, g_config.resizeTo);
    EnableWindow(hImageKeepAspectRatio, g_config.resizeTo);
+   EnableWindow(hImageAllowUpscalingLabel, g_config.resizeTo);
+   EnableWindow(hImageAllowUpscaling, g_config.resizeTo);
+
+   OutputDebugStringW(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE\n" : L"[DEBUG] ResizeTo = FALSE\n");
 
    if (!g_config.resizeTo)
    {
@@ -113,14 +114,14 @@ void ToggleResizeImageCheckbox()
    // Resize is ON
    if (g_config.keepAspectRatio)
    {
-      if (wcscmp(IMAGE_TYPE, L"Portrait") == 0)
+      if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
       {
          EnableWindow(hImageSizeWidthLabel, FALSE);
          EnableWindow(hImageSizeWidth, FALSE);
          EnableWindow(hImageSizeHeightLabel, TRUE);
          EnableWindow(hImageSizeHeight, TRUE);
       }
-      else if (wcscmp(IMAGE_TYPE, L"Landscape") == 0)
+      else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
       {
          EnableWindow(hImageSizeWidthLabel, TRUE);
          EnableWindow(hImageSizeWidth, TRUE);
@@ -174,7 +175,7 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          LRESULT newState = (state == BST_CHECKED) ? BST_UNCHECKED : BST_CHECKED;
          SendMessageW(hCheckbox, BM_SETCHECK, newState, 0);
 
-         // Immediately save to config.ini here
+         // Build config path
          wchar_t iniPath[MAX_PATH];
          GetModuleFileNameW(NULL, iniPath, MAX_PATH);
          wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
@@ -189,29 +190,32 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          {
             if (hCheckbox == *controls[i].hCheckbox)
             {
+               const wchar_t *section = controls[i].configSegment;
                const wchar_t *key = controls[i].configKey;
                const wchar_t *value = (newState == BST_CHECKED) ? L"true" : L"false";
-               WritePrivateProfileStringW(L"Output", key, value, iniPath);
 
+               WritePrivateProfileStringW(section, key, value, iniPath);
+
+               // Update g_config if needed
                if (wcscmp(key, L"hOutputRunImageOptimizer") == 0)
                   g_config.runImageOptimizer = (newState == BST_CHECKED);
                else if (wcscmp(key, L"hOutputRunCompressor") == 0)
                   g_config.runCompressor = (newState == BST_CHECKED);
                else if (wcscmp(key, L"hOutputKeepExtracted") == 0)
                   g_config.keepExtracted = (newState == BST_CHECKED);
+               else if (wcscmp(key, L"IMAGE_RESIZE_TO") == 0)
+                  g_config.resizeTo = (newState == BST_CHECKED);
+               else if (wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0)
+                  g_config.keepAspectRatio = (newState == BST_CHECKED);
+               else if (wcscmp(key, L"IMAGE_ALLOW_UPSCALING") == 0)
+                  g_config.allowUpscaling = (newState == BST_CHECKED);
                break;
             }
          }
 
-         if (hwnd == hImageResizeToLabel)
+         // Handle label-triggered logic
+         if (hwnd == hImageResizeToLabel || hwnd == hImageKeepAspectRatioLabel)
          {
-            g_config.resizeTo = !g_config.resizeTo; // Flip the state first
-            ToggleResizeImageCheckbox();
-         }
-
-         if (hwnd == hImageKeepAspectRatioLabel)
-         {
-            g_config.keepAspectRatio = !g_config.keepAspectRatio; // Flip the state first
             ToggleResizeImageCheckbox();
          }
       }
@@ -300,21 +304,21 @@ void load_config_values()
 {
    wchar_t buffer[MAX_PATH];
 
-   // 🔍 Construct full path to config.ini
+   // Build config.ini path
    wchar_t iniPath[MAX_PATH];
    GetModuleFileNameW(NULL, iniPath, MAX_PATH);
    wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
    if (lastSlash)
-      *(lastSlash + 1) = L'\0'; // Trim to folder path
+      *(lastSlash + 1) = L'\0';
    wcscat(iniPath, L"config.ini");
 
    typedef struct
    {
       const wchar_t *section;
       const wchar_t *key;
-      HWND *hwnd;      // pointer to the HWND variable
-      wchar_t *target; // where to store the value (inside g_config)
-      DWORD size;      // buffer size in wchar_t (not bytes)
+      HWND *hwnd;
+      wchar_t *target;
+      DWORD size;
    } ConfigBinding;
 
    ConfigBinding bindings[] = {
@@ -325,15 +329,13 @@ void load_config_values()
        {L"Paths", L"IMAGEMAGICK_PATH", &hImageMagickPath, g_config.IMAGEMAGICK_PATH, MAX_PATH},
        {L"Image", L"IMAGE_SIZE_WIDTH", &hImageSizeWidth, g_config.IMAGE_SIZE_WIDTH, IMG_DIM_LEN},
        {L"Image", L"IMAGE_SIZE_HEIGHT", &hImageSizeHeight, g_config.IMAGE_SIZE_HEIGHT, IMG_DIM_LEN},
-       {L"Image", L"IMAGE_QUALITY", &hImageQualityValue, g_config.IMAGE_QUALITY, QUALITY_LEN}};
+       {L"Image", L"IMAGE_QUALITY", &hImageQualityValue, g_config.IMAGE_QUALITY, QUALITY_LEN},
+       {L"Image", L"IMAGE_TYPE", &hImageType, g_config.IMAGE_TYPE, IMAGE_TYPE_LEN}};
 
    for (int i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i)
    {
       const ConfigBinding *b = &bindings[i];
       GetPrivateProfileStringW(b->section, b->key, L"", buffer, MAX_PATH, iniPath);
-
-      if (b->hwnd && *b->hwnd)
-         SetWindowTextW(*b->hwnd, buffer);
 
       if (b->target)
       {
@@ -341,33 +343,44 @@ void load_config_values()
          b->target[b->size - 1] = L'\0';
       }
 
-      // Hook: handle IMAGE_QUALITY slider update
+      if (b->hwnd && *b->hwnd)
+      {
+         // IMAGE_TYPE uses dropdown, match by label
+         if (*b->hwnd == hImageType)
+         {
+            for (int j = 0; j < IMAGE_TYPE_COUNT; ++j)
+            {
+               if (wcscmp(buffer, g_ImageTypeOptions[j].label) == 0)
+               {
+                  SendMessageW(hImageType, CB_SETCURSEL, j, 0);
+                  break;
+               }
+            }
+         }
+         else
+         {
+            SetWindowTextW(*b->hwnd, buffer);
+         }
+      }
+
       if (wcscmp(b->key, L"IMAGE_QUALITY") == 0)
       {
          SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
       }
    }
 
-   // Output options
    for (int i = 0; i < controlCount; ++i)
    {
-      GetPrivateProfileStringW(L"Output", controls[i].configKey, L"false", buffer, sizeof(buffer), iniPath);
-      SendMessageW(*controls[i].hCheckbox, BM_SETCHECK,
-                   (wcscmp(buffer, L"true") == 0) ? BST_CHECKED : BST_UNCHECKED, 0);
+      GetPrivateProfileStringW(controls[i].configSegment, controls[i].configKey, L"false", buffer, sizeof(buffer), iniPath);
 
-      if (wcscmp(controls[i].configKey, L"hOutputRunImageOptimizer") == 0)
-         g_config.runImageOptimizer = (wcscmp(buffer, L"true") == 0);
-      else if (wcscmp(controls[i].configKey, L"hOutputRunCompressor") == 0)
-         g_config.runCompressor = (wcscmp(buffer, L"true") == 0);
-      else if (wcscmp(controls[i].configKey, L"hOutputKeepExtracted") == 0)
-         g_config.keepExtracted = (wcscmp(buffer, L"true") == 0);
-      else if (wcscmp(controls[i].configKey, L"hImageResizeTo") == 0)
-         g_config.resizeTo = (wcscmp(buffer, L"true") == 0);
-      else if (wcscmp(controls[i].configKey, L"hImageKeepAspectRatio") == 0)
-         g_config.keepAspectRatio = (wcscmp(buffer, L"true") == 0);
+      BOOL isChecked = (wcscmp(buffer, L"true") == 0);
+
+      SendMessageW(*controls[i].hCheckbox, BM_SETCHECK, isChecked ? BST_CHECKED : BST_UNCHECKED, 0);
+
+      if (controls[i].configField)
+         *controls[i].configField = isChecked;
    }
 
-   // Output type dropdown behavior
    update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
 }
 
@@ -567,7 +580,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       SendMessageW(hImageQualitySlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
       SendMessageW(hImageQualitySlider, TBM_SETTICFREQ, 5, 0);
-      SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(IMAGE_QUALITY));
+      SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(g_config.IMAGE_QUALITY));
 
       hImageTypeLabel = CreateWindowW(L"STATIC", L"Orientation:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hwnd, NULL, NULL, NULL);
       SendMessageW(hImageTypeLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
@@ -584,19 +597,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // Optional: set default to first entry
       SendMessageW(hImageType, CB_SETCURSEL, 0, 0);
       // Update IMAGE_TYPE global from struct
-      wcsncpy(IMAGE_TYPE, g_ImageTypeOptions[0].label, sizeof(IMAGE_TYPE) / sizeof(wchar_t) - 1);
-      IMAGE_TYPE[sizeof(IMAGE_TYPE) / sizeof(wchar_t) - 1] = L'\0'; // Null-terminate
+      wcsncpy(g_config.IMAGE_TYPE, g_ImageTypeOptions[0].label, sizeof(g_config.IMAGE_TYPE) / sizeof(wchar_t) - 1);
+      g_config.IMAGE_TYPE[sizeof(g_config.IMAGE_TYPE) / sizeof(wchar_t) - 1] = L'\0'; // Null-terminate
 
       hImageSizeWidthLabel = CreateWindowW(L"STATIC", L"Width:", WS_CHILD | WS_VISIBLE, 330, 280, 60, 20, hwnd, NULL, NULL, NULL);
       SendMessageW(hImageSizeWidthLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
-      hImageSizeWidth = CreateWindowW(L"EDIT", IMAGE_SIZE_WIDTH, WS_CHILD | WS_VISIBLE | WS_BORDER,
+      hImageSizeWidth = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER,
                                       460, 280, 80, 20, hwnd, NULL, NULL, NULL);
       if (hImageSizeWidth)
          SendMessageW(hImageSizeWidth, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       hImageSizeHeightLabel = CreateWindowW(L"STATIC", L"Height:", WS_CHILD | WS_VISIBLE, 330, 280, 60, 20, hwnd, NULL, NULL, NULL);
       SendMessageW(hImageSizeHeightLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
-      hImageSizeHeight = CreateWindowW(L"EDIT", IMAGE_SIZE_HEIGHT, WS_CHILD | WS_VISIBLE | WS_BORDER,
+      hImageSizeHeight = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER,
                                        460, 280, 80, 20, hwnd, NULL, NULL, NULL);
       if (hImageSizeHeight)
          SendMessageW(hImageSizeHeight, WM_SETFONT, (WPARAM)hFontInput, TRUE);
@@ -627,7 +640,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
 
       load_config_values();
+
       ToggleResizeImageCheckbox();
+
       InvalidateRect(hwnd, NULL, TRUE); // Ensure background updates
       UpdateWindow(hwnd);               // Force immediate redraw
       break;
@@ -690,7 +705,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hImageSizeHeight, rect.right - 85, 340, 50, 20, TRUE);
 
       MoveWindow(hImageKeepAspectRatio, rect.right - 350, 365, 20, 20, TRUE);
-      MoveWindow(hImageKeepAspectRatioLabel, rect.right - 330, 367, 200, 20, TRUE);
+      MoveWindow(hImageKeepAspectRatioLabel, rect.right - 330, 367, 100, 20, TRUE);
+
+      MoveWindow(hImageAllowUpscaling, rect.right - 150, 365, 20, 20, TRUE);
+      MoveWindow(hImageAllowUpscalingLabel, rect.right - 130, 367, 100, 20, TRUE);
 
       MoveWindow(hOutputTypeLabel, rect.right - 350, 430, 80, 20, TRUE);
       MoveWindow(hOutputType, rect.right - 280, 425, 120, 20, TRUE);
@@ -772,6 +790,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             GetWindowTextW(hImageMagickPath, g_config.IMAGEMAGICK_PATH, MAX_PATH);
             WritePrivateProfileStringW(L"Paths", L"IMAGEMAGICK_PATH", L"", iniPath);
          }
+         else if ((HWND)lParam == hImageSizeHeight)
+         {
+            GetWindowTextW(hImageSizeHeight, g_config.IMAGE_SIZE_HEIGHT, MAX_PATH);
+            WritePrivateProfileStringW(L"Image", L"IMAGE_SIZE_HEIGHT", g_config.IMAGE_SIZE_HEIGHT, iniPath);
+            OutputDebugStringW(g_config.IMAGE_SIZE_HEIGHT);
+         }
+         else if ((HWND)lParam == hImageSizeWidth)
+         {
+            GetWindowTextW(hImageSizeWidth, g_config.IMAGE_SIZE_WIDTH, MAX_PATH);
+            WritePrivateProfileStringW(L"Image", L"IMAGE_SIZE_WIDTH", g_config.IMAGE_SIZE_WIDTH, iniPath);
+            OutputDebugStringW(g_config.IMAGE_SIZE_WIDTH);
+         }
       }
       // In WndProc → WM_COMMAND
       else if (LOWORD(wParam) == ID_START_BUTTON)
@@ -800,66 +830,46 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       {
          DestroyWindow(hwnd);
       }
-      else if (LOWORD(wParam) == ID_IMAGE_RESIZE_TO && HIWORD(wParam) == BN_CLICKED)
-      {
-         g_config.resizeTo = !g_config.resizeTo;
-         ToggleResizeImageCheckbox();
-      }
-      else if (LOWORD(wParam) == ID_IMAGE_KEEP_ASPECT_RATIO && HIWORD(wParam) == BN_CLICKED)
-      {
-         g_config.keepAspectRatio = !g_config.keepAspectRatio;
-         ToggleResizeImageCheckbox();
-      }
       else if (LOWORD(wParam) == ID_IMAGE_TYPE && HIWORD(wParam) == CBN_SELCHANGE)
       {
          int selectedIndex = (int)SendMessageW(hImageType, CB_GETCURSEL, 0, 0);
          if (selectedIndex != CB_ERR && selectedIndex < IMAGE_TYPE_COUNT)
          {
             // Copy the label from the struct array into global IMAGE_TYPE buffer
-            wcsncpy(IMAGE_TYPE, g_ImageTypeOptions[selectedIndex].label, sizeof(IMAGE_TYPE) / sizeof(wchar_t) - 1);
-            IMAGE_TYPE[sizeof(IMAGE_TYPE) / sizeof(wchar_t) - 1] = L'\0'; // Ensure null-termination
-            ToggleResizeImageCheckbox();                                  // React to change
+            wcsncpy(g_config.IMAGE_TYPE, g_ImageTypeOptions[selectedIndex].label, sizeof(g_config.IMAGE_TYPE) / sizeof(wchar_t) - 1);
+            g_config.IMAGE_TYPE[sizeof(g_config.IMAGE_TYPE) / sizeof(wchar_t) - 1] = L'\0'; // Ensure null-termination
+            ToggleResizeImageCheckbox();                                                    // React to change
+
+            // Save the selected image type to the .ini file
+            WritePrivateProfileStringW(L"Image", L"IMAGE_TYPE", g_config.IMAGE_TYPE, iniPath);
          }
       }
 
       // Save checkbox state when any of them is toggled
-      // Save checkbox state and update runtime flags
       for (int i = 0; i < controlCount; ++i)
       {
          if ((HWND)lParam == *controls[i].hCheckbox && HIWORD(wParam) == BN_CLICKED)
          {
             LRESULT checked = SendMessageW(*controls[i].hCheckbox, BM_GETCHECK, 0, 0);
             const wchar_t *value = (checked == BST_CHECKED) ? L"true" : L"false";
+            const wchar_t *section = controls[i].configSegment;
+            const wchar_t *key = controls[i].configKey;
 
-            WritePrivateProfileStringW(L"Output", controls[i].configKey, value, iniPath);
+            WritePrivateProfileStringW(section, key, value, iniPath);
 
-            // Update the corresponding runtime toggle
-            if (wcscmp(controls[i].configKey, L"hOutputRunImageOptimizer") == 0)
+            // Optional direct struct write
+            if (controls[i].configField)
             {
-               OutputDebugStringW(L"Inside Image optimizer Check");
-               g_config.runImageOptimizer = (checked == BST_CHECKED);
+               *(controls[i].configField) = (checked == BST_CHECKED);
             }
-            else if (wcscmp(controls[i].configKey, L"hOutputRunCompressor") == 0)
+
+            // Handle special cases
+            if (wcscmp(key, L"IMAGE_RESIZE_TO") == 0 || wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0)
             {
-               OutputDebugStringW(L"Inside Compressor Check");
-               g_config.runCompressor = (checked == BST_CHECKED);
-            }
-            else if (wcscmp(controls[i].configKey, L"hOutputKeepExtracted") == 0)
-            {
-               g_config.keepExtracted = (checked == BST_CHECKED);
-            }
-            else if (wcscmp(controls[i].configKey, L"hImageResizeTo") == 0)
-            {
-               g_config.resizeTo = (checked == BST_CHECKED);
-               ToggleResizeImageCheckbox();
-            }
-            else if (wcscmp(controls[i].configKey, L"hImageKeepAspectRatio") == 0)
-            {
-               g_config.keepAspectRatio = (checked == BST_CHECKED);
                ToggleResizeImageCheckbox();
             }
 
-            break; // handled the toggle, done
+            break; // processed the toggle
          }
       }
 
@@ -874,9 +884,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       int sliderPos = SendMessageW(hImageQualitySlider, TBM_GETPOS, 0, 0);
 
       // Update IMAGE_QUALITY string
-      swprintf(IMAGE_QUALITY, 16, L"%d", sliderPos);
+      swprintf(g_config.IMAGE_QUALITY, 16, L"%d", sliderPos);
 
-      SetWindowTextW(hImageQualityValue, IMAGE_QUALITY);
+      SetWindowTextW(hImageQualityValue, g_config.IMAGE_QUALITY);
 
       // Write to INI
       wchar_t iniPath[MAX_PATH];
@@ -886,7 +896,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          *(lastSlash + 1) = '\0';
       wcscat(iniPath, L"config.ini");
 
-      WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", IMAGE_QUALITY, iniPath);
+      WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, iniPath);
    }
    break;
    case WM_HSCROLL:
@@ -894,8 +904,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       if ((HWND)lParam == hImageQualitySlider)
       {
          int sliderPos = SendMessageW(hImageQualitySlider, TBM_GETPOS, 0, 0);
-         swprintf(IMAGE_QUALITY, 16, L"%d", sliderPos);
-         SetWindowTextW(hImageQualityValue, IMAGE_QUALITY);
+         swprintf(g_config.IMAGE_QUALITY, 16, L"%d", sliderPos);
+         SetWindowTextW(hImageQualityValue, g_config.IMAGE_QUALITY);
 
          // Save to INI
          wchar_t iniPath[MAX_PATH];
@@ -905,7 +915,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             *(lastSlash + 1) = '\0';
          wcscat(iniPath, L"config.ini");
 
-         WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", IMAGE_QUALITY, iniPath);
+         WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, iniPath);
       }
    }
    break;

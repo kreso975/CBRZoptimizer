@@ -1,7 +1,7 @@
 #include "image_handle.h"
 #include "gui.h"
 #include "resource.h"
-#include "functions.h"           // For SendStatus, IMAGE_QUALITY, etc.
+#include "functions.h" // For SendStatus, IMAGE_QUALITY, etc.
 
 #include <windows.h>
 #include <shlobj.h>  // For SHFileOperation
@@ -94,7 +94,7 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
    {
       if (extW && _wcsicmp(extW, L".jpg") == 0)
       {
-         result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(IMAGE_QUALITY));
+         result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(g_config.IMAGE_QUALITY));
       }
       else if (extW && _wcsicmp(extW, L".png") == 0)
       {
@@ -152,7 +152,9 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 
          wcscpy(task->image_path, image_path);
          task->hwnd = hwnd;
-         task->target_height = _wtoi(IMAGE_SIZE_HEIGHT);
+         task->target_height = _wtoi(g_config.IMAGE_SIZE_HEIGHT);
+         OutputDebugStringW(g_config.IMAGE_SIZE_HEIGHT);
+         OutputDebugStringW(g_config.IMAGE_SIZE_WIDTH);
 
          threads[thread_count++] = CreateThread(NULL, 0, OptimizeImageThread, task, 0, NULL);
 
@@ -191,7 +193,8 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 // Optimize Images
 BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
 {
-   wchar_t command[MAX_PATH], buffer[4096];
+   wchar_t command[MAX_PATH * 2], buffer[4096];
+
    DWORD bytesRead;
    HANDLE hReadPipe, hWritePipe;
    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
@@ -209,6 +212,28 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
       return fallback_optimize_images(hwnd, image_folder);
    }
 
+   wchar_t resizeArg[64] = L"";
+   BOOL hasWidth = wcslen(g_config.IMAGE_SIZE_WIDTH) > 0;
+   BOOL hasHeight = wcslen(g_config.IMAGE_SIZE_HEIGHT) > 0;
+
+   if (g_config.resizeTo)
+   {
+      const wchar_t *resizeSuffix = g_config.allowUpscaling ? L"" : L">";
+
+      if (g_config.keepAspectRatio)
+      {
+         if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && hasHeight)
+            swprintf(resizeArg, _countof(resizeArg), L"-resize x%s%s", g_config.IMAGE_SIZE_HEIGHT, resizeSuffix);
+         else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && hasWidth)
+            swprintf(resizeArg, _countof(resizeArg), L"-resize %s%s", g_config.IMAGE_SIZE_WIDTH, resizeSuffix);
+      }
+      else if (hasWidth && hasHeight)
+      {
+         // For forced resize, don't apply conditional suffix
+         swprintf(resizeArg, _countof(resizeArg), L"-resize %sx%s!", g_config.IMAGE_SIZE_WIDTH, g_config.IMAGE_SIZE_HEIGHT);
+      }
+   }
+
    const wchar_t *exts[] = {L"jpg", L"png"};
    OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
    for (int i = 0; i < 2; i++)
@@ -224,8 +249,17 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
       si.wShowWindow = SW_HIDE;
       si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
 
-      swprintf(command, MAX_PATH, L"\"%s\" mogrify -resize %s -quality %s \"%s\\*.%s\"",
-               g_config.IMAGEMAGICK_PATH, IMAGE_SIZE_HEIGHT, IMAGE_QUALITY, image_folder, exts[i]);
+      // swprintf(command, MAX_PATH, L"\"%s\" mogrify -resize %s -quality %s \"%s\\*.%s\"",
+      //          g_config.IMAGEMAGICK_PATH, g_config.IMAGE_SIZE_HEIGHT, g_config.IMAGE_QUALITY, image_folder, exts[i]);
+
+      swprintf(command, MAX_PATH * 2, L"\"%s\" mogrify %s -quality %s \"%s\\*.%s\"",
+               g_config.IMAGEMAGICK_PATH,
+               resizeArg[0] != L'\0' ? resizeArg : L"",
+               g_config.IMAGE_QUALITY,
+               image_folder,
+               exts[i]);
+      OutputDebugStringW(command);
+      MessageBoxW(NULL, command, L"ImageMagick Command", MB_OK | MB_ICONINFORMATION);
 
       if (!CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
       {

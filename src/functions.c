@@ -270,6 +270,7 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    if (g_StopProcessing)
       return;
 
+   OutputDebugStringW(g_config.runImageOptimizer ? L"[DEBUG] RunImageOptimizer = TRUE\n" : L"[DEBUG] RunImageOptimizer = FALSE\n");
 
    // Image optimization
    if (g_config.runImageOptimizer)

@@ -13,16 +13,14 @@ extern HWND hTerminalProcessingLabel;
 extern HWND hTerminalProcessingText;
 extern HWND hTerminalText;
 
-extern wchar_t IMAGE_SIZE_WIDTH[];
-extern wchar_t IMAGE_SIZE_HEIGHT[];
-extern wchar_t IMAGE_QUALITY[];
-
 typedef struct {
     const wchar_t  *labelText;
     const wchar_t  *configKey;
+    const wchar_t *configSegment;
     int y;
     HWND *hCheckbox;
     HWND *hLabel;
+    BOOL *configField;
 } LabelCheckboxPair;
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -45,6 +43,7 @@ typedef struct
    wchar_t IMAGE_TYPE[IMAGE_TYPE_LEN];
    BOOL resizeTo;        // was g_ResizeTo
    BOOL keepAspectRatio; // was g_KeepAspectRatio
+   BOOL allowUpscaling;
    wchar_t IMAGE_SIZE_WIDTH[IMG_DIM_LEN];
    wchar_t IMAGE_SIZE_HEIGHT[IMG_DIM_LEN];
    wchar_t IMAGE_QUALITY[QUALITY_LEN];

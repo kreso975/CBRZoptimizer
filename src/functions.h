@@ -15,6 +15,12 @@ typedef struct {
 
 extern const ImageTypeEntry g_ImageTypeOptions[];
 
+typedef enum
+{
+   ARCHIVE_UNKNOWN,
+   ARCHIVE_CBR,
+   ARCHIVE_CBZ
+} ArchiveType;
 
 BOOL is_zip_archive(const wchar_t *file_path);
 BOOL is_valid_winrar();
@@ -38,4 +44,5 @@ void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath);
 
 
 DWORD WINAPI ProcessingThread(LPVOID lpParam);
+ArchiveType detect_archive_type(const wchar_t *file_path);
 

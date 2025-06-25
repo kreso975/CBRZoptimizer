@@ -74,6 +74,8 @@
    "gui.h": "c",
    "functions.h": "c",
    "zip_handle.h": "c",
-   "rar_handle.h": "c"
+   "rar_handle.h": "c",
+   "stat.h": "c",
+   "shlobj.h": "c"
 }
 }

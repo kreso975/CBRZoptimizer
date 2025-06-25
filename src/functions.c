@@ -1,4 +1,6 @@
-
+#ifndef UNICODE
+#define UNICODE
+#endif
 #include <windows.h>
 #include <shlobj.h>  // For SHFileOperation
 #include <shlwapi.h> // If not already present
@@ -17,27 +19,29 @@
 #include "zip_handle.h"
 #include "image_handle.h"
 
+
+
 HBITMAP LoadBMP(const wchar_t *filename)
 {
    return (HBITMAP)LoadImageW(NULL, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
 }
 
-
 // Disable all controls in the "FilesGroup"
-//EnableGroupElements(L"FilesGroup", FALSE);
+// EnableGroupElements(L"FilesGroup", FALSE);
 
 // Later, re-enable them
-//EnableGroupElements(L"FilesGroup", TRUE);
+// EnableGroupElements(L"FilesGroup", TRUE);
 
 void EnableGroupElements(LPCWSTR groupName, BOOL enable)
 {
-    for (int i = 0; i < groupElementsCount; ++i) {
-        if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr) {
-            EnableWindow(*groupElements[i].hwndPtr, enable);
-        }
-    }
+   for (int i = 0; i < groupElementsCount; ++i)
+   {
+      if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr)
+      {
+         EnableWindow(*groupElements[i].hwndPtr, enable);
+      }
+   }
 }
-
 
 DWORD WINAPI ProcessingThread(LPVOID lpParam)
 {
@@ -50,13 +54,6 @@ DWORD WINAPI ProcessingThread(LPVOID lpParam)
    PostMessage(hwnd, WM_USER + 1, 0, 0);
    return 0;
 }
-
-typedef enum
-{
-   ARCHIVE_UNKNOWN,
-   ARCHIVE_CBR,
-   ARCHIVE_CBZ
-} ArchiveType;
 
 ArchiveType detect_archive_type(const wchar_t *file_path)
 {
@@ -79,6 +76,50 @@ ArchiveType detect_archive_type(const wchar_t *file_path)
    }
 
    return type;
+}
+
+void ValidateAndSaveInput(HWND changedControl, const wchar_t *iniPath)
+{
+    for (size_t i = 0; i < inputsCount; ++i)
+    {
+        if (inputs[i].hEdit && *(inputs[i].hEdit) == changedControl)
+        {
+            wchar_t buffer[MAX_PATH] = {0};
+            GetWindowTextW(changedControl, buffer, MAX_PATH);
+
+            if (!inputs[i].defaultText || wcscmp(buffer, inputs[i].defaultText) == 0)
+                return;
+
+            // Keys that may accept empty values without folder validation
+            BOOL allowEmpty = (
+                wcscmp(inputs[i].configKey, L"WINRAR_PATH") == 0 ||
+                wcscmp(inputs[i].configKey, L"SEVEN_ZIP_PATH") == 0 ||
+                wcscmp(inputs[i].configKey, L"IMAGEMAGICK_PATH") == 0
+            );
+
+            if (wcslen(buffer) == 0 && allowEmpty)
+            {
+                inputs[i].defaultText[0] = L'\0';
+                WritePrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, L"", iniPath); // preserve key, empty value
+                return;
+            }
+
+            // Folder must exist for non-empty inputs
+            DWORD attrs = GetFileAttributesW(buffer);
+            if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY))
+            {
+                wchar_t msg[512];
+                swprintf(msg, 512, L"The folder \"%s\" does not exist.\n\nThe previous value will be kept.", buffer);
+                MessageBoxW(changedControl, msg, L"Invalid Folder", MB_OK | MB_ICONWARNING);
+                SetWindowTextW(changedControl, inputs[i].defaultText);
+                return;
+            }
+
+            wcscpy(inputs[i].defaultText, buffer);
+            WritePrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, buffer, iniPath);
+            return;
+        }
+    }
 }
 
 BOOL is_zip_archive(const wchar_t *file_path)
@@ -123,7 +164,7 @@ void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t 
 
 void TrimTrailingWhitespace(wchar_t *str)
 {
-   int len = wcslen(str);
+   size_t len = wcslen(str);
    while (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r' || str[len - 1] == ' '))
       str[--len] = '\0';
 }
@@ -136,7 +177,7 @@ BOOL find_folder_with_images(const wchar_t *basePath, wchar_t *outPath, int dept
    wchar_t search[MAX_PATH];
    swprintf(search, MAX_PATH, L"%s\\*", basePath);
    // 📌 Track current folder
-   //MessageBoxW(NULL, basePath, L"Scanning:", MB_OK);
+   // MessageBoxW(NULL, basePath, L"Scanning:", MB_OK);
 
    WIN32_FIND_DATAW ffd;
    HANDLE hFind = FindFirstFileW(search, &ffd);
@@ -172,7 +213,7 @@ BOOL find_folder_with_images(const wchar_t *basePath, wchar_t *outPath, int dept
             {
                wcscpy(outPath, basePath);
                // 📌 Confirm image found location
-               //MessageBoxW(NULL, basePath, L"Found image folder:", MB_OK);
+               // MessageBoxW(NULL, basePath, L"Found image folder:", MB_OK);
                found = TRUE;
                break;
             }
@@ -226,33 +267,33 @@ void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target)
 
 void delete_folder_recursive(const wchar_t *path)
 {
-    if (!path || wcslen(path) == 0)
-        return;
+   if (!path || wcslen(path) == 0)
+      return;
 
-    // Prepare buffer with double null-termination
-    wchar_t temp[MAX_PATH + 2] = {0};
-    wcsncpy(temp, path, MAX_PATH);
-    size_t len = wcslen(temp);
+   // Prepare buffer with double null-termination
+   wchar_t temp[MAX_PATH + 2] = {0};
+   wcsncpy(temp, path, MAX_PATH);
+   size_t len = wcslen(temp);
 
-    if (len > 0 && temp[len - 1] != L'\\')
-    {
-        temp[len] = L'\\';
-        temp[len + 1] = L'\0';
-    }
+   if (len > 0 && temp[len - 1] != L'\\')
+   {
+      temp[len] = L'\\';
+      temp[len + 1] = L'\0';
+   }
 
-    SHFILEOPSTRUCTW fileOp = {0};
-    fileOp.wFunc = FO_DELETE;
-    fileOp.pFrom = temp; // double null-terminated
-    fileOp.fFlags = FOF_NO_UI | FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR;
+   SHFILEOPSTRUCTW fileOp = {0};
+   fileOp.wFunc = FO_DELETE;
+   fileOp.pFrom = temp; // double null-terminated
+   fileOp.fFlags = FOF_NO_UI | FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR;
 
-    int result = SHFileOperationW(&fileOp);
+   int result = SHFileOperationW(&fileOp);
 
-    // Optional: Handle errors (result == 0 means success)
-    if (result != 0)
-    {
-        // You can log or fallback here if deletion failed
-        // MessageBoxW(NULL, L"Failed to delete folder.", L"Error", MB_OK | MB_ICONERROR);
-    }
+   // Optional: Handle errors (result == 0 means success)
+   if (result != 0)
+   {
+      // You can log or fallback here if deletion failed
+      // MessageBoxW(NULL, L"Failed to delete folder.", L"Error", MB_OK | MB_ICONERROR);
+   }
 }
 
 void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
@@ -318,7 +359,7 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    {
       wchar_t selectedText[32] = L"";
       int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
-      SendMessageW(hOutputType, CB_GETLBTEXT, selected, (LPARAM)selectedText);
+      SendMessageW(hOutputType, CB_GETLBTEXT, (WPARAM)(INT_PTR)selected, (LPARAM)selectedText);
 
       BOOL useCBR = FALSE;
       if ((_wcsicmp(selectedText, L"CBR") == 0) ||
@@ -351,11 +392,12 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 // Start Processing
 void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox)
 {
-   int total = SendMessage(hListBox, LB_GETCOUNT, 0, 0);
+   LRESULT lTotal = SendMessage(hListBox, LB_GETCOUNT, 0, 0);
+   int total = (int)lTotal;
+
    int processed = 0;
 
-   int count;
-   while (!g_StopProcessing && (count = SendMessage(hListBox, LB_GETCOUNT, 0, 0)) > 0)
+   while (!g_StopProcessing && SendMessage(hListBox, LB_GETCOUNT, 0, 0) > 0)
    {
       wchar_t file_path[MAX_PATH];
       SendMessageW(hListBox, LB_GETTEXT, 0, (LPARAM)file_path);
@@ -458,20 +500,23 @@ void OpenFileDialog(HWND hwnd, HWND hListBox)
 
 void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
 {
+   OutputDebugStringW(itemText);
    if (!IsWindow(hListBox) || !itemText || !*itemText)
       return;
 
-   int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, -1, (LPARAM)itemText);
-
+   int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, (WPARAM)(INT_PTR)-1, (LPARAM)itemText);
+   
    if (existingIndex == LB_ERR)
    {
+      
+
       SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)itemText);
    }
    else
    {
-      SendMessageW(hListBox, LB_SETSEL, FALSE, -1);                  // Deselect all
-      SendMessageW(hListBox, LB_SETSEL, TRUE, existingIndex);        // Select duplicate
-      SendMessageW(hListBox, LB_SETCARETINDEX, existingIndex, TRUE); // Focus on it
+      SendMessageW(hListBox, LB_SETSEL, FALSE, -1);                                   // Deselect all
+      SendMessageW(hListBox, LB_SETSEL, TRUE, existingIndex);                         // Select duplicate
+      SendMessageW(hListBox, LB_SETCARETINDEX, (WPARAM)(INT_PTR)existingIndex, TRUE); // Focus on it
 
       SetForegroundWindow(hwndOwner);
       MessageBeep(MB_ICONWARNING);
@@ -498,16 +543,18 @@ void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
 
 void RemoveSelectedItems(HWND hListBox)
 {
-   int selectedCount = SendMessageW(hListBox, LB_GETSELCOUNT, 0, 0); // Get number of selected items
+   LRESULT result = SendMessageW(hListBox, LB_GETSELCOUNT, 0, 0); // Get number of selected items
+   int selectedCount = (int)result;                               // with bounds check if needed
 
    if (selectedCount > 0)
    {
-      int *selectedIndexes = (int *)malloc(selectedCount * sizeof(int));              // Allocate memory
-      SendMessageW(hListBox, LB_GETSELITEMS, selectedCount, (LPARAM)selectedIndexes); // Get indexes
+      size_t allocSize = (size_t)selectedCount * sizeof(int);
+      int *selectedIndexes = (int *)malloc(allocSize);                                                 // Allocate memory
+      SendMessageW(hListBox, LB_GETSELITEMS, (WPARAM)(INT_PTR)selectedCount, (LPARAM)selectedIndexes); // Get indexes
 
       for (int i = selectedCount - 1; i >= 0; i--)
       {
-         SendMessageW(hListBox, LB_DELETESTRING, selectedIndexes[i], 0);
+         SendMessageW(hListBox, LB_DELETESTRING, (WPARAM)(INT_PTR)selectedIndexes[i], 0);
       }
 
       free(selectedIndexes); // Free memory
@@ -534,10 +581,10 @@ void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath)
       SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
 
       // 👇 Select "Keep original" if added
-      LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, -1, (LPARAM)L"Keep original");
+      LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, (WPARAM)(INT_PTR)-1, (LPARAM)L"Keep original");
       if (index != CB_ERR)
       {
-         SendMessageW(hOutputType, CB_SETCURSEL, index, 0);
+         SendMessageW(hOutputType, CB_SETCURSEL, (WPARAM)index, 0);
       }
    }
    else

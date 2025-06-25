@@ -19,9 +19,6 @@
 
 #include <uxtheme.h>
 
-AppConfig g_config;
-
-volatile BOOL g_StopProcessing = FALSE;
 HINSTANCE g_hInstance;
 
 HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
@@ -46,6 +43,10 @@ HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hIma
 // Output options
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
 HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
+
+AppConfig g_config;
+
+volatile BOOL g_StopProcessing = FALSE;
 
 // define + initialize all defaults in one shot
 AppConfig g_config = {
@@ -300,7 +301,7 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (g_config.runImageOptimizer)
             {
                ToggleResizeImageCheckbox();
-               AdjustLayout(hwnd);
+               AdjustLayout(GetParent(hwnd));
             }
          }
       }
@@ -470,8 +471,6 @@ void load_config_values(void)
    }
 
    update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
-
-   EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -534,11 +533,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       // Create static controls for images (borderless)
       hRemoveButton = CreateWindowW(
-          L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+          L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
           20, 30, 32, 32, hwnd, (HMENU)ID_REMOVE_BUTTON, NULL, NULL);
 
       hAddButton = CreateWindowW(
-          L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+          L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
           70, 30, 32, 32, hwnd, (HMENU)ID_ADD_BUTTON, NULL, NULL);
 
       // Load BMP images
@@ -587,9 +586,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       hTerminalText = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 430, 210, 50, 20, hwnd, NULL, NULL, NULL);
       if (hTerminalText)
-         SendMessageW(hListBox, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
+         SendMessageW(hTerminalText, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
 
-      hStartButton = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+      hStartButton = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                                    20, 230, 70, 30, hwnd, (HMENU)ID_START_BUTTON, NULL, NULL);
 
       hButtonStart = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_START));
@@ -606,7 +605,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       SetWindowLongPtr(hStartButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hStartButton, GWLP_WNDPROC));
       SetWindowLongPtr(hStartButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
 
-      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | BS_OWNERDRAW,
+      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
                                   20, 230, 70, 30, hwnd, (HMENU)ID_STOP_BUTTON, NULL, NULL);
 
       if (!hButtonStop)
@@ -626,29 +625,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       hButtonBrowse = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_ADD));
 
-      typedef struct
-      {
-         const wchar_t *labelText; // Label displayed next to the field
-         wchar_t *defaultText;     // Default content (e.g. TMP_FOLDER)
-         int y;                    // Vertical position
-         int labelWidth;           // Width of the label
-         int editWidth;            // Width of the edit box
-         int browseId;             // Command ID for the Browse button
-         HWND *hLabel;             // Pointer to the label control handle
-         HWND *hEdit;              // Pointer to the edit box handle
-         HWND *hBrowse;            // Pointer to the browse button handle
-         HBITMAP *hBitmap;         // Pointer to optional image (e.g. folder icon)
-         const wchar_t *bmpPath;   // Path to bitmap image to load
-      } EditBrowseControl;
-
-      EditBrowseControl inputs[] = {
-          {L"Temp Folder:", g_config.TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, NULL},
-          {L"Output Folder:", g_config.OUTPUT_FOLDER, 60, 100, 200, ID_OUTPUT_FOLDER_BROWSE, &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, &hButtonBrowse, NULL},
-          {L"WinRAR Path:", g_config.WINRAR_PATH, 90, 100, 200, ID_WINRAR_PATH_BROWSE, &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, &hButtonBrowse, NULL},
-          {L"7-Zip Path:", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL},
-          {L"ImageMagick:", g_config.IMAGEMAGICK_PATH, 150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE, &hImageMagickLabel, &hImageMagickPath, &hImageMagickBrowse, &hButtonBrowse, NULL}};
-
-      for (size_t i = 0; i < ARRAYSIZE(inputs); ++i)
+      for (size_t i = 0; i < inputsCount; ++i)
       {
          *inputs[i].hLabel = CreateWindowW(L"STATIC", inputs[i].labelText, WS_CHILD | WS_VISIBLE, 20, inputs[i].y, inputs[i].labelWidth, 20, hwnd, NULL, NULL, NULL);
          *inputs[i].hEdit = CreateWindowW(L"EDIT", inputs[i].defaultText, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 120, inputs[i].y, inputs[i].editWidth, 20, hwnd, NULL, NULL, NULL);
@@ -675,7 +652,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hImageQualityLabel = CreateWindowW(L"STATIC", L"Image Quality:", WS_CHILD | WS_VISIBLE, 330, 210, 120, 20, hwnd, NULL, NULL, NULL);
       SendMessageW(hImageQualityLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
       hImageQualityValue = CreateWindowW(L"STATIC", L"25", WS_CHILD | WS_VISIBLE, 430, 210, 50, 20, hwnd, NULL, NULL, NULL);
-      hImageQualitySlider = CreateWindowW(L"msctls_trackbar32", NULL, WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
+      hImageQualitySlider = CreateWindowW(L"msctls_trackbar32", NULL, WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS | WS_TABSTOP,
                                           460, 210, 220, 30, hwnd, (HMENU)ID_IMAGE_QUALITY_SLIDER, NULL, NULL);
 
       SendMessageW(hImageQualitySlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
@@ -702,14 +679,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       hImageSizeWidthLabel = CreateWindowW(L"STATIC", L"Width:", WS_CHILD | WS_VISIBLE, 330, 280, 60, 20, hwnd, NULL, NULL, NULL);
       SendMessageW(hImageSizeWidthLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
-      hImageSizeWidth = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER,
+      hImageSizeWidth = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP,
                                       460, 280, 80, 20, hwnd, NULL, NULL, NULL);
       if (hImageSizeWidth)
          SendMessageW(hImageSizeWidth, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       hImageSizeHeightLabel = CreateWindowW(L"STATIC", L"Height:", WS_CHILD | WS_VISIBLE, 330, 280, 60, 20, hwnd, NULL, NULL, NULL);
       SendMessageW(hImageSizeHeightLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
-      hImageSizeHeight = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER,
+      hImageSizeHeight = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP,
                                        460, 280, 80, 20, hwnd, NULL, NULL, NULL);
       if (hImageSizeHeight)
          SendMessageW(hImageSizeHeight, WM_SETFONT, (WPARAM)hFontInput, TRUE);
@@ -728,23 +705,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       for (size_t i = 0; i < ARRAYSIZE(controls); ++i)
       {
-         *controls[i].hCheckbox = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 350, controls[i].y, 20, 20, hwnd, NULL, NULL, NULL);
+         *controls[i].hCheckbox = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 350, controls[i].y, 20, 20, hwnd, NULL, NULL, NULL);
          *controls[i].hLabel = CreateWindowW(L"STATIC", controls[i].labelText, WS_CHILD | WS_VISIBLE | SS_NOTIFY, 330, controls[i].y, 180, 20, hwnd, NULL, NULL, NULL);
 
          SetProp(*controls[i].hLabel, L"CheckboxHandle", (HANDLE)(*controls[i].hCheckbox));
          SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
 
          WNDPROC orig = (WNDPROC)SetWindowLongPtr(*controls[i].hLabel, GWLP_WNDPROC, (LONG_PTR)LabelProc);
-         #pragma GCC diagnostic push
-         #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
          SetProp(*controls[i].hLabel, L"OrigProc", (HANDLE)orig);
-         #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
          SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       }
 
       load_config_values();
 
       ToggleResizeImageCheckbox();
+      EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer); // Must be last to update Controls
 
       InvalidateRect(hwnd, NULL, TRUE); // Ensure background updates
       UpdateWindow(hwnd);               // Force immediate redraw
@@ -802,9 +780,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hImageResizeTo, rect.right - 350, 340, 20, 20, TRUE);
       MoveWindow(hImageResizeToLabel, rect.right - 330, 342, 80, 20, TRUE);
 
-      MoveWindow(hImageSizeWidthLabel, rect.right - 245, 340, 80, 20, TRUE);
+      MoveWindow(hImageSizeWidthLabel, rect.right - 245, 340, 35, 20, TRUE);
       MoveWindow(hImageSizeWidth, rect.right - 205, 340, 50, 20, TRUE);
-      MoveWindow(hImageSizeHeightLabel, rect.right - 130, 340, 50, 20, TRUE);
+      MoveWindow(hImageSizeHeightLabel, rect.right - 130, 340, 45, 20, TRUE);
       MoveWindow(hImageSizeHeight, rect.right - 85, 340, 50, 20, TRUE);
 
       MoveWindow(hImageKeepAspectRatio, rect.right - 350, 365, 20, 20, TRUE);
@@ -866,44 +844,30 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
       else if (HIWORD(wParam) == EN_KILLFOCUS)
       {
-         if ((HWND)lParam == hTmpFolder)
-         {
-            GetWindowTextW(hTmpFolder, g_config.TMP_FOLDER, MAX_PATH);
-            WritePrivateProfileStringW(L"Paths", L"TMP_FOLDER", L"", iniPath);
-         }
-         else if ((HWND)lParam == hOutputFolder)
-         {
-            GetWindowTextW(hOutputFolder, g_config.OUTPUT_FOLDER, MAX_PATH);
-            WritePrivateProfileStringW(L"Paths", L"OUTPUT_FOLDER", L"", iniPath);
-         }
-         else if ((HWND)lParam == hWinrarPath)
-         {
-            GetWindowTextW(hWinrarPath, g_config.WINRAR_PATH, MAX_PATH);
-            WritePrivateProfileStringW(L"Paths", L"WINRAR_PATH", L"", iniPath);
+         wchar_t buffer[MAX_PATH];
+         GetWindowTextW((HWND)lParam, buffer, MAX_PATH);
 
-            update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH); // clean, direct
-         }
-         else if ((HWND)lParam == hSevenZipPath)
+         for (size_t i = 0; i < inputsCount; ++i)
          {
-            GetWindowTextW(hSevenZipPath, g_config.SEVEN_ZIP_PATH, MAX_PATH);
-            WritePrivateProfileStringW(L"Paths", L"SEVEN_ZIP_PATH", L"", iniPath);
+            if (*(inputs[i].hEdit) == (HWND)lParam)
+            {
+               ValidateAndSaveInput((HWND)lParam, iniPath);
+               break;
+            }
          }
-         else if ((HWND)lParam == hImageMagickPath)
+
+         if ((HWND)lParam == hWinrarPath)
+            update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
+
+         else if ((HWND)lParam == hImageSizeWidth)
          {
-            GetWindowTextW(hImageMagickPath, g_config.IMAGEMAGICK_PATH, MAX_PATH);
-            WritePrivateProfileStringW(L"Paths", L"IMAGEMAGICK_PATH", L"", iniPath);
+            wcscpy(g_config.IMAGE_SIZE_WIDTH, buffer);
+            WritePrivateProfileStringW(L"Image", L"IMAGE_SIZE_WIDTH", buffer, iniPath);
          }
          else if ((HWND)lParam == hImageSizeHeight)
          {
-            GetWindowTextW(hImageSizeHeight, g_config.IMAGE_SIZE_HEIGHT, MAX_PATH);
-            WritePrivateProfileStringW(L"Image", L"IMAGE_SIZE_HEIGHT", g_config.IMAGE_SIZE_HEIGHT, iniPath);
-            OutputDebugStringW(g_config.IMAGE_SIZE_HEIGHT);
-         }
-         else if ((HWND)lParam == hImageSizeWidth)
-         {
-            GetWindowTextW(hImageSizeWidth, g_config.IMAGE_SIZE_WIDTH, MAX_PATH);
-            WritePrivateProfileStringW(L"Image", L"IMAGE_SIZE_WIDTH", g_config.IMAGE_SIZE_WIDTH, iniPath);
-            OutputDebugStringW(g_config.IMAGE_SIZE_WIDTH);
+            wcscpy(g_config.IMAGE_SIZE_HEIGHT, buffer);
+            WritePrivateProfileStringW(L"Image", L"IMAGE_SIZE_HEIGHT", buffer, iniPath);
          }
       }
       // In WndProc → WM_COMMAND
@@ -1243,7 +1207,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {
    (void)hPrevInstance; // Silence warnning - cannot be without it 16bi legacy
 
@@ -1270,18 +1234,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
    if (!RegisterClassExW(&wc))
       return -1;
 
-   //HWND hwnd = CreateWindowW(L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT,
-   //                          500, 400, NULL, NULL, hInstance, NULL);
-HWND hwnd = CreateWindowExW(
-    0,                          // dwExStyle
-    L"ResizableWindowClass",    // lpClassName
-    L"CBRZ Optimizer",          // lpWindowName
-    WS_OVERLAPPEDWINDOW | WS_THICKFRAME,
-    CW_USEDEFAULT, CW_USEDEFAULT,
-    500, 400,
-    NULL, NULL, hInstance, NULL);
+   // HWND hwnd = CreateWindowW(L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT,
+   //                           500, 400, NULL, NULL, hInstance, NULL);
+   HWND hwnd = CreateWindowExW(
+       0,                       // dwExStyle
+       L"ResizableWindowClass", // lpClassName
+       L"CBRZ Optimizer",       // lpWindowName
+       WS_OVERLAPPEDWINDOW | WS_THICKFRAME,
+       CW_USEDEFAULT, CW_USEDEFAULT,
+       500, 400,
+       NULL, NULL, hInstance, NULL);
 
-    
    SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)wc.hIcon);
    SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)wc.hIconSm);
 
@@ -1315,8 +1278,11 @@ HWND hwnd = CreateWindowExW(
    MSG msg;
    while (GetMessage(&msg, NULL, 0, 0))
    {
-      TranslateMessage(&msg);
-      DispatchMessage(&msg);
+      if (!IsDialogMessage(hwnd, &msg))
+      {
+         TranslateMessage(&msg);
+         DispatchMessage(&msg);
+      }
    }
 
    return (int)msg.wParam;

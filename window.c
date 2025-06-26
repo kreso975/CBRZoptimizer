@@ -471,6 +471,8 @@ void load_config_values(void)
    }
 
    update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
+
+   
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -586,7 +588,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       hTerminalText = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 430, 210, 50, 20, hwnd, NULL, NULL, NULL);
       if (hTerminalText)
-         SendMessageW(hTerminalText, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
+         SendMessageW(hTerminalText, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       hStartButton = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                                    20, 230, 70, 30, hwnd, (HMENU)ID_START_BUTTON, NULL, NULL);
@@ -722,6 +724,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       load_config_values();
 
       ToggleResizeImageCheckbox();
+
       EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer); // Must be last to update Controls
 
       InvalidateRect(hwnd, NULL, TRUE); // Ensure background updates

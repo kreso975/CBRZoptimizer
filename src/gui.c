@@ -16,3 +16,4 @@ EditBrowseControl inputs[] = {
     { L"ImageMagick:",     L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH,150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE,&hImageMagickLabel,  &hImageMagickPath,&hImageMagickBrowse,&hButtonBrowse,    NULL }
 };
 const size_t inputsCount = sizeof(inputs) / sizeof(inputs[0]);
+

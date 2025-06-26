@@ -19,8 +19,6 @@
 #include "zip_handle.h"
 #include "image_handle.h"
 
-
-
 HBITMAP LoadBMP(const wchar_t *filename)
 {
    return (HBITMAP)LoadImageW(NULL, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
@@ -80,46 +78,44 @@ ArchiveType detect_archive_type(const wchar_t *file_path)
 
 void ValidateAndSaveInput(HWND changedControl, const wchar_t *iniPath)
 {
-    for (size_t i = 0; i < inputsCount; ++i)
-    {
-        if (inputs[i].hEdit && *(inputs[i].hEdit) == changedControl)
-        {
-            wchar_t buffer[MAX_PATH] = {0};
-            GetWindowTextW(changedControl, buffer, MAX_PATH);
+   for (size_t i = 0; i < inputsCount; ++i)
+   {
+      if (inputs[i].hEdit && *(inputs[i].hEdit) == changedControl)
+      {
+         wchar_t buffer[MAX_PATH] = {0};
+         GetWindowTextW(changedControl, buffer, MAX_PATH);
 
-            if (!inputs[i].defaultText || wcscmp(buffer, inputs[i].defaultText) == 0)
-                return;
-
-            // Keys that may accept empty values without folder validation
-            BOOL allowEmpty = (
-                wcscmp(inputs[i].configKey, L"WINRAR_PATH") == 0 ||
-                wcscmp(inputs[i].configKey, L"SEVEN_ZIP_PATH") == 0 ||
-                wcscmp(inputs[i].configKey, L"IMAGEMAGICK_PATH") == 0
-            );
-
-            if (wcslen(buffer) == 0 && allowEmpty)
-            {
-                inputs[i].defaultText[0] = L'\0';
-                WritePrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, L"", iniPath); // preserve key, empty value
-                return;
-            }
-
-            // Folder must exist for non-empty inputs
-            DWORD attrs = GetFileAttributesW(buffer);
-            if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY))
-            {
-                wchar_t msg[512];
-                swprintf(msg, 512, L"The folder \"%s\" does not exist.\n\nThe previous value will be kept.", buffer);
-                MessageBoxW(changedControl, msg, L"Invalid Folder", MB_OK | MB_ICONWARNING);
-                SetWindowTextW(changedControl, inputs[i].defaultText);
-                return;
-            }
-
-            wcscpy(inputs[i].defaultText, buffer);
-            WritePrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, buffer, iniPath);
+         if (!inputs[i].defaultText || wcscmp(buffer, inputs[i].defaultText) == 0)
             return;
-        }
-    }
+
+         // Keys that may accept empty values without folder validation
+         BOOL allowEmpty = (wcscmp(inputs[i].configKey, L"WINRAR_PATH") == 0 ||
+                            wcscmp(inputs[i].configKey, L"SEVEN_ZIP_PATH") == 0 ||
+                            wcscmp(inputs[i].configKey, L"IMAGEMAGICK_PATH") == 0);
+
+         if (wcslen(buffer) == 0 && allowEmpty)
+         {
+            inputs[i].defaultText[0] = L'\0';
+            WritePrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, L"", iniPath); // preserve key, empty value
+            return;
+         }
+
+         // Folder must exist for non-empty inputs
+         DWORD attrs = GetFileAttributesW(buffer);
+         if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY))
+         {
+            wchar_t msg[512];
+            swprintf(msg, 512, L"The folder \"%s\" does not exist.\n\nThe previous value will be kept.", buffer);
+            MessageBoxW(changedControl, msg, L"Invalid Folder", MB_OK | MB_ICONWARNING);
+            SetWindowTextW(changedControl, inputs[i].defaultText);
+            return;
+         }
+
+         wcscpy(inputs[i].defaultText, buffer);
+         WritePrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, buffer, iniPath);
+         return;
+      }
+   }
 }
 
 BOOL is_zip_archive(const wchar_t *file_path)
@@ -154,6 +150,30 @@ void get_clean_name(const wchar_t *file_path, wchar_t *base)
    if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
       *ext = L'\0';
 }
+
+BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex)
+{
+    char roundtrip[MAX_PATH];
+    int valid = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, input, -1, output, MAX_PATH);
+
+    if (valid > 0 && !wcschr(output, L'�') && !wcschr(output, L'?'))
+    {
+        // Round-trip validation: re-encode and compare
+        WideCharToMultiByte(CP_UTF8, 0, output, -1, roundtrip, MAX_PATH, NULL, NULL);
+        if (strcmp(roundtrip, input) == 0)
+            return TRUE;
+    }
+
+    // Try fallback decoding using Windows-1250
+    valid = MultiByteToWideChar(1250, 0, input, -1, output, MAX_PATH);
+    if (valid > 0 && !wcschr(output, L'�') && !wcschr(output, L'?'))
+        return TRUE;
+
+    // Fallback: generate a safe dummy name
+    swprintf(output, MAX_PATH, L"_badfilename_%03d.bin", fallbackIndex);
+    return FALSE;
+}
+
 
 void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info)
 {
@@ -319,11 +339,35 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    }
    else if (type == ARCHIVE_CBZ)
    {
-      extracted = extract_cbz(hwnd, file_path, extracted_dir);
+      BOOL hasWinRAR = is_valid_winrar() &&
+                       wcslen(g_config.WINRAR_PATH) > 0 &&
+                       wcsstr(g_config.WINRAR_PATH, L"WinRAR.exe") != NULL;
+
+      BOOL has7zip = wcslen(g_config.SEVEN_ZIP_PATH) > 0 &&
+                     GetFileAttributesW(g_config.SEVEN_ZIP_PATH) != INVALID_FILE_ATTRIBUTES &&
+                     !(GetFileAttributesW(g_config.SEVEN_ZIP_PATH) & FILE_ATTRIBUTE_DIRECTORY);
+
+      if (hasWinRAR)
+      {
+         extracted = extract_external_cbz(hwnd, file_path, extracted_dir, EXTERNAL_APP_WINRAR);
+      }
+      else if (!extracted && has7zip)
+      {
+         extracted = extract_external_cbz(hwnd, file_path, extracted_dir, EXTERNAL_APP_7ZIP);
+      }
+      else
+      {
+         extracted = extract_cbz(hwnd, file_path, extracted_dir); // fall back to built-in
+      }
    }
 
    if (!extracted)
+   {
+      OutputDebugStringW(L"Extracting Failed!");
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Failed!");
       return;
+   }
+
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
    if (g_StopProcessing)
       return;
@@ -505,10 +549,9 @@ void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
       return;
 
    int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, (WPARAM)(INT_PTR)-1, (LPARAM)itemText);
-   
+
    if (existingIndex == LB_ERR)
    {
-      
 
       SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)itemText);
    }

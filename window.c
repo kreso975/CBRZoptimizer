@@ -176,6 +176,7 @@ void ToggleResizeImageCheckbox()
    EnableWindow(hImageAllowUpscaling, g_config.resizeTo);
 
    OutputDebugStringW(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE\n" : L"[DEBUG] ResizeTo = FALSE\n");
+   OutputDebugStringW(g_config.keepAspectRatio ? L"[DEBUG] Keep aspect ratio = TRUE\n" : L"[DEBUG] Keep aspect ratio = FALSE\n");
 
    if (!g_config.resizeTo)
    {
@@ -192,6 +193,7 @@ void ToggleResizeImageCheckbox()
    {
       if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
       {
+         OutputDebugStringW(L"[DEBUG] Resize ON - Portrait\n");
          EnableWindow(hImageSizeWidthLabel, FALSE);
          EnableWindow(hImageSizeWidth, FALSE);
          EnableWindow(hImageSizeHeightLabel, TRUE);
@@ -199,6 +201,7 @@ void ToggleResizeImageCheckbox()
       }
       else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
       {
+         OutputDebugStringW(L"[DEBUG] Resize ON - Landscape\n");
          EnableWindow(hImageSizeWidthLabel, TRUE);
          EnableWindow(hImageSizeWidth, TRUE);
          EnableWindow(hImageSizeHeightLabel, FALSE);
@@ -206,6 +209,7 @@ void ToggleResizeImageCheckbox()
       }
       else
       {
+         OutputDebugStringW(L"[DEBUG] Resize ON - Unknown\n");
          // Unknown label → disable both
          EnableWindow(hImageSizeWidthLabel, FALSE);
          EnableWindow(hImageSizeWidth, FALSE);
@@ -215,6 +219,7 @@ void ToggleResizeImageCheckbox()
    }
    else
    {
+      OutputDebugStringW(L"[DEBUG] Aspect Ratio is OFF → enable both\n");
       // Aspect Ratio is OFF → enable both
       EnableWindow(hImageSizeWidthLabel, TRUE);
       EnableWindow(hImageSizeWidth, TRUE);

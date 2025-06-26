@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <shlobj.h>
 #include <shlwapi.h> // For PathFindFileNameW if needed
 #include <stdio.h>   // For swprintf, etc.
 #include <string.h>
@@ -10,102 +11,109 @@
 
 BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 {
-    wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], status_msg[256];
-    wcscpy(cleanDir, file_path);
-    wchar_t *ext = wcsrchr(cleanDir, L'.');
-    if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0)) *ext = L'\0';
-    swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
+   wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], status_msg[256];
+   wcscpy(cleanDir, file_path);
+   wchar_t *ext = wcsrchr(cleanDir, L'.');
+   if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
+      *ext = L'\0';
+   swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
-    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES && !CreateDirectoryW(baseFolder, NULL))
-    {
-        MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
-        return FALSE;
-    }
+   if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES && !CreateDirectoryW(baseFolder, NULL))
+   {
+      MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
+      return FALSE;
+   }
 
-    char zip_utf8[MAX_PATH];
-    WideCharToMultiByte(CP_UTF8, 0, file_path, -1, zip_utf8, MAX_PATH, NULL, NULL);
+   char zip_utf8[MAX_PATH];
+   WideCharToMultiByte(CP_UTF8, 0, file_path, -1, zip_utf8, MAX_PATH, NULL, NULL);
 
-    mz_zip_archive zip = {0};
-    if (!mz_zip_reader_init_file(&zip, zip_utf8, 0))
-    {
-        MessageBoxW(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
-        return FALSE;
-    }
+   mz_zip_archive zip = {0};
+   if (!mz_zip_reader_init_file(&zip, zip_utf8, 0))
+   {
+      MessageBoxW(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
+      return FALSE;
+   }
 
-    mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
-    for (mz_uint i = 0; i < fileCount; ++i)
-    {
-        mz_zip_archive_file_stat stat;
-        if (!mz_zip_reader_file_stat(&zip, i, &stat)) continue;
-        if (mz_zip_reader_is_file_a_directory(&zip, i)) continue;
+   mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
+   for (mz_uint i = 0; i < fileCount; ++i)
+   {
+      mz_zip_archive_file_stat stat;
+      if (!mz_zip_reader_file_stat(&zip, i, &stat))
+         continue;
+      if (mz_zip_reader_is_file_a_directory(&zip, i))
+         continue;
 
-        char relpath_utf8[MAX_PATH];
-        mz_zip_reader_get_filename(&zip, i, relpath_utf8, MAX_PATH);
+      char relpath_utf8[MAX_PATH];
+      mz_zip_reader_get_filename(&zip, i, relpath_utf8, MAX_PATH);
 
-        // Split folder and file name
-        char *slash = strrchr(relpath_utf8, '/');
-        if (!slash) slash = strrchr(relpath_utf8, '\\');
-        char folder_utf8[MAX_PATH] = "", file_utf8[MAX_PATH] = "";
-        if (slash)
-        {
-            size_t len = slash - relpath_utf8;
-            strncpy(folder_utf8, relpath_utf8, len);
-            folder_utf8[len] = '\0';
-            strcpy(file_utf8, slash + 1);
-        }
-        else
-        {
-            strcpy(file_utf8, relpath_utf8);
-        }
+      // Split folder and file name
+      char *slash = strrchr(relpath_utf8, '/');
+      if (!slash)
+         slash = strrchr(relpath_utf8, '\\');
+      char folder_utf8[MAX_PATH] = "", file_utf8[MAX_PATH] = "";
+      if (slash)
+      {
+         size_t len = (size_t)(slash - relpath_utf8);
+         strncpy(folder_utf8, relpath_utf8, len);
+         folder_utf8[len] = '\0';
+         strcpy(file_utf8, slash + 1);
+      }
+      else
+      {
+         strcpy(file_utf8, relpath_utf8);
+      }
 
-        wchar_t decoded_folder[MAX_PATH] = L"", decoded_file[MAX_PATH] = L"";
-        safe_decode_filename(folder_utf8, decoded_folder, i);
-        safe_decode_filename(file_utf8, decoded_file, i);
+      wchar_t decoded_folder[MAX_PATH] = L"", decoded_file[MAX_PATH] = L"";
+      safe_decode_filename(folder_utf8, decoded_folder, (int)i);
+      safe_decode_filename(file_utf8, decoded_file, (int)i);
 
-        swprintf(status_msg, 256, L"[%u/%u] %s\\%s", i + 1, fileCount, decoded_folder, decoded_file);
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
+      swprintf(status_msg, 256, L"[%u/%u] %s\\%s", i + 1, fileCount, decoded_folder, decoded_file);
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
 
-        wchar_t fullDestW[MAX_PATH];
-        if (wcslen(decoded_folder))
-            swprintf(fullDestW, MAX_PATH, L"%s\\%s\\%s", baseFolder, decoded_folder, decoded_file);
-        else
-            swprintf(fullDestW, MAX_PATH, L"%s\\%s", baseFolder, decoded_file);
+      wchar_t fullDestW[MAX_PATH];
+      if (wcslen(decoded_folder))
+         swprintf(fullDestW, MAX_PATH, L"%s\\%s\\%s", baseFolder, decoded_folder, decoded_file);
+      else
+         swprintf(fullDestW, MAX_PATH, L"%s\\%s", baseFolder, decoded_file);
 
-        // Create folders if needed
-        wchar_t tempPath[MAX_PATH];
-        wcscpy(tempPath, fullDestW);
-        wchar_t *p = wcsrchr(tempPath, L'\\');
-        if (p)
-        {
-            *p = L'\0';
-            wchar_t *s = tempPath + wcslen(baseFolder) + 1;
-            while (s && *s)
-            {
-                wchar_t *slash = wcschr(s, L'\\');
-                if (slash) *slash = L'\0';
-                CreateDirectoryW(tempPath, NULL);
-                if (slash) *slash = L'\\';
-                s = slash ? slash + 1 : NULL;
-            }
-        }
+      // Create folders if needed
+      wchar_t tempPath[MAX_PATH];
+      wcscpy(tempPath, fullDestW);
+      wchar_t *p = wcsrchr(tempPath, L'\\');
+      if (p)
+      {
+         *p = L'\0';
+         wchar_t *s = tempPath + wcslen(baseFolder) + 1;
+         while (s && *s)
+         {
+            wchar_t *subslash = wcschr(s, L'\\');
+            if (subslash)
+               *subslash = L'\0';
+            CreateDirectoryW(tempPath, NULL);
+            if (subslash)
+               *subslash = L'\\';
+            s = subslash ? subslash + 1 : NULL;
+         }
+      }
 
-        char fullDest_utf8[MAX_PATH];
-        WideCharToMultiByte(CP_UTF8, 0, fullDestW, -1, fullDest_utf8, MAX_PATH, NULL, NULL);
+      char fullDest_utf8[MAX_PATH];
+      WideCharToMultiByte(CP_UTF8, 0, fullDestW, -1, fullDest_utf8, MAX_PATH, NULL, NULL);
 
-        if (!mz_zip_reader_extract_to_file(&zip, i, fullDest_utf8, 0))
-        {
-            swprintf(status_msg, 256, L"❌ Failed to extract: %s", fullDestW);
-            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
-        }
-    }
+      if (!mz_zip_reader_extract_to_file(&zip, i, fullDest_utf8, 0))
+      {
+         swprintf(status_msg, 256, L"❌ Failed to extract: %s", fullDestW);
+         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
+      }
+   }
 
-    mz_zip_reader_end(&zip);
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
-    flatten_and_clean_folder(baseFolder, baseFolder);
+   mz_zip_reader_end(&zip);
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
+   flatten_and_clean_folder(baseFolder, baseFolder);
+   SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW, baseFolder, NULL);
 
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
-    wcscpy(final_dir, baseFolder);
-    return TRUE;
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
+   wcscpy(final_dir, baseFolder);
+   return TRUE;
 }
 
 BOOL extract_external_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir, ExternalApp externalApp)

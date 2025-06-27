@@ -88,14 +88,19 @@ GUIHandleEntry groupElements[] = {
 
     {L"TmpFolder", L"PathsGroup", &hTmpFolder},
     {L"TmpFolder Label", L"PathsGroup", &hTmpFolderLabel},
+    {L"TmpFolder Browse", L"PathsGroup", &hTmpBrowse},
     {L"OutputFolder", L"PathsGroup", &hOutputFolder},
-    {L"OutputFolder", L"PathsGroup", &hOutputFolderLabel},
+    {L"OutputFolder Label", L"PathsGroup", &hOutputFolderLabel},
+    {L"OutputFolder Browse", L"PathsGroup", &hOutputBrowse},
     {L"WinRAR Path", L"PathsGroup", &hWinrarPath},
-    {L"WinRAR Path", L"PathsGroup", &hWinrarLabel},
+    {L"WinRAR Label", L"PathsGroup", &hWinrarLabel},
+    {L"WinRAR Browse", L"PathsGroup", &hWinrarBrowse},
     {L"7-Zip Path", L"PathsGroup", &hSevenZipPath},
-    {L"7-Zip Path", L"PathsGroup", &hSevenZipLabel},
+    {L"7-Zip Label", L"PathsGroup", &hSevenZipLabel},
+    {L"7-Zip Browse", L"PathsGroup", &hSevenZipBrowse},
     {L"ImageMagick Path", L"PathsGroup", &hImageMagickPath},
-    {L"ImageMagick Path", L"PathsGroup", &hImageMagickLabel},
+    {L"ImageMagick Label", L"PathsGroup", &hImageMagickLabel},
+    {L"ImageMagick Browse", L"PathsGroup", &hImageMagickBrowse},
 
     {L"Image Resize", L"ImageGroup", &hImageResize},
     {L"ImageTypeLabel", L"ImageGroup", &hImageTypeLabel},
@@ -476,8 +481,6 @@ void load_config_values(void)
    }
 
    update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
-
-   
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)

@@ -5,6 +5,7 @@
 *.o
 *.ko
 *.obj
+*.res
 *.elf
 
 # Linker output
@@ -54,3 +55,6 @@ dkms.conf
 #Compiled Dir
 /bin/
 !/bin/.keep
+
+/obj/
+!/obj/.keep

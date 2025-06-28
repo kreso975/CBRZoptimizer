@@ -43,7 +43,6 @@ void stb_write_func(void *context, void *data, int size)
 DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
 {
     ImageTask *task = (ImageTask *)lpParam;
-
     wchar_t *pathW = task->image_path;
     char utf8_path[MAX_PATH];
     WideCharToMultiByte(CP_UTF8, 0, pathW, -1, utf8_path, MAX_PATH, NULL, NULL);
@@ -92,9 +91,7 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
         {
             if ((wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && h <= task->target_height) ||
                 (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && w <= task->target_width))
-            {
                 should_resize = FALSE;
-            }
         }
         else
         {
@@ -107,60 +104,65 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     if (!task->keep_aspect && w == task->target_width && h == task->target_height)
         should_resize = FALSE;
 
-    if (!should_resize)
-    {
-        DEBUG_PRINT(L"[STB] Skipping resize: upscaling not allowed or unnecessary\n");
-        stbi_image_free(input);
-        free(task);
-        return 0;
-    }
+    unsigned char *final_buffer = input;
+    unsigned char *resized = NULL;
 
-    if (task->keep_aspect)
+    if (should_resize)
     {
-        float aspect = (float)w / (float)h;
+        DEBUG_PRINT(L"[STB] 🔄 Resizing required, starting resize...\n");
 
-        if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && task->target_height > 0)
+        if (task->keep_aspect)
         {
-            newH = task->target_height;
-            float tempW = (float)newH * aspect;
-            newW = max(1, (int)(tempW));
+            float aspect = (float)w / (float)h;
+
+            if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && task->target_height > 0)
+            {
+                newH = task->target_height;
+                float tempW = (float)newH * aspect;
+                newW = max(1, (int)(tempW));
+            }
+            else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && task->target_width > 0)
+            {
+                newW = task->target_width;
+                float tempH = (float)newW / aspect;
+                newH = max(1, (int)(tempH));
+            }
+            else if (task->target_width > 0 && task->target_height > 0)
+            {
+                float scaleW = (float)task->target_width / (float)w;
+                float scaleH = (float)task->target_height / (float)h;
+                float scale = (scaleW < scaleH) ? scaleW : scaleH;
+
+                float tempW = (float)w * scale;
+                float tempH = (float)h * scale;
+                newW = max(1, (int)(tempW));
+                newH = max(1, (int)(tempH));
+            }
         }
-        else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && task->target_width > 0)
+        else
         {
             newW = task->target_width;
-            float tempH = (float)newW / aspect;
-            newH = max(1, (int)(tempH));
+            newH = task->target_height;
         }
-        else if (task->target_width > 0 && task->target_height > 0)
-        {
-            float scaleW = (float)task->target_width / (float)w;
-            float scaleH = (float)task->target_height / (float)h;
-            float scale = (scaleW < scaleH) ? scaleW : scaleH;
 
-            float tempW = (float)w * scale;
-            float tempH = (float)h * scale;
-            newW = max(1, (int)(tempW));
-            newH = max(1, (int)(tempH));
+        size_t bufferSize = (size_t)newW * (size_t)newH * 3;
+        resized = malloc(bufferSize);
+        if (!resized)
+        {
+            stbi_image_free(input);
+            SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
+            free(task);
+            return 1;
         }
+
+        stbir_resize_uint8_linear(input, w, h, 0, resized, newW, newH, 0, STBIR_RGB);
+        stbi_image_free(input);
+        final_buffer = resized;
     }
     else
     {
-        newW = task->target_width;
-        newH = task->target_height;
+        DEBUG_PRINT(L"[STB] Skipping resize: using original image buffer for encode\n");
     }
-
-    size_t bufferSize = (size_t)newW * (size_t)newH * 3;
-    unsigned char *resized = malloc(bufferSize);
-    if (!resized)
-    {
-        stbi_image_free(input);
-        SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
-        free(task);
-        return 1;
-    }
-
-    stbir_resize_uint8_linear(input, w, h, 0, resized, newW, newH, 0, STBIR_RGB);
-    stbi_image_free(input);
 
     const wchar_t *extW = wcsrchr(pathW, L'.');
     int result = 0;
@@ -168,18 +170,28 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     FILE *fp = _wfopen(pathW, L"wb");
     if (fp)
     {
+        DEBUG_PRINT(L"[Fopen] ⏳ Inside opened file.\n");
+
         if (extW && _wcsicmp(extW, L".jpg") == 0)
         {
             result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(g_config.IMAGE_QUALITY));
+            if (!result)
+            {
+                fwprintf(stderr, L"[STB] ⚠ Failed to encode....\n");
+            }
         }
         else if (extW && _wcsicmp(extW, L".png") == 0)
         {
-            result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, resized, newW * 3);
+            result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, final_buffer, newW * 3);
         }
+
         fclose(fp);
     }
 
-    free(resized);
+    if (resized)
+        free(resized);
+    else
+        stbi_image_free(input);
 
     SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ",
                result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");

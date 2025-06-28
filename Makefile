@@ -52,8 +52,10 @@ ifeq ($(BUILD),release)
 	copy /Y "external\\license.txt"           "$(BIN_DIR)\\thirdparty\\LICENSE-UnRAR.txt" > nul
 	copy /Y "src\\miniz\\LICENSE"             "$(BIN_DIR)\\thirdparty\\LICENSE-miniz.txt" > nul
 	copy /Y "src\\stb\\LICENSE"               "$(BIN_DIR)\\thirdparty\\LICENSE-stb.txt" > nul
+	copy /Y "external\\UnRAR64.dll"   			"$(BIN_DIR)\\" > nul
 else
 	copy /Y "$(MANIFEST)" "$(BIN_DIR)\\" > nul
+	copy /Y "external\\UnRAR64.dll"   			"$(BIN_DIR)\\" > nul
 endif
 
 # Specialized rule: compile miniz.c with relaxed warning flags
@@ -75,6 +77,7 @@ $(RES): resources.rc $(MANIFEST)
 clean:
 	cmd /C "rd /S /Q obj" 2>nul
 	cmd /C "del /Q $(BIN_DIR)\\*.exe" 2>nul
+	cmd /C "del /Q $(BIN_DIR)\\*.dll" 2>nul
 	cmd /C "del /Q $(BIN_DIR)\\*.manifest" 2>nul
 	cmd /C "del /Q $(BIN_DIR)\\LICENSE-*.txt" 2>nul
 	cmd /C "rd /S /Q $(BIN_DIR)\\thirdparty" 2>nul

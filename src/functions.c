@@ -145,7 +145,7 @@ void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target)
       else
       {
          const wchar_t *ext = wcsrchr(ffd.cFileName, L'.');
-         if (ext && (_wcsicmp(ext, L".jpg") == 0 || _wcsicmp(ext, L".jpeg") == 0 || _wcsicmp(ext, L".png") == 0))
+         if (ext && (_wcsicmp(ext, L".jpg") == 0 || _wcsicmp(ext, L".jpeg") == 0 || _wcsicmp(ext, L".png") == 0  || _wcsicmp(ext, L".bmp") == 0))
          {
             wchar_t dest[MAX_PATH];
             swprintf(dest, MAX_PATH, L"%s\\%s", target, ffd.cFileName);
@@ -251,8 +251,7 @@ void process_file(HWND hwnd, const wchar_t *file_path)
    // Image optimization
    if (g_config.runImageOptimizer)
    {
-      if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 ||
-          GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+      if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
           (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
       {
          DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer3: ON\n" : L"ImageOptimizer3: OFF\n");

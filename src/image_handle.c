@@ -47,6 +47,7 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     char utf8_path[MAX_PATH];
     WideCharToMultiByte(CP_UTF8, 0, pathW, -1, utf8_path, MAX_PATH, NULL, NULL);
 
+    // 1) Load file into memory
     HANDLE hFile = CreateFileW(pathW, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE)
     {
@@ -56,8 +57,8 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     }
 
     DWORD fileSize = GetFileSize(hFile, NULL);
-    BYTE *buffer = malloc(fileSize);
-    if (!buffer)
+    BYTE *fileBuf = (BYTE *)malloc(fileSize);
+    if (!fileBuf)
     {
         CloseHandle(hFile);
         SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"❌ Memory allocation failed.");
@@ -66,12 +67,13 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     }
 
     DWORD bytesRead;
-    ReadFile(hFile, buffer, fileSize, &bytesRead, NULL);
+    ReadFile(hFile, fileBuf, fileSize, &bytesRead, NULL);
     CloseHandle(hFile);
 
+    // 2) Decode with STB
     int w, h, c;
-    unsigned char *input = stbi_load_from_memory(buffer, (int)fileSize, &w, &h, &c, 3);
-    free(buffer);
+    unsigned char *input = stbi_load_from_memory(fileBuf, (int)fileSize, &w, &h, &c, 3);
+    free(fileBuf);
 
     if (!input)
     {
@@ -80,11 +82,29 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
         return 1;
     }
 
-    BOOL should_resize = TRUE;
-    int newW = w;
-    int newH = h;
+    // 3) Build output path (.bmp → .jpg)
+    wchar_t outPath[MAX_PATH];
+    wcscpy_s(outPath, MAX_PATH, pathW);
 
-    // Prevent upscaling if disallowed
+    const wchar_t *ext = PathFindExtensionW(pathW);
+    BOOL isBMP = (ext && _wcsnicmp(ext, L".bmp", 4) == 0);
+
+    if (isBMP)
+    {
+        wchar_t *dot = PathFindExtensionW(outPath);
+        if (dot && *dot)
+        {
+            wcscpy_s(dot, (rsize_t)(MAX_PATH - (dot - outPath)), L".jpg");
+            DEBUG_PRINTF(L"[STB] 🖼 BMP detected — remapped to: %ls\n", outPath);
+        }
+    }
+
+    const wchar_t *outExt = PathFindExtensionW(outPath);
+
+    // 4) Resize decision
+    BOOL should_resize = TRUE;
+    int newW = w, newH = h;
+
     if (!task->allow_upscale)
     {
         if (task->keep_aspect)
@@ -100,16 +120,16 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
         }
     }
 
-    // Skip resize if dimensions already match and aspect doesn't matter
     if (!task->keep_aspect && w == task->target_width && h == task->target_height)
         should_resize = FALSE;
 
-    unsigned char *final_buffer = input;
+    unsigned char *final_buf = input;
     unsigned char *resized = NULL;
 
+    // 5) Resize if needed
     if (should_resize)
     {
-        DEBUG_PRINT(L"[STB] 🔄 Resizing required, starting resize...\n");
+        DEBUG_PRINTF(L"[STB] 🔄 Resizing %dx%d → target %dx%d\n", w, h, task->target_width, task->target_height);
 
         if (task->keep_aspect)
         {
@@ -118,25 +138,20 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
             if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && task->target_height > 0)
             {
                 newH = task->target_height;
-                float tempW = (float)newH * aspect;
-                newW = max(1, (int)(tempW));
+                newW = max(1, (int)((float)newH * aspect));
             }
             else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && task->target_width > 0)
             {
                 newW = task->target_width;
-                float tempH = (float)newW / aspect;
-                newH = max(1, (int)(tempH));
+                newH = max(1, (int)((float)newW / aspect));
             }
-            else if (task->target_width > 0 && task->target_height > 0)
+            else
             {
                 float scaleW = (float)task->target_width / (float)w;
                 float scaleH = (float)task->target_height / (float)h;
                 float scale = (scaleW < scaleH) ? scaleW : scaleH;
-
-                float tempW = (float)w * scale;
-                float tempH = (float)h * scale;
-                newW = max(1, (int)(tempW));
-                newH = max(1, (int)(tempH));
+                newW = max(1, (int)((float)w * scale));
+                newH = max(1, (int)((float)h * scale));
             }
         }
         else
@@ -145,8 +160,8 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
             newH = task->target_height;
         }
 
-        size_t bufferSize = (size_t)newW * (size_t)newH * 3;
-        resized = malloc(bufferSize);
+        size_t bufSize = (size_t)newW * (size_t)newH * 3;
+        resized = (unsigned char *)malloc(bufSize);
         if (!resized)
         {
             stbi_image_free(input);
@@ -157,44 +172,42 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
 
         stbir_resize_uint8_linear(input, w, h, 0, resized, newW, newH, 0, STBIR_RGB);
         stbi_image_free(input);
-        final_buffer = resized;
+        final_buf = resized;
     }
     else
     {
-        DEBUG_PRINT(L"[STB] Skipping resize: using original image buffer for encode\n");
+        DEBUG_PRINTF(L"[STB] ⏭ Skipping resize: keeping %dx%d\n", w, h);
     }
 
-    const wchar_t *extW = wcsrchr(pathW, L'.');
+    // 6) Write output
     int result = 0;
-
-    FILE *fp = _wfopen(pathW, L"wb");
+    FILE *fp = _wfopen(outPath, L"wb");
     if (fp)
     {
-        DEBUG_PRINT(L"[Fopen] ⏳ Inside opened file.\n");
-
-        if (extW && _wcsicmp(extW, L".jpg") == 0)
-        {
-            result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, resized, _wtoi(g_config.IMAGE_QUALITY));
-            if (!result)
-            {
-                fwprintf(stderr, L"[STB] ⚠ Failed to encode....\n");
-            }
-        }
-        else if (extW && _wcsicmp(extW, L".png") == 0)
-        {
-            result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, final_buffer, newW * 3);
-        }
-
+        DEBUG_PRINTF(L"[STB] 💾 Saving to %ls\n", outPath);
+        if (outExt && _wcsicmp(outExt, L".jpg") == 0)
+            result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, final_buf, _wtoi(g_config.IMAGE_QUALITY));
+        else if (outExt && _wcsicmp(outExt, L".png") == 0)
+            result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, final_buf, newW * 3);
         fclose(fp);
     }
 
+    // 7) Delete .bmp if converted
+    if (result && isBMP)
+    {
+        if (DeleteFileW(pathW))
+            DEBUG_PRINTF(L"[STB] 🧹 Deleted original BMP: %ls\n", pathW);
+        else
+            DEBUG_PRINTF(L"[STB] ⚠ Failed to delete BMP: %ls (Error: %lu)\n", pathW, GetLastError());
+    }
+
+    // 8) Cleanup
     if (resized)
         free(resized);
     else
         stbi_image_free(input);
 
-    SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ",
-               result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");
+    SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");
 
     free(task);
     return 0;
@@ -211,7 +224,7 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
     DWORD numCPU = sysinfo.dwNumberOfProcessors;
     DWORD max_threads = max(1, min(numCPU * 2, 64));
 
-    const wchar_t *exts[] = {L"jpg", L"png"};
+    const wchar_t *exts[] = {L"jpg", L"png", L"bmp"};
     HANDLE *threads = malloc(sizeof(HANDLE) * max_threads);
     int thread_count = 0;
 
@@ -224,13 +237,11 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 
     // Debug: dump global config into Output
     wchar_t dbg[256];
-    swprintf(dbg, _countof(dbg),
-             L"[STB] ResizeTo: %d | Width: %d | Height: %d | Aspect: %d | Upscale: %d\n",
-             g_config.resizeTo, target_width, target_height,
-             keep_aspect, allow_upscale);
+    swprintf(dbg, _countof(dbg), L"[STB] ResizeTo: %d | Width: %d | Height: %d | Aspect: %d | Upscale: %d\n",
+             g_config.resizeTo, target_width, target_height, keep_aspect, allow_upscale);
     DEBUG_PRINT(dbg);
 
-    for (int i = 0; i < 2; i++)
+    for (size_t i = 0; i < ARRAYSIZE(exts); i++)
     {
         swprintf(search_path, MAX_PATH, L"%s\\*.%s", folder, exts[i]);
 

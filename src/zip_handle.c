@@ -4,10 +4,19 @@
 #include <stdio.h>   // For swprintf, etc.
 #include <string.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wtype-limits"
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
+
 #include "miniz.h"
+
+#pragma GCC diagnostic pop
 #include "functions.h"
 #include "gui.h"
 #include "zip_handle.h"
+#include "debug.h"
 
 BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 {

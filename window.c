@@ -1,6 +1,7 @@
 #ifndef UNICODE
 #define UNICODE
 #endif
+
 #include <windows.h>
 #include <commdlg.h>
 #include <shlobj.h>
@@ -16,15 +17,14 @@
 #include "gui.h"
 #include "functions.h"
 #include "aboutDialog.h"
+#include "debug.h"
 
 #include <uxtheme.h>
 
 HINSTANCE g_hInstance;
 
 HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
-
 HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
-
 // Main controls
 HWND hListBox, hStartButton, hStopButton, hAddButton, hRemoveButton, hSettingsWnd;
 // Paths
@@ -70,16 +70,8 @@ AppConfig g_config = {
     .runCompressor = TRUE,
     .keepExtracted = TRUE};
 
-LabelCheckboxPair controls[] = {
-    {L"Image optimization", L"hOutputRunImageOptimizer", L"Output", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel, &g_config.runImageOptimizer},
-    {L"Compress folder", L"hOutputRunCompressor", L"Output", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel, &g_config.runCompressor},
-    {L"Keep extracted folders", L"hOutputKeepExtracted", L"Output", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel, &g_config.keepExtracted},
-
-    {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 490, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo},
-    {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio},
-    {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling}};
-
-const int controlCount = sizeof(controls) / sizeof(controls[0]);
+extern LabelCheckboxPair controls[];
+extern const int controlCount;
 
 GUIHandleEntry groupElements[] = {
     {L"ListBox", L"FilesGroup", &hListBox},
@@ -172,67 +164,6 @@ void AdjustLayout(HWND hwnd)
                 SWP_NOZORDER | SWP_NOMOVE | SWP_NOCOPYBITS | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
-void ToggleResizeImageCheckbox()
-{
-   // Enable/disable Keep Aspect Ratio controls based on ResizeTo
-   EnableWindow(hImageKeepAspectRatioLabel, g_config.resizeTo);
-   EnableWindow(hImageKeepAspectRatio, g_config.resizeTo);
-   EnableWindow(hImageAllowUpscalingLabel, g_config.resizeTo);
-   EnableWindow(hImageAllowUpscaling, g_config.resizeTo);
-
-   OutputDebugStringW(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE\n" : L"[DEBUG] ResizeTo = FALSE\n");
-   OutputDebugStringW(g_config.keepAspectRatio ? L"[DEBUG] Keep aspect ratio = TRUE\n" : L"[DEBUG] Keep aspect ratio = FALSE\n");
-
-   if (!g_config.resizeTo)
-   {
-      // Resize is OFF → disable everything else
-      EnableWindow(hImageSizeWidthLabel, FALSE);
-      EnableWindow(hImageSizeWidth, FALSE);
-      EnableWindow(hImageSizeHeightLabel, FALSE);
-      EnableWindow(hImageSizeHeight, FALSE);
-      return;
-   }
-
-   // Resize is ON
-   if (g_config.keepAspectRatio)
-   {
-      if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
-      {
-         OutputDebugStringW(L"[DEBUG] Resize ON - Portrait\n");
-         EnableWindow(hImageSizeWidthLabel, FALSE);
-         EnableWindow(hImageSizeWidth, FALSE);
-         EnableWindow(hImageSizeHeightLabel, TRUE);
-         EnableWindow(hImageSizeHeight, TRUE);
-      }
-      else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
-      {
-         OutputDebugStringW(L"[DEBUG] Resize ON - Landscape\n");
-         EnableWindow(hImageSizeWidthLabel, TRUE);
-         EnableWindow(hImageSizeWidth, TRUE);
-         EnableWindow(hImageSizeHeightLabel, FALSE);
-         EnableWindow(hImageSizeHeight, FALSE);
-      }
-      else
-      {
-         OutputDebugStringW(L"[DEBUG] Resize ON - Unknown\n");
-         // Unknown label → disable both
-         EnableWindow(hImageSizeWidthLabel, FALSE);
-         EnableWindow(hImageSizeWidth, FALSE);
-         EnableWindow(hImageSizeHeightLabel, FALSE);
-         EnableWindow(hImageSizeHeight, FALSE);
-      }
-   }
-   else
-   {
-      OutputDebugStringW(L"[DEBUG] Aspect Ratio is OFF → enable both\n");
-      // Aspect Ratio is OFF → enable both
-      EnableWindow(hImageSizeWidthLabel, TRUE);
-      EnableWindow(hImageSizeWidth, TRUE);
-      EnableWindow(hImageSizeHeightLabel, TRUE);
-      EnableWindow(hImageSizeHeight, TRUE);
-   }
-}
-
 WNDPROC oldListBoxProc; // Global variable to store the original ListBox procedure
 // Custom List Box Procedure
 LRESULT CALLBACK ListBoxProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -269,9 +200,6 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             *(lastSlash + 1) = L'\0';
          wcscat(iniPath, L"config.ini");
 
-         extern LabelCheckboxPair controls[];
-         extern const int controlCount;
-
          for (int i = 0; i < controlCount; ++i)
          {
             if (hCheckbox == *controls[i].hCheckbox)
@@ -299,19 +227,16 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
          }
 
-         // Handle label-triggered logic
-         if (hwnd == hImageResizeToLabel || hwnd == hImageKeepAspectRatioLabel)
+         if (hwnd == hImageResizeToLabel || hwnd == hImageKeepAspectRatioLabel || hwnd == hOutputRunImageOptimizerLabel)
          {
-            ToggleResizeImageCheckbox();
-         }
-         // Handle label-triggered logic
-         if (hwnd == hOutputRunImageOptimizerLabel)
-         {
-            EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer);
-            if (g_config.runImageOptimizer)
+            BOOL shouldEnable = g_config.runImageOptimizer;
+
+            EnableResizeGroupWithLogic(L"ImageGroup", shouldEnable);
+
+            // If the group is visible and needs layout attention
+            if (shouldEnable)
             {
-               ToggleResizeImageCheckbox();
-               AdjustLayout(GetParent(hwnd));
+               AdjustLayout(GetParent(hwnd)); // VERY IMPORTANT: GetParent(hwnd) only this works for Label
             }
          }
       }
@@ -397,90 +322,6 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    }
 
    return 0;
-}
-
-void load_config_values(void)
-{
-   wchar_t buffer[MAX_PATH];
-
-   // Build config.ini path
-   wchar_t iniPath[MAX_PATH];
-   GetModuleFileNameW(NULL, iniPath, MAX_PATH);
-   wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
-   if (lastSlash)
-      *(lastSlash + 1) = L'\0';
-   wcscat(iniPath, L"config.ini");
-
-   typedef struct
-   {
-      const wchar_t *section;
-      const wchar_t *key;
-      HWND *hwnd;
-      wchar_t *target;
-      DWORD size;
-   } ConfigBinding;
-
-   ConfigBinding bindings[] = {
-       {L"Paths", L"TMP_FOLDER", &hTmpFolder, g_config.TMP_FOLDER, MAX_PATH},
-       {L"Paths", L"OUTPUT_FOLDER", &hOutputFolder, g_config.OUTPUT_FOLDER, MAX_PATH},
-       {L"Paths", L"WINRAR_PATH", &hWinrarPath, g_config.WINRAR_PATH, MAX_PATH},
-       {L"Paths", L"SEVEN_ZIP_PATH", &hSevenZipPath, g_config.SEVEN_ZIP_PATH, MAX_PATH},
-       {L"Paths", L"IMAGEMAGICK_PATH", &hImageMagickPath, g_config.IMAGEMAGICK_PATH, MAX_PATH},
-       {L"Image", L"IMAGE_SIZE_WIDTH", &hImageSizeWidth, g_config.IMAGE_SIZE_WIDTH, IMG_DIM_LEN},
-       {L"Image", L"IMAGE_SIZE_HEIGHT", &hImageSizeHeight, g_config.IMAGE_SIZE_HEIGHT, IMG_DIM_LEN},
-       {L"Image", L"IMAGE_QUALITY", &hImageQualityValue, g_config.IMAGE_QUALITY, QUALITY_LEN},
-       {L"Image", L"IMAGE_TYPE", &hImageType, g_config.IMAGE_TYPE, IMAGE_TYPE_LEN}};
-
-   for (size_t i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i)
-   {
-      const ConfigBinding *b = &bindings[i];
-      GetPrivateProfileStringW(b->section, b->key, L"", buffer, MAX_PATH, iniPath);
-
-      if (b->target)
-      {
-         wcsncpy(b->target, buffer, b->size - 1);
-         b->target[b->size - 1] = L'\0';
-      }
-
-      if (b->hwnd && *b->hwnd)
-      {
-         // IMAGE_TYPE uses dropdown, match by label
-         if (*b->hwnd == hImageType)
-         {
-            for (int j = 0; j < IMAGE_TYPE_COUNT; ++j)
-            {
-               if (wcscmp(buffer, g_ImageTypeOptions[j].label) == 0)
-               {
-                  SendMessageW(hImageType, CB_SETCURSEL, (WPARAM)j, 0);
-                  break;
-               }
-            }
-         }
-         else
-         {
-            SetWindowTextW(*b->hwnd, buffer);
-         }
-      }
-
-      if (wcscmp(b->key, L"IMAGE_QUALITY") == 0)
-      {
-         SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
-      }
-   }
-
-   for (int i = 0; i < controlCount; ++i)
-   {
-      GetPrivateProfileStringW(controls[i].configSegment, controls[i].configKey, L"false", buffer, sizeof(buffer), iniPath);
-
-      BOOL isChecked = (wcscmp(buffer, L"true") == 0);
-
-      SendMessageW(*controls[i].hCheckbox, BM_SETCHECK, isChecked ? BST_CHECKED : BST_UNCHECKED, 0);
-
-      if (controls[i].configField)
-         *controls[i].configField = isChecked;
-   }
-
-   update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -713,7 +554,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       SendMessageW(hOutputType, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
-      for (size_t i = 0; i < ARRAYSIZE(controls); ++i)
+      for (int i = 0; i < controlCount; ++i)
       {
          *controls[i].hCheckbox = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 350, controls[i].y, 20, 20, hwnd, NULL, NULL, NULL);
          *controls[i].hLabel = CreateWindowW(L"STATIC", controls[i].labelText, WS_CHILD | WS_VISIBLE | SS_NOTIFY, 330, controls[i].y, 180, 20, hwnd, NULL, NULL, NULL);
@@ -731,9 +572,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       load_config_values();
 
-      ToggleResizeImageCheckbox();
-
-      EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer); // Must be last to update Controls
+      EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer); // Must be last to update Controls
 
       InvalidateRect(hwnd, NULL, TRUE); // Ensure background updates
       UpdateWindow(hwnd);               // Force immediate redraw
@@ -839,7 +678,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          BrowseFile(hwnd, g_config.WINRAR_PATH);
          WritePrivateProfileStringW(L"Paths", L"WINRAR_PATH", g_config.WINRAR_PATH, iniPath);
          SetWindowTextW(hWinrarPath, g_config.WINRAR_PATH);
-         update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH); // clean, direct
+         update_output_type_dropdown(g_config.WINRAR_PATH); // clean, direct
       }
       else if (LOWORD(wParam) == ID_SEVEN_ZIP_PATH_BROWSE)
       {
@@ -868,7 +707,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          }
 
          if ((HWND)lParam == hWinrarPath)
-            update_output_type_dropdown(hOutputType, g_config.WINRAR_PATH);
+            update_output_type_dropdown(g_config.WINRAR_PATH);
 
          else if ((HWND)lParam == hImageSizeWidth)
          {
@@ -897,10 +736,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          ShowWindow(hStopButton, SW_SHOW);
          ShowWindow(hTerminalProcessingLabel, SW_SHOW);
          ShowWindow(hTerminalProcessingText, SW_SHOW);
-         EnableGroupElements(L"FilesGroup", FALSE);
-         EnableGroupElements(L"OutputGroup", FALSE);
-         EnableGroupElements(L"PathsGroup", FALSE);
-         EnableGroupElements(L"ImageGroup", FALSE);
+         EnableResizeGroupWithLogic(L"FilesGroup", FALSE);
+         EnableResizeGroupWithLogic(L"OutputGroup", FALSE);
+         EnableResizeGroupWithLogic(L"PathsGroup", FALSE);
+         EnableResizeGroupWithLogic(L"ImageGroup", FALSE);
          CreateThread(NULL, 0, ProcessingThread, hwnd, 0, NULL);
       }
 
@@ -932,7 +771,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // Copy the label from the struct array into global IMAGE_TYPE buffer
             wcsncpy(g_config.IMAGE_TYPE, g_ImageTypeOptions[selectedIndex].label, sizeof(g_config.IMAGE_TYPE) / sizeof(wchar_t) - 1);
             g_config.IMAGE_TYPE[sizeof(g_config.IMAGE_TYPE) / sizeof(wchar_t) - 1] = L'\0'; // Ensure null-termination
-            ToggleResizeImageCheckbox();                                                    // React to change
+            EnableResizeGroupWithLogic(L"ImageGroup", TRUE);                                // React to change
 
             // Save the selected image type to the .ini file
             WritePrivateProfileStringW(L"Image", L"IMAGE_TYPE", g_config.IMAGE_TYPE, iniPath);
@@ -957,17 +796,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                *(controls[i].configField) = (checked == BST_CHECKED);
             }
 
-            // Handle special cases
-            if (wcscmp(key, L"IMAGE_RESIZE_TO") == 0 || wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0)
+            // Handle image optimizer + resize state
+            if (wcscmp(key, L"hOutputRunImageOptimizer") == 0 ||
+                wcscmp(key, L"IMAGE_RESIZE_TO") == 0 ||
+                wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0)
             {
-               ToggleResizeImageCheckbox();
-            }
-            if (wcscmp(key, L"hOutputRunImageOptimizer") == 0)
-            {
-               EnableGroupElements(L"ImageGroup", g_config.runImageOptimizer);
+               // Single clear call to update the group state based on current config
+               EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer);
+
+               // Only update layout if the group is actually visible
                if (g_config.runImageOptimizer)
                {
-                  ToggleResizeImageCheckbox();
                   AdjustLayout(hwnd);
                }
             }
@@ -1186,11 +1025,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       ShowWindow(hStopButton, SW_HIDE);
       ShowWindow(hTerminalProcessingLabel, SW_HIDE);
       ShowWindow(hTerminalProcessingText, SW_HIDE);
-      EnableGroupElements(L"FilesGroup", TRUE);
-      EnableGroupElements(L"OutputGroup", TRUE);
-      EnableGroupElements(L"PathsGroup", TRUE);
-      EnableGroupElements(L"ImageGroup", TRUE);
-      ToggleResizeImageCheckbox(); // I dont know why but it must be called. somehow it losses values
+      EnableResizeGroupWithLogic(L"FilesGroup", TRUE);
+      EnableResizeGroupWithLogic(L"OutputGroup", TRUE);
+      EnableResizeGroupWithLogic(L"PathsGroup", TRUE);
+      EnableResizeGroupWithLogic(L"ImageGroup", TRUE);
       AdjustLayout(hwnd);
       break;
 

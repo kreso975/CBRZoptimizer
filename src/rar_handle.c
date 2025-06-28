@@ -7,8 +7,10 @@
 #include "functions.h"
 #include "gui.h"
 #include "unrar.h" // Ensure this header matches your DLL version
+#include "debug.h"
 
 // Typedefs for dynamic linking
+
 typedef HANDLE(PASCAL *RAROPENARCHIVEEX)(struct RAROpenArchiveDataEx *);
 typedef int(PASCAL *RARREADHEADEREX)(HANDLE, struct RARHeaderDataEx *);
 typedef int(PASCAL *RARPROCESSFILEW)(HANDLE, int, const wchar_t *, const wchar_t *);
@@ -16,6 +18,7 @@ typedef int(PASCAL *RARCLOSEARCHIVE)(HANDLE);
 
 BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *unused_dest_folder)
 {
+   (void)unused_dest_folder;
    // Build base extraction folder like extract_cbr()
    wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH];
    wcscpy(cleanDir, archive_path);
@@ -36,7 +39,7 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
    }
 
    HMODULE hUnrar = LoadLibraryW(UNRAR_DLL_PATH);
-   
+
    if (!hUnrar)
    {
       DWORD err = GetLastError();
@@ -47,11 +50,14 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
       return FALSE;
    }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
    // Load DLL function pointers
    RAROPENARCHIVEEX fnRAROpenArchiveEx = (RAROPENARCHIVEEX)GetProcAddress(hUnrar, "RAROpenArchiveEx");
    RARREADHEADEREX fnRARReadHeaderEx = (RARREADHEADEREX)GetProcAddress(hUnrar, "RARReadHeaderEx");
    RARPROCESSFILEW fnRARProcessFileW = (RARPROCESSFILEW)GetProcAddress(hUnrar, "RARProcessFileW");
    RARCLOSEARCHIVE fnRARCloseArchive = (RARCLOSEARCHIVE)GetProcAddress(hUnrar, "RARCloseArchive");
+#pragma GCC diagnostic pop
 
    if (!fnRAROpenArchiveEx || !fnRARReadHeaderEx || !fnRARProcessFileW || !fnRARCloseArchive)
    {
@@ -141,7 +147,8 @@ BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
    }
 
    swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" \"%s\"", g_config.WINRAR_PATH, file_path, baseFolder);
-   STARTUPINFOW si = {sizeof(si)};
+   STARTUPINFOW si = {0};
+   si.cb = sizeof(si);
    si.dwFlags = STARTF_USESHOWWINDOW;
    si.wShowWindow = SW_HIDE;
    PROCESS_INFORMATION pi;
@@ -167,58 +174,59 @@ BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 
 BOOL create_cbr_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *archive_name)
 {
-    wchar_t cleanName[MAX_PATH], rar_file[MAX_PATH], cbr_file[MAX_PATH], command[1024];
-    wcscpy(cleanName, archive_name);
-    wchar_t *ext = wcsrchr(cleanName, L'.');
-    if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
-        *ext = L'\0';
+   wchar_t cleanName[MAX_PATH], rar_file[MAX_PATH], cbr_file[MAX_PATH], command[1024];
+   wcscpy(cleanName, archive_name);
+   wchar_t *ext = wcsrchr(cleanName, L'.');
+   if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
+      *ext = L'\0';
 
-    swprintf(rar_file, MAX_PATH, L"%s.rar", cleanName);
-    swprintf(cbr_file, MAX_PATH, L"%s.cbr", cleanName);
+   swprintf(rar_file, MAX_PATH, L"%s.rar", cleanName);
+   swprintf(cbr_file, MAX_PATH, L"%s.cbr", cleanName);
 
-    if (wcslen(g_config.WINRAR_PATH) == 0 ||
-        GetFileAttributesW(g_config.WINRAR_PATH) == INVALID_FILE_ATTRIBUTES ||
-        (GetFileAttributesW(g_config.WINRAR_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-    {
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"❌ WINRAR_PATH is invalid or not set.");
-        return FALSE;
-    }
+   if (wcslen(g_config.WINRAR_PATH) == 0 ||
+       GetFileAttributesW(g_config.WINRAR_PATH) == INVALID_FILE_ATTRIBUTES ||
+       (GetFileAttributesW(g_config.WINRAR_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+   {
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"❌ WINRAR_PATH is invalid or not set.");
+      return FALSE;
+   }
 
-    swprintf(command, 1024, L"\"%s\" a -m5 -ep1 -r \"%s\" \"%s\\*\"", g_config.WINRAR_PATH, rar_file, image_folder);
+   swprintf(command, 1024, L"\"%s\" a -m5 -ep1 -r \"%s\" \"%s\\*\"", g_config.WINRAR_PATH, rar_file, image_folder);
 
-    STARTUPINFOW si = {sizeof(STARTUPINFOW)};
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi;
+   STARTUPINFOW si = {0};
+   si.cb = sizeof(si);
+   si.dwFlags = STARTF_USESHOWWINDOW;
+   si.wShowWindow = SW_HIDE;
+   PROCESS_INFORMATION pi;
 
-    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
-    {
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"❌ Failed to start WinRAR.");
-        return FALSE;
-    }
+   if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+   {
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"❌ Failed to start WinRAR.");
+      return FALSE;
+   }
 
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
+   WaitForSingleObject(pi.hProcess, INFINITE);
+   CloseHandle(pi.hProcess);
+   CloseHandle(pi.hThread);
 
-    MoveFileW(rar_file, cbr_file);
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Renamed .rar to .cbr");
+   MoveFileW(rar_file, cbr_file);
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Renamed .rar to .cbr");
 
-    if (g_config.OUTPUT_FOLDER[0] != L'\0')
-    {
-        const wchar_t *cbr_name = wcsrchr(cbr_file, L'\\');
-        cbr_name = cbr_name ? cbr_name + 1 : cbr_file;
+   if (g_config.OUTPUT_FOLDER[0] != L'\0')
+   {
+      const wchar_t *cbr_name = wcsrchr(cbr_file, L'\\');
+      cbr_name = cbr_name ? cbr_name + 1 : cbr_file;
 
-        wchar_t dest_cbr[MAX_PATH];
-        swprintf(dest_cbr, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbr_name);
-        MoveFileW(cbr_file, dest_cbr);
+      wchar_t dest_cbr[MAX_PATH];
+      swprintf(dest_cbr, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbr_name);
+      MoveFileW(cbr_file, dest_cbr);
 
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"✔ Archive moved to OUTPUT_FOLDER.");
-    }
-    else
-    {
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"📁 OUTPUT_FOLDER not set. Leaving archive in TMP.");
-    }
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"✔ Archive moved to OUTPUT_FOLDER.");
+   }
+   else
+   {
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"📁 OUTPUT_FOLDER not set. Leaving archive in TMP.");
+   }
 
-    return TRUE;
+   return TRUE;
 }

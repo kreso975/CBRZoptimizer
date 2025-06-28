@@ -1,8 +1,3 @@
-#include "image_handle.h"
-#include "gui.h"
-#include "resource.h"
-#include "functions.h" // For SendStatus, IMAGE_QUALITY, etc.
-
 #include <windows.h>
 #include <shlobj.h>  // For SHFileOperation
 #include <shlwapi.h> // If not already present
@@ -15,18 +10,34 @@
 #include <direct.h>
 #include <wchar.h>
 
+#include "image_handle.h"
+#include "gui.h"
+#include "resource.h"
+#include "functions.h" // For SendStatus, IMAGE_QUALITY, etc.
+#include "debug.h"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wshadow"
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
+
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "stb_image_resize2.h"
 
+#pragma GCC diagnostic pop
+
 // STB safe write callback
 void stb_write_func(void *context, void *data, int size)
 {
-   FILE *fp = (FILE *)context;
-   fwrite(data, 1, size, fp);
+    FILE *fp = (FILE *)context;
+    fwrite(data, 1, (size_t)size, fp);
 }
 
 DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
@@ -60,7 +71,7 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     CloseHandle(hFile);
 
     int w, h, c;
-    unsigned char *input = stbi_load_from_memory(buffer, fileSize, &w, &h, &c, 3);
+    unsigned char *input = stbi_load_from_memory(buffer, (int)fileSize, &w, &h, &c, 3);
     free(buffer);
 
     if (!input)
@@ -98,13 +109,12 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
 
     if (!should_resize)
     {
-        OutputDebugStringW(L"[STB] Skipping resize: upscaling not allowed or unnecessary\n");
+        DEBUG_PRINT(L"[STB] Skipping resize: upscaling not allowed or unnecessary\n");
         stbi_image_free(input);
         free(task);
         return 0;
     }
 
-    // Calculate new dimensions
     if (task->keep_aspect)
     {
         float aspect = (float)w / (float)h;
@@ -112,20 +122,25 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
         if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && task->target_height > 0)
         {
             newH = task->target_height;
-            newW = max(1, (int)(newH * aspect));
+            float tempW = (float)newH * aspect;
+            newW = max(1, (int)(tempW));
         }
         else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && task->target_width > 0)
         {
             newW = task->target_width;
-            newH = max(1, (int)(newW / aspect));
+            float tempH = (float)newW / aspect;
+            newH = max(1, (int)(tempH));
         }
         else if (task->target_width > 0 && task->target_height > 0)
         {
-            float scaleW = (float)task->target_width / w;
-            float scaleH = (float)task->target_height / h;
+            float scaleW = (float)task->target_width / (float)w;
+            float scaleH = (float)task->target_height / (float)h;
             float scale = (scaleW < scaleH) ? scaleW : scaleH;
-            newW = max(1, (int)(w * scale));
-            newH = max(1, (int)(h * scale));
+
+            float tempW = (float)w * scale;
+            float tempH = (float)h * scale;
+            newW = max(1, (int)(tempW));
+            newH = max(1, (int)(tempH));
         }
     }
     else
@@ -134,7 +149,8 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
         newH = task->target_height;
     }
 
-    unsigned char *resized = malloc(newW * newH * 3);
+    size_t bufferSize = (size_t)newW * (size_t)newH * 3;
+    unsigned char *resized = malloc(bufferSize);
     if (!resized)
     {
         stbi_image_free(input);
@@ -172,7 +188,6 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     return 0;
 }
 
-
 // Fallback Image Optimization using STB
 BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 {
@@ -201,7 +216,7 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
              L"[STB] ResizeTo: %d | Width: %d | Height: %d | Aspect: %d | Upscale: %d\n",
              g_config.resizeTo, target_width, target_height,
              keep_aspect, allow_upscale);
-    OutputDebugStringW(dbg);
+    DEBUG_PRINT(dbg);
 
     for (int i = 0; i < 2; i++)
     {
@@ -235,9 +250,9 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 
             threads[thread_count++] = CreateThread(NULL, 0, OptimizeImageThread, task, 0, NULL);
 
-            if (thread_count == max_threads)
+            if ((DWORD)thread_count == max_threads)
             {
-                WaitForMultipleObjects(thread_count, threads, TRUE, INFINITE);
+                WaitForMultipleObjects((DWORD)thread_count, threads, TRUE, INFINITE);
                 for (int t = 0; t < thread_count; t++)
                     CloseHandle(threads[t]);
                 thread_count = 0;
@@ -252,7 +267,7 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 
     if (thread_count > 0)
     {
-        WaitForMultipleObjects(thread_count, threads, TRUE, INFINITE);
+        WaitForMultipleObjects((DWORD)thread_count, threads, TRUE, INFINITE);
         for (int t = 0; t < thread_count; t++)
             CloseHandle(threads[t]);
     }
@@ -267,103 +282,102 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
     return !g_StopProcessing;
 }
 
-
 // Optimize Images
 BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
 {
-   wchar_t command[MAX_PATH * 2], buffer[4096];
+    wchar_t command[MAX_PATH * 2], buffer[4096];
 
-   DWORD bytesRead;
-   HANDLE hReadPipe, hWritePipe;
-   SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
-   STARTUPINFOW si = {.cb = sizeof(si)};
-   PROCESS_INFORMATION pi;
+    DWORD bytesRead;
+    HANDLE hReadPipe, hWritePipe;
+    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+    STARTUPINFOW si = {.cb = sizeof(si)};
+    PROCESS_INFORMATION pi;
 
-   TrimTrailingWhitespace(g_config.IMAGEMAGICK_PATH);
+    TrimTrailingWhitespace(g_config.IMAGEMAGICK_PATH);
 
-   // Fallback early if IMAGEMAGICK_PATH is missing or invalid
-   if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
-       (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
-      OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer1: ON\n" : L"ImageOptimizer1: OFF\n");
-      return fallback_optimize_images(hwnd, image_folder);
-   }
+    // Fallback early if IMAGEMAGICK_PATH is missing or invalid
+    if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+        (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
+        DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer1: ON\n" : L"ImageOptimizer1: OFF\n");
+        return fallback_optimize_images(hwnd, image_folder);
+    }
 
-   wchar_t resizeArg[64] = L"";
-   BOOL hasWidth = wcslen(g_config.IMAGE_SIZE_WIDTH) > 0;
-   BOOL hasHeight = wcslen(g_config.IMAGE_SIZE_HEIGHT) > 0;
+    wchar_t resizeArg[64] = L"";
+    BOOL hasWidth = wcslen(g_config.IMAGE_SIZE_WIDTH) > 0;
+    BOOL hasHeight = wcslen(g_config.IMAGE_SIZE_HEIGHT) > 0;
 
-   if (g_config.resizeTo)
-   {
-      const wchar_t *resizeSuffix = g_config.allowUpscaling ? L"" : L">";
+    if (g_config.resizeTo)
+    {
+        const wchar_t *resizeSuffix = g_config.allowUpscaling ? L"" : L">";
 
-      if (g_config.keepAspectRatio)
-      {
-         if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && hasHeight)
-            swprintf(resizeArg, _countof(resizeArg), L"-resize x%s%s", g_config.IMAGE_SIZE_HEIGHT, resizeSuffix);
-         else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && hasWidth)
-            swprintf(resizeArg, _countof(resizeArg), L"-resize %s%s", g_config.IMAGE_SIZE_WIDTH, resizeSuffix);
-      }
-      else if (hasWidth && hasHeight)
-      {
-         // For forced resize, don't apply conditional suffix
-         swprintf(resizeArg, _countof(resizeArg), L"-resize %sx%s!", g_config.IMAGE_SIZE_WIDTH, g_config.IMAGE_SIZE_HEIGHT);
-      }
-   }
+        if (g_config.keepAspectRatio)
+        {
+            if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0 && hasHeight)
+                swprintf(resizeArg, _countof(resizeArg), L"-resize x%s%s", g_config.IMAGE_SIZE_HEIGHT, resizeSuffix);
+            else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0 && hasWidth)
+                swprintf(resizeArg, _countof(resizeArg), L"-resize %s%s", g_config.IMAGE_SIZE_WIDTH, resizeSuffix);
+        }
+        else if (hasWidth && hasHeight)
+        {
+            // For forced resize, don't apply conditional suffix
+            swprintf(resizeArg, _countof(resizeArg), L"-resize %sx%s!", g_config.IMAGE_SIZE_WIDTH, g_config.IMAGE_SIZE_HEIGHT);
+        }
+    }
 
-   const wchar_t *exts[] = {L"jpg", L"png"};
-   OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
-   for (int i = 0; i < 2; i++)
-   {
-      if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"Pipe creation failed. Using STB fallback.");
-         return fallback_optimize_images(hwnd, image_folder);
-      }
+    const wchar_t *exts[] = {L"jpg", L"png"};
+    DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
+    for (int i = 0; i < 2; i++)
+    {
+        if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"Pipe creation failed. Using STB fallback.");
+            return fallback_optimize_images(hwnd, image_folder);
+        }
 
-      si.hStdOutput = hWritePipe;
-      si.hStdError = hWritePipe;
-      si.wShowWindow = SW_HIDE;
-      si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+        si.hStdOutput = hWritePipe;
+        si.hStdError = hWritePipe;
+        si.wShowWindow = SW_HIDE;
+        si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
 
-      // swprintf(command, MAX_PATH, L"\"%s\" mogrify -resize %s -quality %s \"%s\\*.%s\"",
-      //          g_config.IMAGEMAGICK_PATH, g_config.IMAGE_SIZE_HEIGHT, g_config.IMAGE_QUALITY, image_folder, exts[i]);
+        // swprintf(command, MAX_PATH, L"\"%s\" mogrify -resize %s -quality %s \"%s\\*.%s\"",
+        //          g_config.IMAGEMAGICK_PATH, g_config.IMAGE_SIZE_HEIGHT, g_config.IMAGE_QUALITY, image_folder, exts[i]);
 
-      swprintf(command, MAX_PATH * 2, L"\"%s\" mogrify %s -quality %s \"%s\\*.%s\"",
-               g_config.IMAGEMAGICK_PATH,
-               resizeArg[0] != L'\0' ? resizeArg : L"",
-               g_config.IMAGE_QUALITY,
-               image_folder,
-               exts[i]);
-      OutputDebugStringW(command);
+        swprintf(command, MAX_PATH * 2, L"\"%s\" mogrify %s -quality %s \"%s\\*.%s\"",
+                 g_config.IMAGEMAGICK_PATH,
+                 resizeArg[0] != L'\0' ? resizeArg : L"",
+                 g_config.IMAGE_QUALITY,
+                 image_folder,
+                 exts[i]);
+        DEBUG_PRINT(command);
 
-      if (!CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
-      {
-         CloseHandle(hWritePipe);
-         CloseHandle(hReadPipe);
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"Failed to execute. Falling back to STB.");
-         return fallback_optimize_images(hwnd, image_folder);
-      }
+        if (!CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+        {
+            CloseHandle(hWritePipe);
+            CloseHandle(hReadPipe);
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"Failed to execute. Falling back to STB.");
+            return fallback_optimize_images(hwnd, image_folder);
+        }
 
-      CloseHandle(hWritePipe);
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", command);
+        CloseHandle(hWritePipe);
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", command);
 
-      if (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0)
-      {
-         buffer[bytesRead] = '\0';
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", buffer);
-      }
-      else
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"No output captured.");
-      }
+        if (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0)
+        {
+            buffer[bytesRead] = '\0';
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", buffer);
+        }
+        else
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"No output captured.");
+        }
 
-      CloseHandle(hReadPipe);
-      CloseHandle(pi.hProcess);
-      CloseHandle(pi.hThread);
-   }
+        CloseHandle(hReadPipe);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"✔ All formats optimized.");
-   return TRUE;
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"✔ All formats optimized.");
+    return TRUE;
 }

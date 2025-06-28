@@ -4,8 +4,8 @@
 // Version Information
 //
 IDI_VERSION_INFO VERSIONINFO
-FILEVERSION 0,1,0,0
-PRODUCTVERSION 0,1,0,0
+FILEVERSION 0,5,0,0
+PRODUCTVERSION 0,5,0,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
 FILEOS 0x40004L
@@ -18,11 +18,11 @@ BLOCK "StringFileInfo"
   {
     VALUE "CompanyName",      "Stergo"
     VALUE "FileDescription",  "CBR & CBZ Optimizer"
-    VALUE "FileVersion",      "v0.1.0"
+    VALUE "FileVersion",      "v0.5.0"
     VALUE "InternalName",     "CBRZoptimizer"
     VALUE "OriginalFilename", "CBRZoptimizer.exe"
     VALUE "ProductName",      "CBRZ Optimizer"
-    VALUE "ProductVersion",   "v0.1.0"
+    VALUE "ProductVersion",   "v0.5.0"
     VALUE "LegalCopyright",   "© 2025 Kresimir Kokanovic. All rights reserved."
   }
 }

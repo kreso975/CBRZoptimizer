@@ -18,6 +18,11 @@ extern HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel;
 extern HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hImageMagickLabel;
 extern HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
 
+extern HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
+// Output options
+extern HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
+extern HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
+
 
 // ─────────────── Config Structure ───────────────
 #define IMAGE_TYPE_LEN 10
@@ -60,6 +65,9 @@ typedef struct {
     BOOL *configField;
 } LabelCheckboxPair;
 
+extern LabelCheckboxPair controls[];
+extern const int controlCount;
+
 // ─────────────── Browse Field Struct ───────────────
 typedef struct {
     const wchar_t *labelText;      // Label displayed next to the field
@@ -92,9 +100,16 @@ extern int groupElementsCount;
 
 // ─────────────── Utility Prototypes ───────────────
 void EnableGroupElements(LPCWSTR groupName, BOOL enable);
+void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable);
 int  MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type);
 void AdjustLayout(HWND hwnd);
-void ToggleResizeImageCheckbox(void);
 void ValidateAndSaveInput(HWND changedControl, const wchar_t *iniPath);
+void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info);
+void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText);
+void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop);
+void RemoveSelectedItems(HWND hListBox);
+void update_output_type_dropdown(const wchar_t *winrarPath);
+void load_config_values(void);
+
 
 #endif // GUI_H

@@ -76,6 +76,8 @@
    "zip_handle.h": "c",
    "rar_handle.h": "c",
    "stat.h": "c",
-   "shlobj.h": "c"
+   "shlobj.h": "c",
+   "window.h": "c",
+   "debug.h": "c"
 }
 }

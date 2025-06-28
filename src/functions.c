@@ -1,6 +1,7 @@
 #ifndef UNICODE
 #define UNICODE
 #endif
+
 #include <windows.h>
 #include <shlobj.h>  // For SHFileOperation
 #include <shlwapi.h> // If not already present
@@ -18,35 +19,14 @@
 #include "rar_handle.h"
 #include "zip_handle.h"
 #include "image_handle.h"
+#include "debug.h"
 
-HBITMAP LoadBMP(const wchar_t *filename)
-{
-   return (HBITMAP)LoadImageW(NULL, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
-}
-
-// Disable all controls in the "FilesGroup"
-// EnableGroupElements(L"FilesGroup", FALSE);
-
-// Later, re-enable them
-// EnableGroupElements(L"FilesGroup", TRUE);
-
-void EnableGroupElements(LPCWSTR groupName, BOOL enable)
-{
-   for (int i = 0; i < groupElementsCount; ++i)
-   {
-      if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr)
-      {
-         EnableWindow(*groupElements[i].hwndPtr, enable);
-      }
-   }
-}
 
 DWORD WINAPI ProcessingThread(LPVOID lpParam)
 {
    HWND hwnd = (HWND)lpParam;
    HWND hListBox = GetDlgItem(hwnd, ID_LISTBOX); // Or pass both in a struct
-   HWND hOutputType = GetDlgItem(hwnd, ID_OUTPUT_TYPE);
-   StartProcessing(hwnd, hOutputType, hListBox);
+   StartProcessing(hwnd, hListBox);
 
    // You can post a message back to the window if needed
    PostMessage(hwnd, WM_USER + 1, 0, 0);
@@ -74,48 +54,6 @@ ArchiveType detect_archive_type(const wchar_t *file_path)
    }
 
    return type;
-}
-
-void ValidateAndSaveInput(HWND changedControl, const wchar_t *iniPath)
-{
-   for (size_t i = 0; i < inputsCount; ++i)
-   {
-      if (inputs[i].hEdit && *(inputs[i].hEdit) == changedControl)
-      {
-         wchar_t buffer[MAX_PATH] = {0};
-         GetWindowTextW(changedControl, buffer, MAX_PATH);
-
-         if (!inputs[i].defaultText || wcscmp(buffer, inputs[i].defaultText) == 0)
-            return;
-
-         // Keys that may accept empty values without folder validation
-         BOOL allowEmpty = (wcscmp(inputs[i].configKey, L"WINRAR_PATH") == 0 ||
-                            wcscmp(inputs[i].configKey, L"SEVEN_ZIP_PATH") == 0 ||
-                            wcscmp(inputs[i].configKey, L"IMAGEMAGICK_PATH") == 0);
-
-         if (wcslen(buffer) == 0 && allowEmpty)
-         {
-            inputs[i].defaultText[0] = L'\0';
-            WritePrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, L"", iniPath); // preserve key, empty value
-            return;
-         }
-
-         // Folder must exist for non-empty inputs
-         DWORD attrs = GetFileAttributesW(buffer);
-         if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY))
-         {
-            wchar_t msg[512];
-            swprintf(msg, 512, L"The folder \"%s\" does not exist.\n\nThe previous value will be kept.", buffer);
-            MessageBoxW(changedControl, msg, L"Invalid Folder", MB_OK | MB_ICONWARNING);
-            SetWindowTextW(changedControl, inputs[i].defaultText);
-            return;
-         }
-
-         wcscpy(inputs[i].defaultText, buffer);
-         WritePrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, buffer, iniPath);
-         return;
-      }
-   }
 }
 
 BOOL is_zip_archive(const wchar_t *file_path)
@@ -174,76 +112,11 @@ BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex)
     return FALSE;
 }
 
-
-void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info)
-{
-   wchar_t buffer[512];
-   swprintf(buffer, 512, L"%s%s", prefix, info);
-   PostMessageW(hwnd, messageId, 0, (LPARAM)_wcsdup(buffer));
-}
-
 void TrimTrailingWhitespace(wchar_t *str)
 {
    size_t len = wcslen(str);
    while (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r' || str[len - 1] == ' '))
       str[--len] = '\0';
-}
-
-BOOL find_folder_with_images(const wchar_t *basePath, wchar_t *outPath, int depth)
-{
-   if (depth > 10)
-      return FALSE; // prevent runaway recursion
-
-   wchar_t search[MAX_PATH];
-   swprintf(search, MAX_PATH, L"%s\\*", basePath);
-   // 📌 Track current folder
-   // MessageBoxW(NULL, basePath, L"Scanning:", MB_OK);
-
-   WIN32_FIND_DATAW ffd;
-   HANDLE hFind = FindFirstFileW(search, &ffd);
-   if (hFind == INVALID_HANDLE_VALUE)
-      return FALSE;
-
-   BOOL found = FALSE;
-
-   do
-   {
-      if (wcscmp(ffd.cFileName, L".") == 0 || wcscmp(ffd.cFileName, L"..") == 0)
-         continue;
-
-      wchar_t fullPath[MAX_PATH];
-      swprintf(fullPath, MAX_PATH, L"%s\\%s", basePath, ffd.cFileName);
-
-      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-      {
-         if (find_folder_with_images(fullPath, outPath, depth + 1))
-         {
-            found = TRUE;
-            break;
-         }
-      }
-      else
-      {
-         const wchar_t *ext = wcsrchr(ffd.cFileName, L'.');
-         if (ext && (_wcsicmp(ext, L".jpg") == 0 ||
-                     _wcsicmp(ext, L".jpeg") == 0 ||
-                     _wcsicmp(ext, L".png") == 0))
-         {
-            if (depth > 0)
-            {
-               wcscpy(outPath, basePath);
-               // 📌 Confirm image found location
-               // MessageBoxW(NULL, basePath, L"Found image folder:", MB_OK);
-               found = TRUE;
-               break;
-            }
-         }
-      }
-
-   } while (FindNextFileW(hFind, &ffd));
-
-   FindClose(hFind);
-   return found;
 }
 
 void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target)
@@ -316,7 +189,7 @@ void delete_folder_recursive(const wchar_t *path)
    }
 }
 
-void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
+void process_file(HWND hwnd, const wchar_t *file_path)
 {
    wchar_t base[MAX_PATH];
    get_clean_name(file_path, base);
@@ -363,7 +236,8 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 
    if (!extracted)
    {
-      OutputDebugStringW(L"Extracting Failed!");
+      DEBUG_PRINT(L"Extracting Failed!");
+      
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Failed!");
       return;
    }
@@ -372,7 +246,7 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
    if (g_StopProcessing)
       return;
 
-   OutputDebugStringW(g_config.runImageOptimizer ? L"[DEBUG] RunImageOptimizer = TRUE\n" : L"[DEBUG] RunImageOptimizer = FALSE\n");
+   DEBUG_PRINT(g_config.runImageOptimizer ? L"[DEBUG] RunImageOptimizer = TRUE\n" : L"[DEBUG] RunImageOptimizer = FALSE\n");
 
    // Image optimization
    if (g_config.runImageOptimizer)
@@ -381,14 +255,14 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
           GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
           (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
       {
-         OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer3: ON\n" : L"ImageOptimizer3: OFF\n");
+         DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer3: ON\n" : L"ImageOptimizer3: OFF\n");
          SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
          if (!fallback_optimize_images(hwnd, extracted_dir))
             return;
       }
       else
       {
-         OutputDebugStringW(g_config.runImageOptimizer ? L"ImageOptimizer4: ON\n" : L"ImageOptimizer4: OFF\n");
+         DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer4: ON\n" : L"ImageOptimizer4: OFF\n");
          if (!optimize_images(hwnd, extracted_dir))
             return;
       }
@@ -434,7 +308,7 @@ void process_file(HWND hwnd, HWND hOutputType, const wchar_t *file_path)
 }
 
 // Start Processing
-void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox)
+void StartProcessing(HWND hwnd, HWND hListBox)
 {
    LRESULT lTotal = SendMessage(hListBox, LB_GETCOUNT, 0, 0);
    int total = (int)lTotal;
@@ -458,7 +332,7 @@ void StartProcessing(HWND hwnd, HWND hOutputType, HWND hListBox)
       swprintf(progress, sizeof(progress), L"%d/%d", processed + 1, total);
       SendStatus(hwnd, WM_UPDATE_PROCESSING_TEXT, L"", progress);
 
-      process_file(hwnd, hOutputType, file_path);
+      process_file(hwnd, file_path);
       SendMessage(hListBox, LB_DELETESTRING, 0, 0);
 
       processed++;
@@ -542,97 +416,3 @@ void OpenFileDialog(HWND hwnd, HWND hListBox)
    }
 }
 
-void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
-{
-   OutputDebugStringW(itemText);
-   if (!IsWindow(hListBox) || !itemText || !*itemText)
-      return;
-
-   int existingIndex = (int)SendMessageW(hListBox, LB_FINDSTRINGEXACT, (WPARAM)(INT_PTR)-1, (LPARAM)itemText);
-
-   if (existingIndex == LB_ERR)
-   {
-
-      SendMessageW(hListBox, LB_ADDSTRING, 0, (LPARAM)itemText);
-   }
-   else
-   {
-      SendMessageW(hListBox, LB_SETSEL, FALSE, -1);                                   // Deselect all
-      SendMessageW(hListBox, LB_SETSEL, TRUE, existingIndex);                         // Select duplicate
-      SendMessageW(hListBox, LB_SETCARETINDEX, (WPARAM)(INT_PTR)existingIndex, TRUE); // Focus on it
-
-      SetForegroundWindow(hwndOwner);
-      MessageBeep(MB_ICONWARNING);
-      MessageBoxCentered(hwndOwner, L"This file is already in the list.", L"Duplicate Detected", MB_OK | MB_ICONWARNING);
-   }
-}
-
-// Process Dragged Files
-void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
-{
-   wchar_t filePath[MAX_PATH];
-   UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
-
-   for (UINT i = 0; i < fileCount; i++)
-   {
-      if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
-      {
-         AddUniqueToListBox(hwnd, hListBox, filePath);
-      }
-   }
-
-   DragFinish(hDrop);
-}
-
-void RemoveSelectedItems(HWND hListBox)
-{
-   LRESULT result = SendMessageW(hListBox, LB_GETSELCOUNT, 0, 0); // Get number of selected items
-   int selectedCount = (int)result;                               // with bounds check if needed
-
-   if (selectedCount > 0)
-   {
-      size_t allocSize = (size_t)selectedCount * sizeof(int);
-      int *selectedIndexes = (int *)malloc(allocSize);                                                 // Allocate memory
-      SendMessageW(hListBox, LB_GETSELITEMS, (WPARAM)(INT_PTR)selectedCount, (LPARAM)selectedIndexes); // Get indexes
-
-      for (int i = selectedCount - 1; i >= 0; i--)
-      {
-         SendMessageW(hListBox, LB_DELETESTRING, (WPARAM)(INT_PTR)selectedIndexes[i], 0);
-      }
-
-      free(selectedIndexes); // Free memory
-   }
-}
-
-void update_output_type_dropdown(HWND hOutputType, const wchar_t *winrarPath)
-{
-   const wchar_t *filename = wcsrchr(winrarPath, L'\\');
-   filename = filename ? filename + 1 : winrarPath;
-
-   BOOL isValid =
-       wcslen(winrarPath) > 0 &&
-       GetFileAttributesW(winrarPath) != INVALID_FILE_ATTRIBUTES &&
-       !(GetFileAttributesW(winrarPath) & FILE_ATTRIBUTE_DIRECTORY) &&
-       _wcsicmp(filename, L"winrar.exe") == 0;
-
-   SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
-   SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
-
-   if (isValid)
-   {
-      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
-      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
-
-      // 👇 Select "Keep original" if added
-      LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, (WPARAM)(INT_PTR)-1, (LPARAM)L"Keep original");
-      if (index != CB_ERR)
-      {
-         SendMessageW(hOutputType, CB_SETCURSEL, (WPARAM)index, 0);
-      }
-   }
-   else
-   {
-      // No WinRAR, so select "CBZ" which is index 0
-      SendMessageW(hOutputType, CB_SETCURSEL, 0, 0);
-   }
-}

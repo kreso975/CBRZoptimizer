@@ -101,7 +101,8 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
    FreeLibrary(hUnrar);
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", L"📂 Flattening image folders...");
-   flatten_and_clean_folder(baseFolder, baseFolder);
+   wchar_t cleanPath[MAX_PATH];
+   flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", L"✅ Archive extracted via UnRAR.dll");
    return TRUE;
@@ -109,67 +110,69 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
 
 BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 {
-   wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], command[MAX_PATH];
-   wcscpy(cleanDir, file_path);
+    wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], command[MAX_PATH];
+    wcscpy(cleanDir, file_path);
 
-   wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && _wcsicmp(ext, L".cbr") == 0)
-      *ext = L'\0';
+    wchar_t *ext = wcsrchr(cleanDir, L'.');
+    if (ext && _wcsicmp(ext, L".cbr") == 0)
+        *ext = L'\0';
 
-   swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
+    swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
-   if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
-   {
-      if (!CreateDirectoryW(baseFolder, NULL))
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting fail: ", baseFolder);
-         MessageBeep(MB_ICONERROR); // Play error sound
-         MessageBoxCentered(hwnd, L"Failed to create extraction directory", L"Extract Error", MB_OK | MB_ICONERROR);
-         return FALSE;
-      }
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
-   }
+    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
+    {
+        if (!CreateDirectoryW(baseFolder, NULL))
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting fail: ", baseFolder);
+            MessageBeep(MB_ICONERROR);
+            MessageBoxCentered(hwnd, L"Failed to create extraction directory", L"Extract Error", MB_OK | MB_ICONERROR);
+            return FALSE;
+        }
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
+    }
 
-   if (wcslen(g_config.WINRAR_PATH) == 0)
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ WINRAR_PATH is not set.");
-      MessageBeep(MB_ICONERROR); // Play error sound
-      MessageBoxCentered(hwnd, L"WINRAR_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
-      return FALSE;
-   }
+    if (wcslen(g_config.WINRAR_PATH) == 0)
+    {
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ WINRAR_PATH is not set.");
+        MessageBeep(MB_ICONERROR);
+        MessageBoxCentered(hwnd, L"WINRAR_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
 
-   DWORD attrib = GetFileAttributesW(g_config.WINRAR_PATH);
-   if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY))
-   {
-      MessageBeep(MB_ICONERROR); // Play error sound
-      MessageBoxCentered(hwnd, L"The specified WINRAR_PATH does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
-      return FALSE;
-   }
+    DWORD attrib = GetFileAttributesW(g_config.WINRAR_PATH);
+    if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        MessageBeep(MB_ICONERROR);
+        MessageBoxCentered(hwnd, L"The specified WINRAR_PATH does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
 
-   swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" \"%s\"", g_config.WINRAR_PATH, file_path, baseFolder);
-   STARTUPINFOW si = {0};
-   si.cb = sizeof(si);
-   si.dwFlags = STARTF_USESHOWWINDOW;
-   si.wShowWindow = SW_HIDE;
-   PROCESS_INFORMATION pi;
+    swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" \"%s\"", g_config.WINRAR_PATH, file_path, baseFolder);
+    STARTUPINFOW si = {0};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi;
 
-   if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ Failed to launch WinRAR.");
-      return FALSE;
-   }
+    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+    {
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ Failed to launch WinRAR.");
+        return FALSE;
+    }
 
-   WaitForSingleObject(pi.hProcess, INFINITE);
-   CloseHandle(pi.hProcess);
-   CloseHandle(pi.hThread);
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
 
-   flatten_and_clean_folder(baseFolder, baseFolder); // ✅ Corrected call
+    wchar_t cleaned_path[MAX_PATH] = {0};
+    flatten_and_clean_folder(baseFolder, baseFolder, cleaned_path);  // Updated to 3-argument version
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ Extraction complete.");
-   wcscpy(final_dir, baseFolder);
-   return TRUE;
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ Extraction complete.");
+
+    wcscpy(final_dir, cleaned_path);  // Return the actual cleaned path
+    return TRUE;
 }
 
 BOOL create_cbr_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *archive_name)

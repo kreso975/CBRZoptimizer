@@ -119,43 +119,75 @@ void TrimTrailingWhitespace(wchar_t *str)
       str[--len] = '\0';
 }
 
-void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target)
+void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wchar_t *final_folder_name)
 {
-   wchar_t search[MAX_PATH];
-   swprintf(search, MAX_PATH, L"%s\\*", source);
+    if (!source || !target || !final_folder_name)
+        return;
 
-   WIN32_FIND_DATAW ffd;
-   HANDLE hFind = FindFirstFileW(search, &ffd);
-   if (hFind == INVALID_HANDLE_VALUE)
-      return;
+    wchar_t cleanSource[MAX_PATH];
+    wcscpy_s(cleanSource, MAX_PATH, source);
+    TrimTrailingWhitespace(cleanSource);
 
-   do
-   {
-      if (wcscmp(ffd.cFileName, L".") == 0 || wcscmp(ffd.cFileName, L"..") == 0)
-         continue;
+    wchar_t cleanTarget[MAX_PATH];
+    wcscpy_s(cleanTarget, MAX_PATH, target);
+    TrimTrailingWhitespace(cleanTarget);
 
-      wchar_t fullPath[MAX_PATH];
-      swprintf(fullPath, MAX_PATH, L"%s\\%s", source, ffd.cFileName);
+    // Store the actual folder name used
+    wcscpy_s(final_folder_name, MAX_PATH, cleanTarget);
 
-      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-      {
-         flatten_and_clean_folder(fullPath, target);
-         delete_folder_recursive(fullPath);
-      }
-      else
-      {
-         const wchar_t *ext = wcsrchr(ffd.cFileName, L'.');
-         if (ext && (_wcsicmp(ext, L".jpg") == 0 || _wcsicmp(ext, L".jpeg") == 0 || _wcsicmp(ext, L".png") == 0  || _wcsicmp(ext, L".bmp") == 0))
-         {
-            wchar_t dest[MAX_PATH];
-            swprintf(dest, MAX_PATH, L"%s\\%s", target, ffd.cFileName);
-            MoveFileExW(fullPath, dest, MOVEFILE_REPLACE_EXISTING);
-         }
-      }
+    CreateDirectoryW(cleanTarget, NULL);  // Ensure target exists
 
-   } while (FindNextFileW(hFind, &ffd));
+    if (wcslen(cleanSource) + 3 >= MAX_PATH)
+    {
+        DEBUG_PRINTF(L"[FLATTEN] ❌ Source path too long: %ls\n", cleanSource);
+        return;
+    }
 
-   FindClose(hFind);
+    wchar_t search[MAX_PATH];
+    swprintf(search, MAX_PATH, L"%s\\*", cleanSource);
+
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileW(search, &ffd);
+    if (hFind == INVALID_HANDLE_VALUE)
+    {
+        DEBUG_PRINTF(L"[FLATTEN] ❌ FindFirstFile failed for: %ls\n", search);
+        return;
+    }
+
+    do
+    {
+        if (wcscmp(ffd.cFileName, L".") == 0 || wcscmp(ffd.cFileName, L"..") == 0)
+            continue;
+
+        wchar_t fullPath[MAX_PATH];
+        swprintf(fullPath, MAX_PATH, L"%s\\%s", cleanSource, ffd.cFileName);
+
+        if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        {
+            flatten_and_clean_folder(fullPath, cleanTarget, final_folder_name);
+            delete_folder_recursive(fullPath);
+        }
+        else
+        {
+            const wchar_t *ext = wcsrchr(ffd.cFileName, L'.');
+            if (ext && (_wcsicmp(ext, L".jpg") == 0 ||
+                        _wcsicmp(ext, L".jpeg") == 0 ||
+                        _wcsicmp(ext, L".png") == 0 ||
+                        _wcsicmp(ext, L".bmp") == 0))
+            {
+                wchar_t dest[MAX_PATH];
+                swprintf(dest, MAX_PATH, L"%s\\%s", cleanTarget, ffd.cFileName);
+                if (!MoveFileExW(fullPath, dest, MOVEFILE_REPLACE_EXISTING))
+                {
+                    DWORD err = GetLastError();
+                    DEBUG_PRINTF(L"[FLATTEN] ⚠️ MoveFileEx failed! Error: %lu\n", err);
+                }
+            }
+        }
+
+    } while (FindNextFileW(hFind, &ffd));
+
+    FindClose(hFind);
 }
 
 void delete_folder_recursive(const wchar_t *path)
@@ -191,119 +223,125 @@ void delete_folder_recursive(const wchar_t *path)
 
 void process_file(HWND hwnd, const wchar_t *file_path)
 {
-   wchar_t base[MAX_PATH];
-   get_clean_name(file_path, base);
+    wchar_t base[MAX_PATH];
+    get_clean_name(file_path, base);
+    TrimTrailingWhitespace(base);  // Ensure folder names are clean
 
-   wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
-   swprintf(extracted_dir, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
-   swprintf(archive_name, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
+    wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
+    swprintf(extracted_dir, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
+    swprintf(archive_name, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
 
-   if (g_StopProcessing)
-      return;
+    TrimTrailingWhitespace(extracted_dir);  // Fix potential space at end
+    TrimTrailingWhitespace(archive_name);
 
-   ArchiveType type = detect_archive_type(file_path);
-   BOOL extracted = FALSE;
+    if (g_StopProcessing)
+        return;
 
-   if (type == ARCHIVE_CBR)
-   {
-      extracted = is_valid_winrar()
-                      ? extract_cbr(hwnd, file_path, extracted_dir)
-                      : extract_unrar_dll(hwnd, file_path, extracted_dir);
-   }
-   else if (type == ARCHIVE_CBZ)
-   {
-      BOOL hasWinRAR = is_valid_winrar() &&
-                       wcslen(g_config.WINRAR_PATH) > 0 &&
-                       wcsstr(g_config.WINRAR_PATH, L"WinRAR.exe") != NULL;
+    ArchiveType type = detect_archive_type(file_path);
+    BOOL extracted = FALSE;
 
-      BOOL has7zip = wcslen(g_config.SEVEN_ZIP_PATH) > 0 &&
-                     GetFileAttributesW(g_config.SEVEN_ZIP_PATH) != INVALID_FILE_ATTRIBUTES &&
-                     !(GetFileAttributesW(g_config.SEVEN_ZIP_PATH) & FILE_ATTRIBUTE_DIRECTORY);
+    if (type == ARCHIVE_CBR)
+    {
+        extracted = is_valid_winrar()
+                    ? extract_cbr(hwnd, file_path, extracted_dir)
+                    : extract_unrar_dll(hwnd, file_path, extracted_dir);
+    }
+    else if (type == ARCHIVE_CBZ)
+    {
+        BOOL hasWinRAR = is_valid_winrar() &&
+                         wcslen(g_config.WINRAR_PATH) > 0 &&
+                         wcsstr(g_config.WINRAR_PATH, L"WinRAR.exe") != NULL;
 
-      if (hasWinRAR)
-      {
-         extracted = extract_external_cbz(hwnd, file_path, extracted_dir, EXTERNAL_APP_WINRAR);
-      }
-      else if (!extracted && has7zip)
-      {
-         extracted = extract_external_cbz(hwnd, file_path, extracted_dir, EXTERNAL_APP_7ZIP);
-      }
-      else
-      {
-         extracted = extract_cbz(hwnd, file_path, extracted_dir); // fall back to built-in
-      }
-   }
+        BOOL has7zip = wcslen(g_config.SEVEN_ZIP_PATH) > 0 &&
+                       GetFileAttributesW(g_config.SEVEN_ZIP_PATH) != INVALID_FILE_ATTRIBUTES &&
+                       !(GetFileAttributesW(g_config.SEVEN_ZIP_PATH) & FILE_ATTRIBUTE_DIRECTORY);
 
-   if (!extracted)
-   {
-      DEBUG_PRINT(L"Extracting Failed!");
-      
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Failed!");
-      return;
-   }
+        if (hasWinRAR)
+        {
+            extracted = extract_external_cbz(hwnd, file_path, extracted_dir, EXTERNAL_APP_WINRAR);
+        }
+        else if (!extracted && has7zip)
+        {
+            extracted = extract_external_cbz(hwnd, file_path, extracted_dir, EXTERNAL_APP_7ZIP);
+        }
+        else
+        {
+            extracted = extract_cbz(hwnd, file_path, extracted_dir);  // fallback
+        }
+    }
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
-   if (g_StopProcessing)
-      return;
+    if (!extracted)
+    {
+        DEBUG_PRINT(L"Extracting Failed!");
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Failed!");
+        return;
+    }
 
-   DEBUG_PRINT(g_config.runImageOptimizer ? L"[DEBUG] RunImageOptimizer = TRUE\n" : L"[DEBUG] RunImageOptimizer = FALSE\n");
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
 
-   // Image optimization
-   if (g_config.runImageOptimizer)
-   {
-      if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
-          (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-      {
-         DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer3: ON\n" : L"ImageOptimizer3: OFF\n");
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
-         if (!fallback_optimize_images(hwnd, extracted_dir))
-            return;
-      }
-      else
-      {
-         DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer4: ON\n" : L"ImageOptimizer4: OFF\n");
-         if (!optimize_images(hwnd, extracted_dir))
-            return;
-      }
+    if (g_StopProcessing)
+        return;
 
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
-      if (g_StopProcessing)
-         return;
-   }
+    DEBUG_PRINT(g_config.runImageOptimizer ? L"[DEBUG] RunImageOptimizer = TRUE\n" : L"[DEBUG] RunImageOptimizer = FALSE\n");
 
-   // Output format decision
-   if (g_config.runCompressor)
-   {
-      wchar_t selectedText[32] = L"";
-      int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
-      SendMessageW(hOutputType, CB_GETLBTEXT, (WPARAM)(INT_PTR)selected, (LPARAM)selectedText);
+    // Image optimization
+    if (g_config.runImageOptimizer)
+    {
+        if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 ||
+            GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+            (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            DEBUG_PRINT(L"ImageOptimizer3: ON\n");
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Falling back to STB optimizer...");
+            if (!fallback_optimize_images(hwnd, extracted_dir))
+                return;
+        }
+        else
+        {
+            DEBUG_PRINT(L"ImageOptimizer4: ON\n");
+            if (!optimize_images(hwnd, extracted_dir))
+                return;
+        }
 
-      BOOL useCBR = FALSE;
-      if ((_wcsicmp(selectedText, L"CBR") == 0) ||
-          (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
-      {
-         useCBR = is_valid_winrar();
-      }
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
+    }
 
-      if (useCBR)
-      {
-         if (!create_cbr_archive(hwnd, extracted_dir, archive_name))
-            return;
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Completed");
-      }
-      else
-      {
-         if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
-            return;
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
-      }
-   }
+    if (g_StopProcessing)
+        return;
 
-   // REMOVE EXTRACTED FOLDER
-   if (!g_config.keepExtracted)
-   {
-      delete_folder_recursive(extracted_dir);
-   }
+    // Output format
+    if (g_config.runCompressor)
+    {
+        wchar_t selectedText[32] = L"";
+        int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
+        SendMessageW(hOutputType, CB_GETLBTEXT, (WPARAM)(INT_PTR)selected, (LPARAM)selectedText);
+
+        BOOL useCBR = FALSE;
+        if ((_wcsicmp(selectedText, L"CBR") == 0) ||
+            (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
+        {
+            useCBR = is_valid_winrar();
+        }
+
+        if (useCBR)
+        {
+            if (!create_cbr_archive(hwnd, extracted_dir, archive_name))
+                return;
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WinRAR: ", L"Completed");
+        }
+        else
+        {
+            if (!create_cbz_archive(hwnd, extracted_dir, archive_name))
+                return;
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Completed");
+        }
+    }
+
+    // Cleanup
+    if (!g_config.keepExtracted)
+    {
+        delete_folder_recursive(extracted_dir);
+    }
 }
 
 // Start Processing

@@ -117,7 +117,8 @@ BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 
    mz_zip_reader_end(&zip);
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
-   flatten_and_clean_folder(baseFolder, baseFolder);
+   wchar_t cleanPath[MAX_PATH];
+   flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
    SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW, baseFolder, NULL);
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
@@ -200,7 +201,8 @@ BOOL extract_external_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_di
    CloseHandle(pi.hThread);
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
-   flatten_and_clean_folder(baseFolder, baseFolder);
+   wchar_t cleanPath[MAX_PATH];
+flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ Extraction complete.");
    wcscpy(final_dir, baseFolder);

@@ -4,7 +4,7 @@
 
 // Status callback (optional - safe to remove if not used elsewhere)
 extern void SendStatus(HWND hwnd, UINT msg, const wchar_t *prefix, const wchar_t *message);
-extern void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target);
+extern void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wchar_t *final_folder_name);
 
 
 typedef enum {

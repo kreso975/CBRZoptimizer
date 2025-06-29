@@ -350,7 +350,7 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
     }
 
     const wchar_t *exts[] = {L"jpg", L"png"};
-    DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
+    //DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
     for (int i = 0; i < 2; i++)
     {
         if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))

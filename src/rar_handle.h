@@ -55,7 +55,7 @@ typedef struct {
 
 // Status callback (optional - safe to remove if not used elsewhere)
 extern void SendStatus(HWND hwnd, UINT msg, const wchar_t *prefix, const wchar_t *message);
-extern void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target);
+extern void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wchar_t *final_folder_name);
 
 BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir);
 BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *dest_folder);

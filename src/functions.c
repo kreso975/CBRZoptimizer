@@ -21,72 +21,91 @@
 #include "image_handle.h"
 #include "debug.h"
 
-
 DWORD WINAPI ProcessingThread(LPVOID lpParam)
 {
-   HWND hwnd = (HWND)lpParam;
-   HWND hListBox = GetDlgItem(hwnd, ID_LISTBOX); // Or pass both in a struct
-   StartProcessing(hwnd, hListBox);
+    HWND hwnd = (HWND)lpParam;
+    HWND hListBox = GetDlgItem(hwnd, ID_LISTBOX); // Or pass both in a struct
+    StartProcessing(hwnd, hListBox);
 
-   // You can post a message back to the window if needed
-   PostMessage(hwnd, WM_USER + 1, 0, 0);
-   return 0;
+    // You can post a message back to the window if needed
+    PostMessage(hwnd, WM_USER + 1, 0, 0);
+    return 0;
 }
 
 ArchiveType detect_archive_type(const wchar_t *file_path)
 {
-   const wchar_t *ext = wcsrchr(file_path, L'.');
-   if (!ext)
-      return ARCHIVE_UNKNOWN;
+    const wchar_t *ext = wcsrchr(file_path, L'.');
+    if (!ext)
+        return ARCHIVE_UNKNOWN;
 
-   ArchiveType type = ARCHIVE_UNKNOWN;
+    ArchiveType type = ARCHIVE_UNKNOWN;
 
-   if (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".rar") == 0)
-   {
-      if (is_zip_archive(file_path))
-         type = ARCHIVE_CBZ; // mislabeled ZIP
-      else
-         type = ARCHIVE_CBR;
-   }
-   else if (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0)
-   {
-      type = ARCHIVE_CBZ;
-   }
+    if (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".rar") == 0)
+    {
+        if (is_zip_archive(file_path))
+            type = ARCHIVE_CBZ; // mislabeled ZIP
+        else
+            type = ARCHIVE_CBR;
+    }
+    else if (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0)
+    {
+        type = ARCHIVE_CBZ;
+    }
 
-   return type;
+    return type;
 }
 
 BOOL is_zip_archive(const wchar_t *file_path)
 {
-   FILE *file = _wfopen(file_path, L"rb");
-   if (!file)
-      return FALSE;
+    FILE *file = _wfopen(file_path, L"rb");
+    if (!file)
+        return FALSE;
 
-   unsigned char signature[4];
-   size_t read = fread(signature, 1, 4, file);
-   fclose(file);
+    unsigned char signature[4];
+    size_t read = fread(signature, 1, 4, file);
+    fclose(file);
 
-   return (read == 4 && signature[0] == 'P' && signature[1] == 'K');
+    return (read == 4 && signature[0] == 'P' && signature[1] == 'K');
 }
 
-// Helper to validate if WINRAR_PATH is set and points to winrar.exe
-BOOL is_valid_winrar()
+// Helper to validate if WINRAR_PATH is set and points to .exe
+//   mode==1 → extract CBR/RAR (accept winrar.exe OR unrar.exe)
+//   mode==2 → unzip only     (accept ONLY winrar.exe)
+//   mode==3 → compress to RAR(accept ONLY winrar.exe)
+BOOL is_valid_winrar(int mode) 
 {
-   const wchar_t *exe = wcsrchr(g_config.WINRAR_PATH, L'\\');
-   return wcslen(g_config.WINRAR_PATH) > 0 &&
-          GetFileAttributesW(g_config.WINRAR_PATH) != INVALID_FILE_ATTRIBUTES &&
-          exe && _wcsicmp(exe + 1, L"winrar.exe") == 0;
+    // 1) Path must exist
+    if (GetFileAttributesW(g_config.WINRAR_PATH) == INVALID_FILE_ATTRIBUTES)
+        return FALSE;
+
+    // 2) Isolate filename
+    const wchar_t *exe = wcsrchr(g_config.WINRAR_PATH, L'\\');
+    exe = exe ? exe + 1 : g_config.WINRAR_PATH;
+
+    // 3) Mode‐dependent check
+    switch (mode)
+    {
+    case 1: // extract
+        return _wcsicmp(exe, L"winrar.exe") == 0 || _wcsicmp(exe, L"unrar.exe") == 0;
+
+    case 2: // unzip
+    case 3: // compress
+        return _wcsicmp(exe, L"winrar.exe") == 0;
+
+    default:
+        return FALSE;
+    }
 }
 
 // Helper to clean filename (strip path + .cbr/.cbz)
 void get_clean_name(const wchar_t *file_path, wchar_t *base)
 {
-   const wchar_t *file_name = wcsrchr(file_path, L'\\');
-   file_name = file_name ? file_name + 1 : file_path;
-   wcscpy(base, file_name);
-   wchar_t *ext = wcsrchr(base, L'.');
-   if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
-      *ext = L'\0';
+    const wchar_t *file_name = wcsrchr(file_path, L'\\');
+    file_name = file_name ? file_name + 1 : file_path;
+    wcscpy(base, file_name);
+    wchar_t *ext = wcsrchr(base, L'.');
+    if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
+        *ext = L'\0';
 }
 
 BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex)
@@ -114,9 +133,9 @@ BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex)
 
 void TrimTrailingWhitespace(wchar_t *str)
 {
-   size_t len = wcslen(str);
-   while (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r' || str[len - 1] == ' '))
-      str[--len] = '\0';
+    size_t len = wcslen(str);
+    while (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r' || str[len - 1] == ' '))
+        str[--len] = '\0';
 }
 
 void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wchar_t *final_folder_name)
@@ -135,7 +154,7 @@ void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wcha
     // Store the actual folder name used
     wcscpy_s(final_folder_name, MAX_PATH, cleanTarget);
 
-    CreateDirectoryW(cleanTarget, NULL);  // Ensure target exists
+    CreateDirectoryW(cleanTarget, NULL); // Ensure target exists
 
     if (wcslen(cleanSource) + 3 >= MAX_PATH)
     {
@@ -179,8 +198,10 @@ void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wcha
                 swprintf(dest, MAX_PATH, L"%s\\%s", cleanTarget, ffd.cFileName);
                 if (!MoveFileExW(fullPath, dest, MOVEFILE_REPLACE_EXISTING))
                 {
+#if defined(DEBUG) || defined(_DEBUG)
                     DWORD err = GetLastError();
                     DEBUG_PRINTF(L"[FLATTEN] ⚠️ MoveFileEx failed! Error: %lu\n", err);
+#endif
                 }
             }
         }
@@ -192,46 +213,46 @@ void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wcha
 
 void delete_folder_recursive(const wchar_t *path)
 {
-   if (!path || wcslen(path) == 0)
-      return;
+    if (!path || wcslen(path) == 0)
+        return;
 
-   // Prepare buffer with double null-termination
-   wchar_t temp[MAX_PATH + 2] = {0};
-   wcsncpy(temp, path, MAX_PATH);
-   size_t len = wcslen(temp);
+    // Prepare buffer with double null-termination
+    wchar_t temp[MAX_PATH + 2] = {0};
+    wcsncpy(temp, path, MAX_PATH);
+    size_t len = wcslen(temp);
 
-   if (len > 0 && temp[len - 1] != L'\\')
-   {
-      temp[len] = L'\\';
-      temp[len + 1] = L'\0';
-   }
+    if (len > 0 && temp[len - 1] != L'\\')
+    {
+        temp[len] = L'\\';
+        temp[len + 1] = L'\0';
+    }
 
-   SHFILEOPSTRUCTW fileOp = {0};
-   fileOp.wFunc = FO_DELETE;
-   fileOp.pFrom = temp; // double null-terminated
-   fileOp.fFlags = FOF_NO_UI | FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR;
+    SHFILEOPSTRUCTW fileOp = {0};
+    fileOp.wFunc = FO_DELETE;
+    fileOp.pFrom = temp; // double null-terminated
+    fileOp.fFlags = FOF_NO_UI | FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR;
 
-   int result = SHFileOperationW(&fileOp);
+    int result = SHFileOperationW(&fileOp);
 
-   // Optional: Handle errors (result == 0 means success)
-   if (result != 0)
-   {
-      // You can log or fallback here if deletion failed
-      // MessageBoxW(NULL, L"Failed to delete folder.", L"Error", MB_OK | MB_ICONERROR);
-   }
+    // Optional: Handle errors (result == 0 means success)
+    if (result != 0)
+    {
+        // You can log or fallback here if deletion failed
+        // MessageBoxW(NULL, L"Failed to delete folder.", L"Error", MB_OK | MB_ICONERROR);
+    }
 }
 
 void process_file(HWND hwnd, const wchar_t *file_path)
 {
     wchar_t base[MAX_PATH];
     get_clean_name(file_path, base);
-    TrimTrailingWhitespace(base);  // Ensure folder names are clean
+    TrimTrailingWhitespace(base); // Ensure folder names are clean
 
     wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
     swprintf(extracted_dir, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
     swprintf(archive_name, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
 
-    TrimTrailingWhitespace(extracted_dir);  // Fix potential space at end
+    TrimTrailingWhitespace(extracted_dir); // Fix potential space at end
     TrimTrailingWhitespace(archive_name);
 
     if (g_StopProcessing)
@@ -242,15 +263,15 @@ void process_file(HWND hwnd, const wchar_t *file_path)
 
     if (type == ARCHIVE_CBR)
     {
-        extracted = is_valid_winrar()
-                    ? extract_cbr(hwnd, file_path, extracted_dir)
-                    : extract_unrar_dll(hwnd, file_path, extracted_dir);
+        // Case #1: CBR/RAR extraction
+        extracted = is_valid_winrar(1)
+                        ? extract_cbr(hwnd, file_path, extracted_dir)
+                        : extract_unrar_dll(hwnd, file_path, extracted_dir);
     }
     else if (type == ARCHIVE_CBZ)
     {
-        BOOL hasWinRAR = is_valid_winrar() &&
-                         wcslen(g_config.WINRAR_PATH) > 0 &&
-                         wcsstr(g_config.WINRAR_PATH, L"WinRAR.exe") != NULL;
+        // Case #2: ZIP extraction / we need winrar.exe to do it
+        BOOL hasWinRAR = is_valid_winrar(2);
 
         BOOL has7zip = wcslen(g_config.SEVEN_ZIP_PATH) > 0 &&
                        GetFileAttributesW(g_config.SEVEN_ZIP_PATH) != INVALID_FILE_ATTRIBUTES &&
@@ -266,7 +287,7 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         }
         else
         {
-            extracted = extract_cbz(hwnd, file_path, extracted_dir);  // fallback
+            extracted = extract_cbz(hwnd, file_path, extracted_dir); // fallback
         }
     }
 
@@ -317,10 +338,10 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         SendMessageW(hOutputType, CB_GETLBTEXT, (WPARAM)(INT_PTR)selected, (LPARAM)selectedText);
 
         BOOL useCBR = FALSE;
-        if ((_wcsicmp(selectedText, L"CBR") == 0) ||
-            (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
+        if ((_wcsicmp(selectedText, L"CBR") == 0) || (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
         {
-            useCBR = is_valid_winrar();
+            // Case #3: RAR compression
+            useCBR = is_valid_winrar(3);
         }
 
         if (useCBR)
@@ -347,109 +368,108 @@ void process_file(HWND hwnd, const wchar_t *file_path)
 // Start Processing
 void StartProcessing(HWND hwnd, HWND hListBox)
 {
-   LRESULT lTotal = SendMessage(hListBox, LB_GETCOUNT, 0, 0);
-   int total = (int)lTotal;
+    LRESULT lTotal = SendMessage(hListBox, LB_GETCOUNT, 0, 0);
+    int total = (int)lTotal;
 
-   int processed = 0;
+    int processed = 0;
 
-   while (!g_StopProcessing && SendMessage(hListBox, LB_GETCOUNT, 0, 0) > 0)
-   {
-      wchar_t file_path[MAX_PATH];
-      SendMessageW(hListBox, LB_GETTEXT, 0, (LPARAM)file_path);
+    while (!g_StopProcessing && SendMessage(hListBox, LB_GETCOUNT, 0, 0) > 0)
+    {
+        wchar_t file_path[MAX_PATH];
+        SendMessageW(hListBox, LB_GETTEXT, 0, (LPARAM)file_path);
 
-      if (g_StopProcessing)
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"CANCELLED", L"");
-         MessageBeep(MB_ICONEXCLAMATION); // play warning sound
-         MessageBoxCentered(hwnd, L"Processing was canceled.", L"Info", MB_OK | MB_ICONEXCLAMATION);
-         return;
-      }
+        if (g_StopProcessing)
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"CANCELLED", L"");
+            MessageBeep(MB_ICONEXCLAMATION); // play warning sound
+            MessageBoxCentered(hwnd, L"Processing was canceled.", L"Info", MB_OK | MB_ICONEXCLAMATION);
+            return;
+        }
 
-      wchar_t progress[64];
-      swprintf(progress, sizeof(progress), L"%d/%d", processed + 1, total);
-      SendStatus(hwnd, WM_UPDATE_PROCESSING_TEXT, L"", progress);
+        wchar_t progress[64];
+        swprintf(progress, sizeof(progress), L"%d/%d", processed + 1, total);
+        SendStatus(hwnd, WM_UPDATE_PROCESSING_TEXT, L"", progress);
 
-      process_file(hwnd, file_path);
-      SendMessage(hListBox, LB_DELETESTRING, 0, 0);
+        process_file(hwnd, file_path);
+        SendMessage(hListBox, LB_DELETESTRING, 0, 0);
 
-      processed++;
-   }
+        processed++;
+    }
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"DONE", L"");
-   MessageBeep(MB_ICONINFORMATION); // play warning sound
-   MessageBoxCentered(hwnd, L"Processing Complete!", L"Info", MB_OK | MB_ICONINFORMATION);
-   PostMessage(hwnd, WM_PROCESSING_DONE, 0, 0);
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"DONE", L"");
+    MessageBeep(MB_ICONINFORMATION); // play warning sound
+    MessageBoxCentered(hwnd, L"Processing Complete!", L"Info", MB_OK | MB_ICONINFORMATION);
+    PostMessage(hwnd, WM_PROCESSING_DONE, 0, 0);
 }
 
 void BrowseFolder(HWND hwnd, wchar_t *targetPath)
 {
-   BROWSEINFO bi = {0};
-   bi.hwndOwner = hwnd;
-   bi.lpszTitle = L"Select a folder:";
-   bi.ulFlags = BIF_NEWDIALOGSTYLE | BIF_RETURNONLYFSDIRS;
+    BROWSEINFO bi = {0};
+    bi.hwndOwner = hwnd;
+    bi.lpszTitle = L"Select a folder:";
+    bi.ulFlags = BIF_NEWDIALOGSTYLE | BIF_RETURNONLYFSDIRS;
 
-   // Required for BIF_NEWDIALOGSTYLE on older systems
-   OleInitialize(NULL);
+    // Required for BIF_NEWDIALOGSTYLE on older systems
+    OleInitialize(NULL);
 
-   LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
-   if (pidl != NULL)
-   {
-      SHGetPathFromIDListW(pidl, targetPath);
-      CoTaskMemFree(pidl);
-   }
+    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
+    if (pidl != NULL)
+    {
+        SHGetPathFromIDListW(pidl, targetPath);
+        CoTaskMemFree(pidl);
+    }
 
-   OleUninitialize();
+    OleUninitialize();
 }
 
 void BrowseFile(HWND hwnd, wchar_t *targetPath)
 {
-   OPENFILENAMEW ofn;
-   ZeroMemory(&ofn, sizeof(ofn));
-   ofn.lStructSize = sizeof(ofn);
-   ofn.hwndOwner = hwnd;
-   ofn.lpstrFile = targetPath;
-   ofn.nMaxFile = MAX_PATH;
-   ofn.lpstrFilter = L"Executables\0*.exe\0All Files\0*.*\0";
-   ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-   GetOpenFileNameW(&ofn);
+    OPENFILENAMEW ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFile = targetPath;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrFilter = L"Executables\0*.exe\0All Files\0*.*\0";
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+    GetOpenFileNameW(&ofn);
 }
 
 void OpenFileDialog(HWND hwnd, HWND hListBox)
 {
-   OPENFILENAMEW ofn;
-   wchar_t fileNames[MAX_PATH * 50] = {0}; // Large buffer to hold multiple file paths
+    OPENFILENAMEW ofn;
+    wchar_t fileNames[MAX_PATH * 50] = {0}; // Large buffer to hold multiple file paths
 
-   ZeroMemory(&ofn, sizeof(ofn));
-   ofn.lStructSize = sizeof(ofn);
-   ofn.hwndOwner = hwnd;
-   ofn.lpstrFilter = L"CBR/CBZ/RAR/ZIP Files (*.cbr;*.cbz;*.rar;*.zip)\0*.cbr;*.cbz;*.rar;*.zip\0All Files\0*.*\0";
-   ofn.lpstrFile = fileNames;
-   ofn.nMaxFile = sizeof(fileNames);
-   ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter = L"CBR/CBZ/RAR/ZIP Files (*.cbr;*.cbz;*.rar;*.zip)\0*.cbr;*.cbz;*.rar;*.zip\0All Files\0*.*\0";
+    ofn.lpstrFile = fileNames;
+    ofn.nMaxFile = sizeof(fileNames);
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
 
-   if (GetOpenFileNameW(&ofn))
-   {
-      wchar_t *p = fileNames + wcslen(fileNames) + 1;
+    if (GetOpenFileNameW(&ofn))
+    {
+        wchar_t *p = fileNames + wcslen(fileNames) + 1;
 
-      if (*p == L'\0')
-      {
-         // Single file selected
-         AddUniqueToListBox(hwnd, hListBox, fileNames);
-      }
-      else
-      {
-         // Multiple files selected
-         wchar_t folder[MAX_PATH];
-         wcscpy(folder, fileNames);
+        if (*p == L'\0')
+        {
+            // Single file selected
+            AddUniqueToListBox(hwnd, hListBox, fileNames);
+        }
+        else
+        {
+            // Multiple files selected
+            wchar_t folder[MAX_PATH];
+            wcscpy(folder, fileNames);
 
-         while (*p)
-         {
-            wchar_t fullPath[MAX_PATH];
-            swprintf(fullPath, MAX_PATH, L"%s\\%s", folder, p);
-            AddUniqueToListBox(hwnd, hListBox, fullPath);
-            p += wcslen(p) + 1;
-         }
-      }
-   }
+            while (*p)
+            {
+                wchar_t fullPath[MAX_PATH];
+                swprintf(fullPath, MAX_PATH, L"%s\\%s", folder, p);
+                AddUniqueToListBox(hwnd, hListBox, fullPath);
+                p += wcslen(p) + 1;
+            }
+        }
+    }
 }
-

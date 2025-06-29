@@ -23,7 +23,7 @@ typedef enum
 } ArchiveType;
 
 BOOL is_zip_archive(const wchar_t *file_path);
-BOOL is_valid_winrar();
+BOOL is_valid_winrar(int mode);
 void get_clean_name(const wchar_t *file_path, wchar_t *base);
 BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex);
 

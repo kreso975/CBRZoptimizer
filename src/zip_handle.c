@@ -20,110 +20,143 @@
 
 BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 {
-   wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], status_msg[256];
-   wcscpy(cleanDir, file_path);
-   wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
-      *ext = L'\0';
-   swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
+    wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], status_msg[256];
+    wcscpy(cleanDir, file_path);
 
-   if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES && !CreateDirectoryW(baseFolder, NULL))
-   {
-      MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
-      return FALSE;
-   }
+    // 🧼 Remove extension if .cbz or .zip
+    wchar_t *ext = wcsrchr(cleanDir, L'.');
+    if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
+    {
+        *ext = L'\0';
+    }
 
-   char zip_utf8[MAX_PATH];
-   WideCharToMultiByte(CP_UTF8, 0, file_path, -1, zip_utf8, MAX_PATH, NULL, NULL);
+    const wchar_t *rawFolder = wcsrchr(cleanDir, L'\\');
+    const wchar_t *folderStart = rawFolder ? rawFolder + 1 : cleanDir;
 
-   mz_zip_archive zip = {0};
-   if (!mz_zip_reader_init_file(&zip, zip_utf8, 0))
-   {
-      MessageBoxW(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
-      return FALSE;
-   }
+    wchar_t trimmedFolder[MAX_PATH];
+    wcsncpy(trimmedFolder, folderStart, MAX_PATH);
+    trimmedFolder[MAX_PATH - 1] = L'\0';
 
-   mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
-   for (mz_uint i = 0; i < fileCount; ++i)
-   {
-      mz_zip_archive_file_stat stat;
-      if (!mz_zip_reader_file_stat(&zip, i, &stat))
-         continue;
-      if (mz_zip_reader_is_file_a_directory(&zip, i))
-         continue;
+    wchar_t *tail = trimmedFolder + wcslen(trimmedFolder) - 1;
+    while (tail > trimmedFolder && iswspace(*tail))
+        *tail-- = L'\0';
 
-      char relpath_utf8[MAX_PATH];
-      mz_zip_reader_get_filename(&zip, i, relpath_utf8, MAX_PATH);
+    swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, trimmedFolder);
 
-      // Split folder and file name
-      char *slash = strrchr(relpath_utf8, '/');
-      if (!slash)
-         slash = strrchr(relpath_utf8, '\\');
-      char folder_utf8[MAX_PATH] = "", file_utf8[MAX_PATH] = "";
-      if (slash)
-      {
-         size_t len = (size_t)(slash - relpath_utf8);
-         strncpy(folder_utf8, relpath_utf8, len);
-         folder_utf8[len] = '\0';
-         strcpy(file_utf8, slash + 1);
-      }
-      else
-      {
-         strcpy(file_utf8, relpath_utf8);
-      }
+    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES && !CreateDirectoryW(baseFolder, NULL))
+    {
+        MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
 
-      wchar_t decoded_folder[MAX_PATH] = L"", decoded_file[MAX_PATH] = L"";
-      safe_decode_filename(folder_utf8, decoded_folder, (int)i);
-      safe_decode_filename(file_utf8, decoded_file, (int)i);
+    char zip_utf8[MAX_PATH];
+    WideCharToMultiByte(CP_UTF8, 0, file_path, -1, zip_utf8, MAX_PATH, NULL, NULL);
 
-      swprintf(status_msg, 256, L"[%u/%u] %s\\%s", i + 1, fileCount, decoded_folder, decoded_file);
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
+    mz_zip_archive zip = {0};
+    if (!mz_zip_reader_init_file(&zip, zip_utf8, 0))
+    {
+        MessageBoxW(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
 
-      wchar_t fullDestW[MAX_PATH];
-      if (wcslen(decoded_folder))
-         swprintf(fullDestW, MAX_PATH, L"%s\\%s\\%s", baseFolder, decoded_folder, decoded_file);
-      else
-         swprintf(fullDestW, MAX_PATH, L"%s\\%s", baseFolder, decoded_file);
+    int filesExtracted = 0;
+    mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
+    for (mz_uint i = 0; i < fileCount; ++i)
+    {
+        mz_zip_archive_file_stat stat;
+        if (!mz_zip_reader_file_stat(&zip, i, &stat))
+            continue;
+        if (mz_zip_reader_is_file_a_directory(&zip, i))
+            continue;
 
-      // Create folders if needed
-      wchar_t tempPath[MAX_PATH];
-      wcscpy(tempPath, fullDestW);
-      wchar_t *p = wcsrchr(tempPath, L'\\');
-      if (p)
-      {
-         *p = L'\0';
-         wchar_t *s = tempPath + wcslen(baseFolder) + 1;
-         while (s && *s)
-         {
-            wchar_t *subslash = wcschr(s, L'\\');
-            if (subslash)
-               *subslash = L'\0';
-            CreateDirectoryW(tempPath, NULL);
-            if (subslash)
-               *subslash = L'\\';
-            s = subslash ? subslash + 1 : NULL;
-         }
-      }
+        char relpath_utf8[MAX_PATH];
+        mz_zip_reader_get_filename(&zip, i, relpath_utf8, MAX_PATH);
 
-      char fullDest_utf8[MAX_PATH];
-      WideCharToMultiByte(CP_UTF8, 0, fullDestW, -1, fullDest_utf8, MAX_PATH, NULL, NULL);
+        char *slash = strrchr(relpath_utf8, '/');
+        if (!slash)
+            slash = strrchr(relpath_utf8, '\\');
+        char folder_utf8[MAX_PATH] = "", file_utf8[MAX_PATH] = "";
+        if (slash)
+        {
+            size_t len = (size_t)(slash - relpath_utf8);
+            strncpy(folder_utf8, relpath_utf8, len);
+            folder_utf8[len] = '\0';
+            strcpy(file_utf8, slash + 1);
+        }
+        else
+        {
+            strcpy(file_utf8, relpath_utf8);
+        }
 
-      if (!mz_zip_reader_extract_to_file(&zip, i, fullDest_utf8, 0))
-      {
-         swprintf(status_msg, 256, L"❌ Failed to extract: %s", fullDestW);
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
-      }
-   }
+        wchar_t decoded_folder[MAX_PATH] = L"", decoded_file[MAX_PATH] = L"";
+        safe_decode_filename(folder_utf8, decoded_folder, (int)i);
+        safe_decode_filename(file_utf8, decoded_file, (int)i);
 
-   mz_zip_reader_end(&zip);
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
-   wchar_t cleanPath[MAX_PATH];
-   flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
-   SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW, baseFolder, NULL);
+        if (should_skip_file(decoded_file))
+        {
+            DEBUG_PRINTF(L"⏭️ Skipping unwanted file: %s\n", decoded_file);
+            continue;
+        }
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
-   wcscpy(final_dir, baseFolder);
-   return TRUE;
+        swprintf(status_msg, 256, L"[%u/%u] %s\\%s", i + 1, fileCount, decoded_folder, decoded_file);
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
+
+        wchar_t fullDestW[MAX_PATH];
+        if (wcslen(decoded_folder))
+            swprintf(fullDestW, MAX_PATH, L"%s\\%s\\%s", baseFolder, decoded_folder, decoded_file);
+        else
+            swprintf(fullDestW, MAX_PATH, L"%s\\%s", baseFolder, decoded_file);
+
+        wchar_t tempPath[MAX_PATH];
+        wcscpy(tempPath, fullDestW);
+        wchar_t *p = wcsrchr(tempPath, L'\\');
+        if (p)
+        {
+            *p = L'\0';
+            wchar_t *s = tempPath + wcslen(baseFolder) + 1;
+            while (s && *s)
+            {
+                wchar_t *subslash = wcschr(s, L'\\');
+                if (subslash)
+                    *subslash = L'\0';
+                CreateDirectoryW(tempPath, NULL);
+                if (subslash)
+                    *subslash = L'\\';
+                s = subslash ? subslash + 1 : NULL;
+            }
+        }
+
+        char fullDest_utf8[MAX_PATH];
+        WideCharToMultiByte(CP_UTF8, 0, fullDestW, -1, fullDest_utf8, MAX_PATH, NULL, NULL);
+
+        if (mz_zip_reader_extract_to_file(&zip, i, fullDest_utf8, 0))
+        {
+            ++filesExtracted;
+        }
+        else
+        {
+            swprintf(status_msg, 256, L"❌ Failed to extract: %s", fullDestW);
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_msg);
+        }
+    }
+
+    mz_zip_reader_end(&zip);
+
+    if (filesExtracted == 0)
+    {
+        DEBUG_PRINT(L"❌ CBZ archive contained no extractable files.");
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ No valid files extracted from CBZ.");
+        return FALSE;
+    }
+
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
+    wchar_t cleanPath[MAX_PATH];
+    flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
+    SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW, baseFolder, NULL);
+
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ CBZ extraction complete.");
+    wcscpy(final_dir, baseFolder);
+    return TRUE;
 }
 
 BOOL extract_external_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir, ExternalApp externalApp)
@@ -132,8 +165,10 @@ BOOL extract_external_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_di
    wcscpy(cleanDir, file_path);
 
    wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
-      *ext = L'\0';
+   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
+   {
+      *ext = L'\0'; // Strip known archive extensions
+   }
 
    swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
@@ -202,83 +237,116 @@ BOOL extract_external_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_di
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
    wchar_t cleanPath[MAX_PATH];
-flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
+   flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
 
    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ Extraction complete.");
    wcscpy(final_dir, baseFolder);
    return TRUE;
 }
 
-// Create CBZ Archive using miniz
 BOOL create_cbz_with_miniz(HWND hwnd, const wchar_t *folder, const wchar_t *output_cbz)
 {
-   mz_zip_archive zip;
-   memset(&zip, 0, sizeof(zip));
-   wchar_t status_buf[256];
+    mz_zip_archive zip;
+    memset(&zip, 0, sizeof(zip));
+    wchar_t status_buf[256];
 
-   // Convert output CBZ filename to UTF-8 for MiniZ
-   char output_cbz_utf8[MAX_PATH];
-   WideCharToMultiByte(CP_UTF8, 0, output_cbz, -1, output_cbz_utf8, MAX_PATH, NULL, NULL);
+    DEBUG_PRINTF(L"📦 Starting CBZ creation from folder: %s", folder);
+    DEBUG_PRINTF(L"📤 Target CBZ path: %s", output_cbz);
 
-   if (!mz_zip_writer_init_file(&zip, output_cbz_utf8, 0))
-      return FALSE;
+    // Convert output CBZ filename to UTF-8 for MiniZ
+    char output_cbz_utf8[MAX_PATH];
+    WideCharToMultiByte(CP_UTF8, 0, output_cbz, -1, output_cbz_utf8, MAX_PATH, NULL, NULL);
 
-   wchar_t search_path[MAX_PATH];
-   swprintf(search_path, MAX_PATH, L"%s\\*", folder);
+    if (!mz_zip_writer_init_file(&zip, output_cbz_utf8, 0))
+    {
+        DEBUG_PRINTF(L"❌ Failed to initialize ZIP writer for: %s", output_cbz);
+        return FALSE;
+    }
 
-   WIN32_FIND_DATAW ffd;
-   HANDLE hFind = FindFirstFileW(search_path, &ffd);
-   if (hFind == INVALID_HANDLE_VALUE)
-      return FALSE;
+    wchar_t search_path[MAX_PATH];
+    swprintf(search_path, MAX_PATH, L"%s\\*", folder);
 
-   do
-   {
-      if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-      {
-         wchar_t filepathW[MAX_PATH], archiveW[MAX_PATH];
-         swprintf(filepathW, MAX_PATH, L"%s\\%s", folder, ffd.cFileName);
-         wcscpy(archiveW, ffd.cFileName);
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileW(search_path, &ffd);
+    if (hFind == INVALID_HANDLE_VALUE)
+    {
+        DEBUG_PRINTF(L"❌ Failed to enumerate files in: %s", folder);
+        return FALSE;
+    }
 
-         // Convert both paths to UTF-8 for MiniZ
-         char filepath_utf8[MAX_PATH], archive_utf8[MAX_PATH];
-         WideCharToMultiByte(CP_UTF8, 0, filepathW, -1, filepath_utf8, MAX_PATH, NULL, NULL);
-         WideCharToMultiByte(CP_UTF8, 0, archiveW, -1, archive_utf8, MAX_PATH, NULL, NULL);
+    do
+    {
+        if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            // 🔒 Skip unwanted files
+            if (should_skip_file(ffd.cFileName))
+            {
+                DEBUG_PRINTF(L"⏭️ Skipping unwanted file: %s", ffd.cFileName);
+                continue;
+            }
 
-         swprintf(status_buf, 256, L"Adding %s", ffd.cFileName);
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_buf);
+            wchar_t filepathW[MAX_PATH], archiveW[MAX_PATH];
+            swprintf(filepathW, MAX_PATH, L"%s\\%s", folder, ffd.cFileName);
+            wcscpy(archiveW, ffd.cFileName);
 
-         if (!mz_zip_writer_add_file(&zip, archive_utf8, filepath_utf8, NULL, 0, MZ_BEST_COMPRESSION))
-         {
-            mz_zip_writer_end(&zip);
-            FindClose(hFind);
-            return FALSE;
-         }
-      }
-   } while (FindNextFileW(hFind, &ffd));
+            // Convert both paths to UTF-8 for MiniZ
+            char filepath_utf8[MAX_PATH], archive_utf8[MAX_PATH];
+            WideCharToMultiByte(CP_UTF8, 0, filepathW, -1, filepath_utf8, MAX_PATH, NULL, NULL);
+            WideCharToMultiByte(CP_UTF8, 0, archiveW, -1, archive_utf8, MAX_PATH, NULL, NULL);
 
-   FindClose(hFind);
-   mz_zip_writer_finalize_archive(&zip);
-   mz_zip_writer_end(&zip);
+            swprintf(status_buf, 256, L"Adding %s", ffd.cFileName);
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", status_buf);
+            DEBUG_PRINTF(L"➕ Adding file to archive: %s", filepathW);
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"Archive finalized successfully.");
+            if (!mz_zip_writer_add_file(&zip, archive_utf8, filepath_utf8, NULL, 0, MZ_BEST_COMPRESSION))
+            {
+                DEBUG_PRINTF(L"❌ Failed to add file to archive: %s", filepathW);
+                mz_zip_writer_end(&zip);
+                FindClose(hFind);
+                return FALSE;
+            }
+        }
+    } while (FindNextFileW(hFind, &ffd));
 
-   if (g_config.OUTPUT_FOLDER[0] != L'\0')
-   {
-      const wchar_t *cbz_name = wcsrchr(output_cbz, L'\\');
-      cbz_name = cbz_name ? cbz_name + 1 : output_cbz;
+    FindClose(hFind);
 
-      wchar_t dest_cbzW[MAX_PATH];
-      swprintf(dest_cbzW, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbz_name);
+    if (!mz_zip_writer_finalize_archive(&zip))
+    {
+        DEBUG_PRINTF(L"❌ Failed to finalize archive: %s", output_cbz);
+        mz_zip_writer_end(&zip);
+        return FALSE;
+    }
 
-      MoveFileW(output_cbz, dest_cbzW);
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"✔ Archive moved to OUTPUT_FOLDER.");
-   }
-   else
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"📁 OUTPUT_FOLDER not set. Leaving archive in TMP.");
-   }
+    mz_zip_writer_end(&zip);
+    DEBUG_PRINTF(L"✅ Archive finalized: %s", output_cbz);
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"Archive finalized successfully.");
 
-   return TRUE;
+    if (g_config.OUTPUT_FOLDER[0] != L'\0')
+    {
+        const wchar_t *cbz_name = wcsrchr(output_cbz, L'\\');
+        cbz_name = cbz_name ? cbz_name + 1 : output_cbz;
+
+        wchar_t dest_cbzW[MAX_PATH];
+        swprintf(dest_cbzW, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbz_name);
+
+        if (MoveFileW(output_cbz, dest_cbzW))
+        {
+            DEBUG_PRINTF(L"📁 Moved archive to OUTPUT_FOLDER: %s", dest_cbzW);
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"✔ Archive moved to OUTPUT_FOLDER.");
+        }
+        else
+        {
+            DEBUG_PRINTF(L"⚠️ Failed to move archive to OUTPUT_FOLDER: %s", dest_cbzW);
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"⚠️ Failed to move archive to OUTPUT_FOLDER.");
+        }
+    }
+    else
+    {
+        DEBUG_PRINT(L"📂 OUTPUT_FOLDER not set. Archive remains in TMP.");
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"MiniZ: ", L"📁 OUTPUT_FOLDER not set. Leaving archive in TMP.");
+    }
+
+    return TRUE;
 }
 
 // Create CBZ Archive
@@ -292,8 +360,10 @@ BOOL create_cbz_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *a
 
    wcscpy(cleanName, archive_name);
    wchar_t *ext = wcsrchr(cleanName, L'.');
-   if (ext && wcscmp(ext, L".cbr") == 0)
-      *ext = L'\0';
+   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
+   {
+      *ext = L'\0'; // Strip known archive extensions
+   }
 
    swprintf(zip_file, MAX_PATH, L"%s.zip", cleanName);
    swprintf(cbz_file, MAX_PATH, L"%s.cbz", cleanName);

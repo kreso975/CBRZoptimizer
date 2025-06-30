@@ -18,120 +18,128 @@ typedef int(PASCAL *RARCLOSEARCHIVE)(HANDLE);
 
 BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *unused_dest_folder)
 {
-    (void)unused_dest_folder;
+   (void)unused_dest_folder;
 
-    wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH];
-    wcscpy(cleanDir, archive_path);
+   wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH];
+   wcscpy(cleanDir, archive_path);
 
-    // 🧽 Trim trailing whitespace from whole path
-    wchar_t *end = cleanDir + wcslen(cleanDir) - 1;
-    while (end > cleanDir && iswspace(*end))
-        *end-- = L'\0';
+   // 🧽 Trim trailing whitespace from whole path
+   wchar_t *end = cleanDir + wcslen(cleanDir) - 1;
+   while (end > cleanDir && iswspace(*end))
+      *end-- = L'\0';
 
-    // Remove extension if it's .cbr or .rar
-    wchar_t *ext = wcsrchr(cleanDir, L'.');
-    if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".rar") == 0))
-        *ext = L'\0';
+   // Remove extension if it's .cbr or .rar
+   wchar_t *ext = wcsrchr(cleanDir, L'.');
+   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
+   {
+      *ext = L'\0'; // Strip known archive extensions
+   }
 
-    // Extract base name and trim trailing spaces from that as well
-    const wchar_t *rawFolder = wcsrchr(cleanDir, L'\\');
-    const wchar_t *folderStart = rawFolder ? rawFolder + 1 : cleanDir;
+   // Extract base name and trim trailing spaces from that as well
+   const wchar_t *rawFolder = wcsrchr(cleanDir, L'\\');
+   const wchar_t *folderStart = rawFolder ? rawFolder + 1 : cleanDir;
 
-    wchar_t trimmedFolder[MAX_PATH];
-    wcsncpy(trimmedFolder, folderStart, MAX_PATH);
-    trimmedFolder[MAX_PATH - 1] = L'\0';  // ensure null-termination
+   wchar_t trimmedFolder[MAX_PATH];
+   wcsncpy(trimmedFolder, folderStart, MAX_PATH);
+   trimmedFolder[MAX_PATH - 1] = L'\0'; // ensure null-termination
 
-    // ✂️ Trim trailing whitespace again from folder name
-    wchar_t *folderEnd = trimmedFolder + wcslen(trimmedFolder) - 1;
-    while (folderEnd > trimmedFolder && iswspace(*folderEnd))
-        *folderEnd-- = L'\0';
+   // ✂️ Trim trailing whitespace again from folder name
+   wchar_t *folderEnd = trimmedFolder + wcslen(trimmedFolder) - 1;
+   while (folderEnd > trimmedFolder && iswspace(*folderEnd))
+      *folderEnd-- = L'\0';
 
-    // Build final baseFolder path
-    swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, trimmedFolder);
+   // Build final baseFolder path
+   swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, trimmedFolder);
 
-    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
-    {
-        if (!CreateDirectoryW(baseFolder, NULL))
-        {
-            MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
-            return FALSE;
-        }
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", baseFolder);
-    }
+   if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
+   {
+      if (!CreateDirectoryW(baseFolder, NULL))
+      {
+         MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
+         return FALSE;
+      }
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", baseFolder);
+   }
 
-    HMODULE hUnrar = LoadLibraryW(UNRAR_DLL_PATH);
-    if (!hUnrar)
-    {
-        DWORD err = GetLastError();
-        wchar_t msg[256];
-        swprintf(msg, 256, L"❌ LoadLibraryW failed. Error code: %lu", err);
-        MessageBeep(MB_ICONERROR);
-        MessageBoxCentered(hwnd, L"UnRAR.dll Load Failed", L"UnRAR.dll", MB_OK | MB_ICONERROR);
-        return FALSE;
-    }
+   HMODULE hUnrar = LoadLibraryW(UNRAR_DLL_PATH);
+   if (!hUnrar)
+   {
+      DWORD err = GetLastError();
+      wchar_t msg[256];
+      swprintf(msg, 256, L"❌ LoadLibraryW failed. Error code: %lu", err);
+      MessageBeep(MB_ICONERROR);
+      MessageBoxCentered(hwnd, L"UnRAR.dll Load Failed", L"UnRAR.dll", MB_OK | MB_ICONERROR);
+      return FALSE;
+   }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-function-type"
-    RAROPENARCHIVEEX fnRAROpenArchiveEx = (RAROPENARCHIVEEX)GetProcAddress(hUnrar, "RAROpenArchiveEx");
-    RARREADHEADEREX  fnRARReadHeaderEx  = (RARREADHEADEREX)GetProcAddress(hUnrar, "RARReadHeaderEx");
-    RARPROCESSFILEW  fnRARProcessFileW  = (RARPROCESSFILEW)GetProcAddress(hUnrar, "RARProcessFileW");
-    RARCLOSEARCHIVE  fnRARCloseArchive  = (RARCLOSEARCHIVE)GetProcAddress(hUnrar, "RARCloseArchive");
+   RAROPENARCHIVEEX fnRAROpenArchiveEx = (RAROPENARCHIVEEX)GetProcAddress(hUnrar, "RAROpenArchiveEx");
+   RARREADHEADEREX fnRARReadHeaderEx = (RARREADHEADEREX)GetProcAddress(hUnrar, "RARReadHeaderEx");
+   RARPROCESSFILEW fnRARProcessFileW = (RARPROCESSFILEW)GetProcAddress(hUnrar, "RARProcessFileW");
+   RARCLOSEARCHIVE fnRARCloseArchive = (RARCLOSEARCHIVE)GetProcAddress(hUnrar, "RARCloseArchive");
 #pragma GCC diagnostic pop
 
-    if (!fnRAROpenArchiveEx || !fnRARReadHeaderEx || !fnRARProcessFileW || !fnRARCloseArchive)
-    {
-        FreeLibrary(hUnrar);
-        return FALSE;
-    }
+   if (!fnRAROpenArchiveEx || !fnRARReadHeaderEx || !fnRARProcessFileW || !fnRARCloseArchive)
+   {
+      FreeLibrary(hUnrar);
+      return FALSE;
+   }
 
-    struct RAROpenArchiveDataEx openArchive = {0};
-    struct RARHeaderDataEx header = {0};
-    openArchive.ArcNameW = (wchar_t *)archive_path;
-    openArchive.OpenMode = RAR_OM_EXTRACT;
+   struct RAROpenArchiveDataEx openArchive = {0};
+   struct RARHeaderDataEx header = {0};
+   openArchive.ArcNameW = (wchar_t *)archive_path;
+   openArchive.OpenMode = RAR_OM_EXTRACT;
 
-    HANDLE hArchive = fnRAROpenArchiveEx(&openArchive);
-    if (!hArchive || openArchive.OpenResult != 0)
-    {
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"❌ Failed to open archive.", archive_path);
-        MessageBeep(MB_ICONERROR);
-        MessageBoxCentered(hwnd, L"Failed to open archive.", L"Archive Error", MB_OK | MB_ICONERROR);
-        FreeLibrary(hUnrar);
-        return FALSE;
-    }
+   HANDLE hArchive = fnRAROpenArchiveEx(&openArchive);
+   if (!hArchive || openArchive.OpenResult != 0)
+   {
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"❌ Failed to open archive.", archive_path);
+      MessageBeep(MB_ICONERROR);
+      MessageBoxCentered(hwnd, L"Failed to open archive.", L"Archive Error", MB_OK | MB_ICONERROR);
+      FreeLibrary(hUnrar);
+      return FALSE;
+   }
 
-    while (fnRARReadHeaderEx(hArchive, &header) == 0)
-    {
-        const wchar_t *originalName = wcsrchr(header.FileNameW, L'\\');
-        const wchar_t *filenameOnly = originalName ? originalName + 1 : header.FileNameW;
+   while (fnRARReadHeaderEx(hArchive, &header) == 0)
+   {
+      const wchar_t *originalName = wcsrchr(header.FileNameW, L'\\');
+      const wchar_t *filenameOnly = originalName ? originalName + 1 : header.FileNameW;
 
-        wchar_t flatOut[MAX_PATH];
-        swprintf(flatOut, MAX_PATH, L"%s\\%s", baseFolder, filenameOnly);
+      // 🔒 Skip unwanted files
+      if (should_skip_file(filenameOnly))
+      {
+         DEBUG_PRINTF(L"⏭️ Skipping unwanted file: %s\n", filenameOnly);
+         fnRARProcessFileW(hArchive, RAR_SKIP, NULL, NULL); // ✅ This tells UnRAR to advance to next file
+         continue;
+      }
 
-#if defined(DEBUG) || defined(_DEBUG)
-        DEBUG_PRINTF(L"[DLL Extract] → Attempting to extract to: %s\n", flatOut);
-#endif
+      wchar_t flatOut[MAX_PATH];
+      swprintf(flatOut, MAX_PATH, L"%s\\%s", baseFolder, filenameOnly);
 
-        wchar_t statusMsg[MAX_PATH + 64];
-        swprintf(statusMsg, MAX_PATH + 64, L"🪪 Target extract path: %s", flatOut);
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", statusMsg);
+      DEBUG_PRINTF(L"[DLL Extract] → Attempting to extract to: %s\n", flatOut);
 
-        if (fnRARProcessFileW(hArchive, RAR_EXTRACT, NULL, flatOut) != 0)
-        {
-            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"⚠️ Could not extract file:", filenameOnly);
-            MessageBeep(MB_ICONERROR);
-            MessageBoxCentered(hwnd, L"Could not extract file", filenameOnly, MB_OK | MB_ICONERROR);
-        }
-    }
+      wchar_t statusMsg[MAX_PATH + 64];
+      swprintf(statusMsg, MAX_PATH + 64, L"🪪 Target extract path: %s", flatOut);
+      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", statusMsg);
 
-    fnRARCloseArchive(hArchive);
-    FreeLibrary(hUnrar);
+      if (fnRARProcessFileW(hArchive, RAR_EXTRACT, NULL, flatOut) != 0)
+      {
+         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"⚠️ Could not extract file:", filenameOnly);
+         MessageBeep(MB_ICONERROR);
+         MessageBoxCentered(hwnd, L"Could not extract file", filenameOnly, MB_OK | MB_ICONERROR);
+      }
+   }
 
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", L"📂 Flattening image folders...");
-    wchar_t cleanPath[MAX_PATH];
-    flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
+   fnRARCloseArchive(hArchive);
+   FreeLibrary(hUnrar);
 
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", L"✅ Archive extracted via UnRAR.dll");
-    return TRUE;
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", L"📂 Flattening image folders...");
+   wchar_t cleanPath[MAX_PATH];
+   flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
+
+   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", L"✅ Archive extracted via UnRAR.dll");
+   return TRUE;
 }
 
 BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
@@ -140,8 +148,10 @@ BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
    wcscpy(cleanDir, file_path);
 
    wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".rar") == 0))
-      *ext = L'\0';
+   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
+   {
+      *ext = L'\0'; // Strip known archive extensions
+   }
 
    swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
@@ -206,8 +216,10 @@ BOOL create_cbr_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *a
    wchar_t cleanName[MAX_PATH], rar_file[MAX_PATH], cbr_file[MAX_PATH], command[1024];
    wcscpy(cleanName, archive_name);
    wchar_t *ext = wcsrchr(cleanName, L'.');
-   if (ext && (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0))
-      *ext = L'\0';
+   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
+   {
+      *ext = L'\0'; // Strip known archive extensions
+   }
 
    swprintf(rar_file, MAX_PATH, L"%s.rar", cleanName);
    swprintf(cbr_file, MAX_PATH, L"%s.cbr", cleanName);

@@ -21,6 +21,45 @@
 #include "image_handle.h"
 #include "debug.h"
 
+// List of files/extensions to ignore during extraction:
+// If isExtension == TRUE, match by file extension (case-insensitive)
+// If isExtension == FALSE, match full filename exactly
+// Helps eliminate archive noise like Thumbs.db, .nfo, logs, etc.
+const SkipEntry g_skipList[] = {
+    {L"Thumbs.db", FALSE},
+    {L".DS_Store", FALSE},
+    {L"desktop.ini", FALSE},
+    {L".nfo", TRUE},
+    {L".sfv", TRUE},
+    {L".log", TRUE},
+    {L".ini", TRUE},
+    {L".url", TRUE},
+    {L".bak", TRUE},
+    // Add more as needed
+};
+
+const size_t g_skipListCount = sizeof(g_skipList) / sizeof(g_skipList[0]);
+
+BOOL should_skip_file(const wchar_t *filename)
+{
+    for (size_t i = 0; i < g_skipListCount; ++i)
+    {
+        const SkipEntry *entry = &g_skipList[i];
+        if (entry->isExtension)
+        {
+            const wchar_t *ext = wcsrchr(filename, L'.');
+            if (ext && _wcsicmp(ext, entry->name) == 0)
+                return TRUE;
+        }
+        else
+        {
+            if (_wcsicmp(filename, entry->name) == 0)
+                return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 DWORD WINAPI ProcessingThread(LPVOID lpParam)
 {
     HWND hwnd = (HWND)lpParam;
@@ -34,45 +73,31 @@ DWORD WINAPI ProcessingThread(LPVOID lpParam)
 
 ArchiveType detect_archive_type(const wchar_t *file_path)
 {
-    const wchar_t *ext = wcsrchr(file_path, L'.');
-    if (!ext)
-        return ARCHIVE_UNKNOWN;
-
-    ArchiveType type = ARCHIVE_UNKNOWN;
-
-    if (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".rar") == 0)
-    {
-        if (is_zip_archive(file_path))
-            type = ARCHIVE_CBZ; // mislabeled ZIP
-        else
-            type = ARCHIVE_CBR;
-    }
-    else if (_wcsicmp(ext, L".cbz") == 0 || _wcsicmp(ext, L".zip") == 0)
-    {
-        type = ARCHIVE_CBZ;
-    }
-
-    return type;
-}
-
-BOOL is_zip_archive(const wchar_t *file_path)
-{
     FILE *file = _wfopen(file_path, L"rb");
     if (!file)
-        return FALSE;
+        return ARCHIVE_UNKNOWN;
 
-    unsigned char signature[4];
-    size_t read = fread(signature, 1, 4, file);
+    unsigned char signature[8] = {0};
+    size_t read = fread(signature, 1, sizeof(signature), file);
     fclose(file);
 
-    return (read == 4 && signature[0] == 'P' && signature[1] == 'K');
+    if (read >= 4 && signature[0] == 'P' && signature[1] == 'K')
+        return ARCHIVE_CBZ; // ZIP-based (CBZ/ZIP mislabeled or not)
+
+    if (read >= 5 && memcmp(signature, "\x52\x61\x72\x21\x1A", 5) == 0)
+        return ARCHIVE_CBR; // RAR v4.x
+
+    if (read == 8 && memcmp(signature, "\x52\x61\x72\x21\x1A\x07\x01\x00", 8) == 0)
+        return ARCHIVE_CBR; // RAR v5.x
+
+    return ARCHIVE_UNKNOWN;
 }
 
 // Helper to validate if WINRAR_PATH is set and points to .exe
 //   mode==1 → extract CBR/RAR (accept winrar.exe OR unrar.exe)
 //   mode==2 → unzip only     (accept ONLY winrar.exe)
 //   mode==3 → compress to RAR(accept ONLY winrar.exe)
-BOOL is_valid_winrar(int mode) 
+BOOL is_valid_winrar(int mode)
 {
     // 1) Path must exist
     if (GetFileAttributesW(g_config.WINRAR_PATH) == INVALID_FILE_ATTRIBUTES)
@@ -103,9 +128,15 @@ void get_clean_name(const wchar_t *file_path, wchar_t *base)
     const wchar_t *file_name = wcsrchr(file_path, L'\\');
     file_name = file_name ? file_name + 1 : file_path;
     wcscpy(base, file_name);
+
     wchar_t *ext = wcsrchr(base, L'.');
-    if (ext && (_wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".cbz") == 0))
+    if (ext && (_wcsicmp(ext, L".cbr") == 0 ||
+                _wcsicmp(ext, L".cbz") == 0 ||
+                _wcsicmp(ext, L".rar") == 0 ||
+                _wcsicmp(ext, L".zip") == 0))
+    {
         *ext = L'\0';
+    }
 }
 
 BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex)
@@ -258,6 +289,7 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     if (g_StopProcessing)
         return;
 
+    // Sometimes file extension is not set correctly, so we need to detect it
     ArchiveType type = detect_archive_type(file_path);
     BOOL extracted = FALSE;
 
@@ -358,7 +390,7 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         }
     }
 
-    // Cleanup
+    // Cleanup if selected
     if (!g_config.keepExtracted)
     {
         delete_folder_recursive(extracted_dir);

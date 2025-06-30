@@ -22,7 +22,16 @@ typedef enum
    ARCHIVE_CBZ
 } ArchiveType;
 
-BOOL is_zip_archive(const wchar_t *file_path);
+typedef struct {
+    const wchar_t *name;
+    BOOL isExtension;
+} SkipEntry;
+
+extern const SkipEntry g_skipList[];
+extern const size_t g_skipListCount;
+
+BOOL should_skip_file(const wchar_t *filename);
+
 BOOL is_valid_winrar(int mode);
 void get_clean_name(const wchar_t *file_path, wchar_t *base);
 BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex);

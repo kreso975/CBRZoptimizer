@@ -67,3 +67,9 @@ This project is licensed under the [Apache License 2.0](LICENSE).
 > **Disclaimer:**  
 > This software is provided as-is, with no warranty.  
 > It is intended for personal and non-commercial purposes.
+
+## Screenshots of GUI  
+  
+**Dashboard**  
+  
+<div style="display: flex; justify-content: center;"> <img src="./img/CBRZoptimizer.png?raw=true" alt="CBR & CBZ Optimizer" title="CBR & CBZ Optimizer" style="width: 100%;"> </div>

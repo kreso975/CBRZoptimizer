@@ -26,7 +26,7 @@ HINSTANCE g_hInstance;
 HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
 HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
 // Main controls
-HWND hListBox, hStartButton, hStopButton, hAddButton, hRemoveButton, hSettingsWnd;
+HWND hListBox, hStartButton, hStopButton, hAddButton, hRemoveButton, hLabelNumberOfFiles, hNumberOfFiles, hSettingsWnd;
 // Paths
 HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageResize;
 HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse;
@@ -585,7 +585,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hRemoveButton, 20, 30, 32, 32, TRUE);
       MoveWindow(hAddButton, 55, 30, 32, 32, TRUE);
       MoveWindow(hFilesGroup, 10, 10, rect.right - 380, rect.bottom - 175, TRUE);
-      MoveWindow(hListBox, 20, 70, rect.right - 400, rect.bottom - 240, TRUE);
+      MoveWindow(hListBox, 20, 70, rect.right - 400, rect.bottom - 245, TRUE);
       MoveWindow(hTerminalGroup, 10, rect.bottom - 150, rect.right - 380, 100, TRUE);
       MoveWindow(hTerminalProcessingLabel, 20, rect.bottom - 125, 100, 20, TRUE);
       MoveWindow(hTerminalProcessingText, 120, rect.bottom - 125, 100, 20, TRUE);

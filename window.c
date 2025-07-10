@@ -864,8 +864,39 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    break;
 
    case WM_DROPFILES:
-      ProcessDroppedFiles(hwnd, hListBox, (HDROP)wParam);
-      break;
+   {
+      HDROP hDrop = (HDROP)wParam;
+
+      // Get cursor position in screen coordinates
+      POINT pt;
+      DragQueryPoint(hDrop, &pt);
+      ClientToScreen(hwnd, &pt);
+
+      // Get the window under the cursor
+      HWND hTarget = WindowFromPoint(pt);
+
+      // Check if it's one of your edit controls
+      if (hTarget == hTmpFolder || hTarget == hOutputFolder)
+      {
+         wchar_t filePath[MAX_PATH];
+         if (DragQueryFileW(hDrop, 0, filePath, MAX_PATH) > 0)
+         {
+            DWORD attr = GetFileAttributesW(filePath);
+            if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY))
+            {
+               SetWindowTextW(hTarget, filePath);
+            }
+         }
+      }
+      else
+      {
+         // Fallback to listbox handling
+         ProcessDroppedFiles(hwnd, hListBox, hDrop);
+      }
+
+      DragFinish(hDrop);
+      return 0;
+   }
 
    case WM_CLOSE:
       DestroyWindow(hwnd);

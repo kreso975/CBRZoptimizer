@@ -23,12 +23,8 @@ BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
     wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], status_msg[256];
     wcscpy(cleanDir, file_path);
 
-    // 🧼 Remove extension if .cbz or .zip
-    wchar_t *ext = wcsrchr(cleanDir, L'.');
-    if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
-    {
-        *ext = L'\0';
-    }
+    // 🧼 Remove known archive extension
+    get_clean_name(cleanDir);
 
     const wchar_t *rawFolder = wcsrchr(cleanDir, L'\\');
     const wchar_t *folderStart = rawFolder ? rawFolder + 1 : cleanDir;
@@ -161,87 +157,84 @@ BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 
 BOOL extract_external_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir, ExternalApp externalApp)
 {
-   wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], command[MAX_PATH];
-   wcscpy(cleanDir, file_path);
+    wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], command[MAX_PATH];
+    wcscpy(cleanDir, file_path);
 
-   wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
-   {
-      *ext = L'\0'; // Strip known archive extensions
-   }
+    // 🧼 Remove known archive extension
+    get_clean_name(cleanDir);
 
-   swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
+    swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
-   if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
-   {
-      if (!CreateDirectoryW(baseFolder, NULL))
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting fail: ", baseFolder);
-         MessageBeep(MB_ICONERROR);
-         MessageBoxCentered(hwnd, L"Failed to create extraction directory", L"Extract Error", MB_OK | MB_ICONERROR);
-         return FALSE;
-      }
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
-   }
+    if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES)
+    {
+        if (!CreateDirectoryW(baseFolder, NULL))
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting fail: ", baseFolder);
+            MessageBeep(MB_ICONERROR);
+            MessageBoxCentered(hwnd, L"Failed to create extraction directory", L"Extract Error", MB_OK | MB_ICONERROR);
+            return FALSE;
+        }
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", baseFolder);
+    }
 
-   const wchar_t *extractor = NULL;
+    const wchar_t *extractor = NULL;
 
-   if (externalApp == EXTERNAL_APP_WINRAR)
-   {
-      if (wcslen(g_config.WINRAR_PATH) == 0)
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ WINRAR_PATH is not set.");
-         MessageBeep(MB_ICONERROR);
-         MessageBoxCentered(hwnd, L"WINRAR_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
-         return FALSE;
-      }
-      extractor = g_config.WINRAR_PATH;
-      swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" \"%s\"", extractor, file_path, baseFolder);
-   }
-   else if (externalApp == EXTERNAL_APP_7ZIP)
-   {
-      if (wcslen(g_config.SEVEN_ZIP_PATH) == 0)
-      {
-         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ SEVEN_ZIP_PATH is not set.");
-         MessageBeep(MB_ICONERROR);
-         MessageBoxCentered(hwnd, L"SEVEN_ZIP_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
-         return FALSE;
-      }
-      extractor = g_config.SEVEN_ZIP_PATH;
-      swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" -o\"%s\" -y", extractor, file_path, baseFolder);
-   }
+    if (externalApp == EXTERNAL_APP_WINRAR)
+    {
+        if (wcslen(g_config.WINRAR_PATH) == 0)
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ WINRAR_PATH is not set.");
+            MessageBeep(MB_ICONERROR);
+            MessageBoxCentered(hwnd, L"WINRAR_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
+            return FALSE;
+        }
+        extractor = g_config.WINRAR_PATH;
+        swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" \"%s\"", extractor, file_path, baseFolder);
+    }
+    else if (externalApp == EXTERNAL_APP_7ZIP)
+    {
+        if (wcslen(g_config.SEVEN_ZIP_PATH) == 0)
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ SEVEN_ZIP_PATH is not set.");
+            MessageBeep(MB_ICONERROR);
+            MessageBoxCentered(hwnd, L"SEVEN_ZIP_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
+            return FALSE;
+        }
+        extractor = g_config.SEVEN_ZIP_PATH;
+        swprintf(command, MAX_PATH, L"\"%s\" x \"%s\" -o\"%s\" -y", extractor, file_path, baseFolder);
+    }
 
-   DWORD attrib = GetFileAttributesW(extractor);
-   if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY))
-   {
-      MessageBeep(MB_ICONERROR);
-      MessageBoxCentered(hwnd, L"The specified extraction tool does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
-      return FALSE;
-   }
+    DWORD attrib = GetFileAttributesW(extractor);
+    if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        MessageBeep(MB_ICONERROR);
+        MessageBoxCentered(hwnd, L"The specified extraction tool does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
 
-   STARTUPINFOW si = {0};
-   si.cb = sizeof(si);
-   si.dwFlags = STARTF_USESHOWWINDOW;
-   si.wShowWindow = SW_HIDE;
-   PROCESS_INFORMATION pi;
+    STARTUPINFOW si = {0};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi;
 
-   if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
-   {
-      SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ Failed to launch extraction tool.");
-      return FALSE;
-   }
+    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+    {
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"❌ Failed to launch extraction tool.");
+        return FALSE;
+    }
 
-   WaitForSingleObject(pi.hProcess, INFINITE);
-   CloseHandle(pi.hProcess);
-   CloseHandle(pi.hThread);
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
-   wchar_t cleanPath[MAX_PATH];
-   flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"📂 Flattening image folders...");
+    wchar_t cleanPath[MAX_PATH];
+    flatten_and_clean_folder(baseFolder, baseFolder, cleanPath);
 
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ Extraction complete.");
-   wcscpy(final_dir, baseFolder);
-   return TRUE;
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"✅ Extraction complete.");
+    wcscpy(final_dir, baseFolder);
+    return TRUE;
 }
 
 BOOL create_cbz_with_miniz(HWND hwnd, const wchar_t *folder, const wchar_t *output_cbz)
@@ -352,84 +345,81 @@ BOOL create_cbz_with_miniz(HWND hwnd, const wchar_t *folder, const wchar_t *outp
 // Create CBZ Archive
 BOOL create_cbz_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *archive_name)
 {
-   wchar_t cleanName[MAX_PATH], zip_file[MAX_PATH], cbz_file[MAX_PATH], command[1024];
-   wchar_t buffer[4096];
-   DWORD bytesRead;
-   HANDLE hReadPipe = NULL, hWritePipe = NULL;
-   SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+    wchar_t cleanName[MAX_PATH], zip_file[MAX_PATH], cbz_file[MAX_PATH], command[1024];
+    wchar_t buffer[4096];
+    DWORD bytesRead;
+    HANDLE hReadPipe = NULL, hWritePipe = NULL;
+    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
 
-   wcscpy(cleanName, archive_name);
-   wchar_t *ext = wcsrchr(cleanName, L'.');
-   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
-   {
-      *ext = L'\0'; // Strip known archive extensions
-   }
+    wcscpy(cleanName, archive_name);
+    // 🧼 Remove known archive extension
+    get_clean_name(cleanName);
 
-   swprintf(zip_file, MAX_PATH, L"%s.zip", cleanName);
-   swprintf(cbz_file, MAX_PATH, L"%s.cbz", cleanName);
+    swprintf(zip_file, MAX_PATH, L"%s.zip", cleanName);
+    swprintf(cbz_file, MAX_PATH, L"%s.cbz", cleanName);
 
-   if (wcslen(g_config.SEVEN_ZIP_PATH) > 0)
-   {
-      DWORD attrib = GetFileAttributesW(g_config.SEVEN_ZIP_PATH);
-      if (!(attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY)))
-      {
-         if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
-            goto fallback;
+    if (wcslen(g_config.SEVEN_ZIP_PATH) > 0)
+    {
+        DWORD attrib = GetFileAttributesW(g_config.SEVEN_ZIP_PATH);
+        if (!(attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY)))
+        {
+            if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
+                goto fallback;
 
-         STARTUPINFOW si = {0};
-         si.cb = sizeof(si);
-         PROCESS_INFORMATION pi;
-         si.hStdOutput = hWritePipe;
-         si.hStdError = hWritePipe;
-         si.wShowWindow = SW_HIDE;
-         si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+            STARTUPINFOW si = {0};
+            si.cb = sizeof(si);
+            PROCESS_INFORMATION pi;
+            si.hStdOutput = hWritePipe;
+            si.hStdError = hWritePipe;
+            si.wShowWindow = SW_HIDE;
+            si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
 
-         swprintf(command, 1024, L"\"%s\" a -mx9 \"%s\" \"%s\"",
-                  g_config.SEVEN_ZIP_PATH, zip_file, image_folder);
+            swprintf(command, 1024, L"\"%s\" a -mx9 \"%s\" \"%s\"",
+                     g_config.SEVEN_ZIP_PATH, zip_file, image_folder);
 
-         if (CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW,
-                            NULL, NULL, &si, &pi))
-         {
-            CloseHandle(hWritePipe);
-            if (ReadFile(hReadPipe, buffer, sizeof(buffer) - sizeof(wchar_t), &bytesRead, NULL))
+            if (CreateProcessW(NULL, command, NULL, NULL, TRUE, CREATE_NO_WINDOW,
+                               NULL, NULL, &si, &pi))
             {
-               buffer[bytesRead / sizeof(wchar_t)] = L'\0';
-               SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", buffer);
+                CloseHandle(hWritePipe);
+                if (ReadFile(hReadPipe, buffer, sizeof(buffer) - sizeof(wchar_t), &bytesRead, NULL))
+                {
+                    buffer[bytesRead / sizeof(wchar_t)] = L'\0';
+                    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", buffer);
+                }
+                else
+                {
+                    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"7-Zip might have run successfully.");
+                }
+
+                CloseHandle(hReadPipe);
+                CloseHandle(pi.hProcess);
+                CloseHandle(pi.hThread);
+
+                MoveFileW(zip_file, cbz_file);
+                SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Renaming from .zip to .cbz");
+
+                if (g_config.OUTPUT_FOLDER[0] != L'\0')
+                {
+                    const wchar_t *cbz_name = wcsrchr(cbz_file, L'\\');
+                    cbz_name = cbz_name ? cbz_name + 1 : cbz_file;
+
+                    wchar_t dest_cbz[MAX_PATH];
+                    swprintf(dest_cbz, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbz_name);
+                    MoveFileW(cbz_file, dest_cbz);
+
+                    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"✔ Archive moved to OUTPUT_FOLDER.");
+                }
+                else
+                {
+                    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"📁 OUTPUT_FOLDER not set. Leaving archive in TMP.");
+                }
+
+                return TRUE;
             }
-            else
-            {
-               SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"7-Zip might have run successfully.");
-            }
-
-            CloseHandle(hReadPipe);
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-
-            MoveFileW(zip_file, cbz_file);
-            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"Renaming from .zip to .cbz");
-
-            if (g_config.OUTPUT_FOLDER[0] != L'\0')
-            {
-               const wchar_t *cbz_name = wcsrchr(cbz_file, L'\\');
-               cbz_name = cbz_name ? cbz_name + 1 : cbz_file;
-
-               wchar_t dest_cbz[MAX_PATH];
-               swprintf(dest_cbz, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, cbz_name);
-               MoveFileW(cbz_file, dest_cbz);
-
-               SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"✔ Archive moved to OUTPUT_FOLDER.");
-            }
-            else
-            {
-               SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"7-Zip: ", L"📁 OUTPUT_FOLDER not set. Leaving archive in TMP.");
-            }
-
-            return TRUE;
-         }
-      }
-   }
+        }
+    }
 
 fallback:
-   SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Fallback: ", L"7-Zip unavailable, using miniz.");
-   return create_cbz_with_miniz(hwnd, image_folder, cbz_file);
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Fallback: ", L"7-Zip unavailable, using miniz.");
+    return create_cbz_with_miniz(hwnd, image_folder, cbz_file);
 }

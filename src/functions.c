@@ -19,6 +19,7 @@
 #include "rar_handle.h"
 #include "zip_handle.h"
 #include "image_handle.h"
+#include "pdf_handle.h"
 #include "debug.h"
 
 // List of files/extensions to ignore during extraction:
@@ -90,6 +91,9 @@ ArchiveType detect_archive_type(const wchar_t *file_path)
     if (read == 8 && memcmp(signature, "\x52\x61\x72\x21\x1A\x07\x01\x00", 8) == 0)
         return ARCHIVE_CBR; // RAR v5.x
 
+    if (read >= 4 && memcmp(signature, "%PDF", 4) == 0)
+        return ARCHIVE_PDF; // PDF file
+
     return ARCHIVE_UNKNOWN;
 }
 
@@ -122,20 +126,27 @@ BOOL is_valid_winrar(int mode)
     }
 }
 
-// Helper to clean filename (strip path + .cbr/.cbz)
-void get_clean_name(const wchar_t *file_path, wchar_t *base)
+BOOL is_valid_mutool()
 {
-    const wchar_t *file_name = wcsrchr(file_path, L'\\');
-    file_name = file_name ? file_name + 1 : file_path;
-    wcscpy(base, file_name);
+    const wchar_t *exe = wcsrchr(g_config.MUTOOL_PATH, L'\\');
+    exe = exe ? exe + 1 : g_config.MUTOOL_PATH;
 
-    wchar_t *ext = wcsrchr(base, L'.');
+    return wcslen(g_config.MUTOOL_PATH) > 0 &&
+           GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
+           !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY) &&
+           _wcsicmp(exe, L"mutool.exe") == 0;
+}
+
+void get_clean_name(wchar_t *path)
+{
+    wchar_t *ext = wcsrchr(path, L'.');
     if (ext && (_wcsicmp(ext, L".cbr") == 0 ||
                 _wcsicmp(ext, L".cbz") == 0 ||
                 _wcsicmp(ext, L".rar") == 0 ||
-                _wcsicmp(ext, L".zip") == 0))
+                _wcsicmp(ext, L".zip") == 0 ||
+                _wcsicmp(ext, L".pdf") == 0))
     {
-        *ext = L'\0';
+        *ext = L'\0'; // Strip known extension
     }
 }
 
@@ -276,8 +287,14 @@ void delete_folder_recursive(const wchar_t *path)
 void process_file(HWND hwnd, const wchar_t *file_path)
 {
     wchar_t base[MAX_PATH];
-    get_clean_name(file_path, base);
-    TrimTrailingWhitespace(base); // Ensure folder names are clean
+
+    // ✅ Extract just the filename from the full path
+    const wchar_t *file_name = wcsrchr(file_path, L'\\');
+    file_name = file_name ? file_name + 1 : file_path;
+
+    wcscpy(base, file_name);
+    get_clean_name(base); // ✅ Strips extension from filename only
+    TrimTrailingWhitespace(base);
 
     wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
     swprintf(extracted_dir, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
@@ -322,6 +339,21 @@ void process_file(HWND hwnd, const wchar_t *file_path)
             extracted = extract_cbz(hwnd, file_path, extracted_dir); // fallback
         }
     }
+    else if (type == ARCHIVE_PDF)
+    {
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"Detected PDF file.");
+
+        extracted = pdf_extract_images(hwnd, file_path, extracted_dir);
+
+        if (!extracted)
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ Failed to extract images.");
+        }
+        else
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"✅ Images extracted.");
+        }
+    }
 
     if (!extracted)
     {
@@ -363,6 +395,7 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         return;
 
     // Output format
+    // Output format
     if (g_config.runCompressor)
     {
         wchar_t selectedText[32] = L"";
@@ -370,13 +403,29 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         SendMessageW(hOutputType, CB_GETLBTEXT, (WPARAM)(INT_PTR)selected, (LPARAM)selectedText);
 
         BOOL useCBR = FALSE;
-        if ((_wcsicmp(selectedText, L"CBR") == 0) || (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
+        BOOL usePDF = (_wcsicmp(selectedText, L"PDF") == 0);
+
+        if ((_wcsicmp(selectedText, L"CBR") == 0) ||
+            (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
         {
-            // Case #3: RAR compression
             useCBR = is_valid_winrar(3);
         }
 
-        if (useCBR)
+        if (usePDF)
+        {
+            if (!is_valid_mutool())
+            {
+                SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ MuPDF not available.");
+                return;
+            }
+
+
+            if (!pdf_create_from_images(hwnd, extracted_dir, archive_name))
+                return;
+
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"✅ PDF created.");
+        }
+        else if (useCBR)
         {
             if (!create_cbr_archive(hwnd, extracted_dir, archive_name))
                 return;
@@ -471,11 +520,29 @@ void OpenFileDialog(HWND hwnd, HWND hListBox)
 {
     OPENFILENAMEW ofn;
     wchar_t fileNames[MAX_PATH * 50] = {0}; // Large buffer to hold multiple file paths
+    wchar_t filter[256] = {0};
+
+    // Build dynamic filter
+    wcscpy(filter, L"Comic & Archive Files (*.cbr;*.cbz;*.rar;*.zip");
+    if (wcslen(g_config.MUTOOL_PATH) > 0 &&
+        GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
+        !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        wcscat(filter, L";*.pdf");
+    }
+    wcscat(filter, L")\0*.cbr;*.cbz;*.rar;*.zip");
+    if (wcslen(g_config.MUTOOL_PATH) > 0 &&
+        GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
+        !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        wcscat(filter, L";*.pdf");
+    }
+    wcscat(filter, L"\0All Files\0*.*\0");
 
     ZeroMemory(&ofn, sizeof(ofn));
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = hwnd;
-    ofn.lpstrFilter = L"CBR/CBZ/RAR/ZIP Files (*.cbr;*.cbz;*.rar;*.zip)\0*.cbr;*.cbz;*.rar;*.zip\0All Files\0*.*\0";
+    ofn.lpstrFilter = filter;
     ofn.lpstrFile = fileNames;
     ofn.nMaxFile = sizeof(fileNames);
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;

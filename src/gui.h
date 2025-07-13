@@ -11,10 +11,10 @@
 
 extern volatile BOOL g_StopProcessing;
 extern HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
-extern HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageResize;
-extern HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse;
+extern HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hMuToolPath, hImageResize;
+extern HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse, hMuToolBrowse;
 extern HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
-extern HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel;
+extern HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hMuToolLabel;
 extern HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hImageMagickLabel;
 extern HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
 
@@ -36,6 +36,7 @@ typedef struct {
     wchar_t WINRAR_PATH[MAX_PATH];
     wchar_t IMAGEMAGICK_PATH[MAX_PATH];
     wchar_t SEVEN_ZIP_PATH[MAX_PATH];
+    wchar_t MUTOOL_PATH[MAX_PATH];
 
     // Image settings
     wchar_t IMAGE_TYPE[IMAGE_TYPE_LEN];
@@ -108,7 +109,7 @@ void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t 
 void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText);
 void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop);
 void RemoveSelectedItems(HWND hListBox);
-void update_output_type_dropdown(const wchar_t *winrarPath);
+void update_output_type_dropdown();
 void load_config_values(void);
 
 

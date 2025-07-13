@@ -88,14 +88,15 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
 
     const wchar_t *ext = PathFindExtensionW(pathW);
     BOOL isBMP = (ext && _wcsnicmp(ext, L".bmp", 4) == 0);
+    BOOL isPNG = (ext && _wcsnicmp(ext, L".png", 4) == 0);
 
-    if (isBMP)
+    if (isBMP || isPNG)
     {
         wchar_t *dot = PathFindExtensionW(outPath);
         if (dot && *dot)
         {
             wcscpy_s(dot, (rsize_t)(MAX_PATH - (dot - outPath)), L".jpg");
-            DEBUG_PRINTF(L"[STB] 🖼 BMP detected — remapped to: %ls\n", outPath);
+            DEBUG_PRINTF(L"[STB] 🖼 %s detected — remapped to: %ls\n", isBMP ? "BMP" : "PNG", outPath);
         }
     }
 
@@ -193,12 +194,12 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     }
 
     // 7) Delete .bmp if converted
-    if (result && isBMP)
+    if (result && (isBMP || isPNG))
     {
         if (DeleteFileW(pathW))
-            DEBUG_PRINTF(L"[STB] 🧹 Deleted original BMP: %ls\n", pathW);
+            DEBUG_PRINTF(L"[STB] 🧹 Deleted original %s: %ls\n", isBMP ? "BMP" : "PNG", pathW);
         else
-            DEBUG_PRINTF(L"[STB] ⚠ Failed to delete BMP: %ls (Error: %lu)\n", pathW, GetLastError());
+            DEBUG_PRINTF(L"[STB] ⚠ Failed to delete %s: %ls (Error: %lu)\n", isBMP ? "BMP" : "PNG", pathW, GetLastError());
     }
 
     // 8) Cleanup
@@ -350,7 +351,7 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
     }
 
     const wchar_t *exts[] = {L"jpg", L"png"};
-    //DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
+    // DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
     for (int i = 0; i < 2; i++)
     {
         if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))

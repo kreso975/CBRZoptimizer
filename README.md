@@ -12,7 +12,8 @@
 
 ## ✨ Features
 
-- 📦 Extract `.cbz`, `.zip`, and `.cbr`, `.rar` archives
+- 📦 Extract `.cbz`, `.zip`, `.cbr`, `.rar` archives
+- 📄 Convert image folders to `.pdf` using [MuPDF](https://mupdf.com/)
 - 🧰 Uses built-in [MiniZ](https://github.com/richgel999/miniz) for ZIP/CBZ handling
 - 📂 Automatically flattens nested image folders
 - 🖼️ Image optimization with:
@@ -21,6 +22,7 @@
 - 🧵 Multithreaded image optimization (STB internal)
 - 🗂️ Handles UTF-8 and special characters in paths
 - 🛠️ Configurable via `config.ini`
+- 📦 Optional use of [7-Zip](https://www.7-zip.org/) for ZIP/CBZ extraction and compression
 
 ---
 
@@ -36,7 +38,11 @@
 3. **Configure your settings** in `config.ini`:
 
    - Input/output folders
-   - Optional tools like WinRAR and ImageMagick
+   - Optional tools:
+   - [WinRAR](https://www.win-rar.com/) for `.cbr`, `.rar` support
+   - [7-Zip CLI](https://www.7-zip.org/) for `.zip`, `.cbz` extraction and compression
+   - [MuPDF CLI](https://mupdf.com/) for PDF creation
+   - [ImageMagick CLI](https://imagemagick.org/script/download.php) for advanced image optimization
 
 ---
 
@@ -44,6 +50,8 @@
 
 - Windows 10 or newer
 - Optional: [WinRAR](https://www.win-rar.com/) for `.cbr`, `.rar` support
+- Optional: [7-Zip CLI](https://www.7-zip.org/) for `.zip`, `.cbz` support
+- Optional: [MuPDF CLI](https://mupdf.com/) for `.pdf` generation
 - Optional: [ImageMagick CLI](https://imagemagick.org/script/download.php) for advanced image optimization
 
 ---
@@ -53,6 +61,8 @@
 - Extracted archives are unpacked to the `TMP_FOLDER`
 - Final output files are saved in the `OUTPUT_FOLDER`
 - STB fallback is used automatically when ImageMagick is unavailable
+- PDF creation supports mixed image formats (`.jpg`, `.png`, `.bmp`, `.tif`) and preserves alphabetical page order
+- 7-Zip is used for ZIP/CBZ extraction and compression if configured
 
 ---
 

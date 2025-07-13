@@ -78,6 +78,7 @@
    "stat.h": "c",
    "shlobj.h": "c",
    "window.h": "c",
-   "debug.h": "c"
+   "debug.h": "c",
+   "stdlib.h": "c"
 }
 }

@@ -5,7 +5,7 @@
 #define _WIN32_WINNT 0x0501  // Or match your MinGW target
 
 #include <windows.h>
-
+#include <shlwapi.h>
 #include <commctrl.h>
 #include <wchar.h>
 #include "window.h"
@@ -20,7 +20,8 @@ EditBrowseControl inputs[] = {
     { L"Output Folder:",   L"OUTPUT_FOLDER",    L"Paths", g_config.OUTPUT_FOLDER,  60, 100, 200, ID_OUTPUT_FOLDER_BROWSE,  &hOutputFolderLabel,  &hOutputFolder,  &hOutputBrowse,   &hButtonBrowse,     NULL },
     { L"WinRAR Path:",     L"WINRAR_PATH",      L"Paths", g_config.WINRAR_PATH,    90, 100, 200, ID_WINRAR_PATH_BROWSE,    &hWinrarLabel,        &hWinrarPath,    &hWinrarBrowse,   &hButtonBrowse,     NULL },
     { L"7-Zip Path:",      L"SEVEN_ZIP_PATH",   L"Paths", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel,      &hSevenZipPath,  &hSevenZipBrowse, &hButtonBrowse,     NULL },
-    { L"ImageMagick:",     L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH,150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE,&hImageMagickLabel,  &hImageMagickPath,&hImageMagickBrowse,&hButtonBrowse,    NULL }
+    { L"ImageMagick:",     L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH,150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE,&hImageMagickLabel,  &hImageMagickPath,&hImageMagickBrowse, &hButtonBrowse,    NULL },
+    { L"MuPDF Tool:",      L"MUTOOL_PATH",      L"Paths", g_config.MUTOOL_PATH,     180, 100, 200, ID_MUTOOL_PATH_BROWSE,   &hMuToolLabel,     &hMuToolPath,   &hMuToolBrowse,  &hButtonBrowse,    NULL }
 };
 
 const size_t inputsCount = sizeof(inputs) / sizeof(inputs[0]);
@@ -167,7 +168,8 @@ void ValidateAndSaveInput(HWND changedControl, const wchar_t *iniPath)
          // Keys that may accept empty values without folder validation
          BOOL allowEmpty = (wcscmp(inputs[i].configKey, L"WINRAR_PATH") == 0 ||
                             wcscmp(inputs[i].configKey, L"SEVEN_ZIP_PATH") == 0 ||
-                            wcscmp(inputs[i].configKey, L"IMAGEMAGICK_PATH") == 0);
+                            wcscmp(inputs[i].configKey, L"IMAGEMAGICK_PATH") == 0 ||
+                            wcscmp(inputs[i].configKey, L"MUTOOL_PATH") == 0);
 
          if (wcslen(buffer) == 0 && allowEmpty)
          {
@@ -256,37 +258,28 @@ void RemoveSelectedItems(HWND hListBox)
    }
 }
 
-void update_output_type_dropdown(const wchar_t *winrarPath)
+void update_output_type_dropdown()
 {
-   const wchar_t *filename = wcsrchr(winrarPath, L'\\');
-   filename = filename ? filename + 1 : winrarPath;
+    BOOL hasWinRAR = is_valid_winrar(3);   // Mode 3 = compression
+    BOOL hasMuPDF  = is_valid_mutool();
 
-   BOOL isValid =
-       wcslen(winrarPath) > 0 &&
-       GetFileAttributesW(winrarPath) != INVALID_FILE_ATTRIBUTES &&
-       !(GetFileAttributesW(winrarPath) & FILE_ATTRIBUTE_DIRECTORY) &&
-       _wcsicmp(filename, L"winrar.exe") == 0;
+    SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
+    SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
 
-   SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
-   SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
+    if (hasWinRAR)
+    {
+        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
+        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
+    }
 
-   if (isValid)
-   {
-      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
-      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
+    if (hasMuPDF)
+    {
+        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"PDF");
+    }
 
-      // 👇 Select "Keep original" if added
-      LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, (WPARAM)(INT_PTR)-1, (LPARAM)L"Keep original");
-      if (index != CB_ERR)
-      {
-         SendMessageW(hOutputType, CB_SETCURSEL, (WPARAM)index, 0);
-      }
-   }
-   else
-   {
-      // No WinRAR, so select "CBZ" which is index 0
-      SendMessageW(hOutputType, CB_SETCURSEL, 0, 0);
-   }
+    // Default selection
+    LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, (WPARAM)-1, (LPARAM)L"Keep original");
+    SendMessageW(hOutputType, CB_SETCURSEL, (WPARAM)(index != CB_ERR ? index : 0), 0);
 }
 
 void load_config_values(void)
@@ -316,6 +309,7 @@ void load_config_values(void)
        {L"Paths", L"WINRAR_PATH", &hWinrarPath, g_config.WINRAR_PATH, MAX_PATH},
        {L"Paths", L"SEVEN_ZIP_PATH", &hSevenZipPath, g_config.SEVEN_ZIP_PATH, MAX_PATH},
        {L"Paths", L"IMAGEMAGICK_PATH", &hImageMagickPath, g_config.IMAGEMAGICK_PATH, MAX_PATH},
+       {L"Paths", L"MUTOOL_PATH", &hMuToolPath, g_config.MUTOOL_PATH, MAX_PATH},
        {L"Image", L"IMAGE_SIZE_WIDTH", &hImageSizeWidth, g_config.IMAGE_SIZE_WIDTH, IMG_DIM_LEN},
        {L"Image", L"IMAGE_SIZE_HEIGHT", &hImageSizeHeight, g_config.IMAGE_SIZE_HEIGHT, IMG_DIM_LEN},
        {L"Image", L"IMAGE_QUALITY", &hImageQualityValue, g_config.IMAGE_QUALITY, QUALITY_LEN},
@@ -370,5 +364,5 @@ void load_config_values(void)
          *controls[i].configField = isChecked;
    }
 
-   update_output_type_dropdown(g_config.WINRAR_PATH);
+   update_output_type_dropdown();
 }

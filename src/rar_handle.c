@@ -28,12 +28,8 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
    while (end > cleanDir && iswspace(*end))
       *end-- = L'\0';
 
-   // Remove extension if it's .cbr or .rar
-   wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
-   {
-      *ext = L'\0'; // Strip known archive extensions
-   }
+   // 🧼 Remove known archive extension
+   get_clean_name(cleanDir);
 
    // Extract base name and trim trailing spaces from that as well
    const wchar_t *rawFolder = wcsrchr(cleanDir, L'\\');
@@ -147,11 +143,8 @@ BOOL extract_cbr(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
    wchar_t cleanDir[MAX_PATH], baseFolder[MAX_PATH], command[MAX_PATH];
    wcscpy(cleanDir, file_path);
 
-   wchar_t *ext = wcsrchr(cleanDir, L'.');
-   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
-   {
-      *ext = L'\0'; // Strip known archive extensions
-   }
+   // 🧼 Remove known archive extension
+   get_clean_name(cleanDir);
 
    swprintf(baseFolder, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, wcsrchr(cleanDir, L'\\') + 1);
 
@@ -215,11 +208,8 @@ BOOL create_cbr_archive(HWND hwnd, const wchar_t *image_folder, const wchar_t *a
 {
    wchar_t cleanName[MAX_PATH], rar_file[MAX_PATH], cbr_file[MAX_PATH], command[1024];
    wcscpy(cleanName, archive_name);
-   wchar_t *ext = wcsrchr(cleanName, L'.');
-   if (ext && (_wcsicmp(ext, L".rar") == 0 || _wcsicmp(ext, L".cbr") == 0 || _wcsicmp(ext, L".zip") == 0 || _wcsicmp(ext, L".cbz") == 0))
-   {
-      *ext = L'\0'; // Strip known archive extensions
-   }
+   // 🧼 Remove known archive extension
+   get_clean_name(cleanName);
 
    swprintf(rar_file, MAX_PATH, L"%s.rar", cleanName);
    swprintf(cbr_file, MAX_PATH, L"%s.cbr", cleanName);

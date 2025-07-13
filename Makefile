@@ -10,7 +10,7 @@ MANIFEST = CBRZoptimizer.exe.manifest
 
 # Source files
 MINIZ = src/miniz/miniz.c
-SRC = window.c src/functions.c src/aboutDialog.c src/rar_handle.c src/zip_handle.c src/image_handle.c src/gui.c $(MINIZ)
+SRC = window.c src/functions.c src/aboutDialog.c src/rar_handle.c src/zip_handle.c src/pdf_handle.c src/image_handle.c src/gui.c $(MINIZ)
 
 # Object files
 OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRC))

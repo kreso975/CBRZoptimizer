@@ -19,7 +19,8 @@ typedef enum
 {
    ARCHIVE_UNKNOWN,
    ARCHIVE_CBR,
-   ARCHIVE_CBZ
+   ARCHIVE_CBZ,
+   ARCHIVE_PDF
 } ArchiveType;
 
 typedef struct {
@@ -33,7 +34,8 @@ extern const size_t g_skipListCount;
 BOOL should_skip_file(const wchar_t *filename);
 
 BOOL is_valid_winrar(int mode);
-void get_clean_name(const wchar_t *file_path, wchar_t *base);
+BOOL is_valid_mutool();
+void get_clean_name(wchar_t *path);
 BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex);
 
 void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wchar_t *final_folder_name);

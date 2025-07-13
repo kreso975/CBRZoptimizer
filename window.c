@@ -28,14 +28,14 @@ HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
 // Main controls
 HWND hListBox, hStartButton, hStopButton, hAddButton, hRemoveButton, hLabelNumberOfFiles, hNumberOfFiles, hSettingsWnd;
 // Paths
-HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hImageResize;
-HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse;
+HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hMuToolPath, hImageResize;
+HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse, hMuToolBrowse;
 // Groups
 HWND hFilesGroup, hTerminalGroup, hSettingsGroup, hImageSettingsGroup, hOutputGroup;
 // Terminal
 HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
 // Labels
-HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel;
+HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hMuToolLabel;
 HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hImageMagickLabel;
 HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
 // Image settings
@@ -56,6 +56,7 @@ AppConfig g_config = {
     .WINRAR_PATH = L"",
     .IMAGEMAGICK_PATH = L"",
     .SEVEN_ZIP_PATH = L"",
+    .MUTOOL_PATH = L"",
 
     // Image defaults
     .IMAGE_TYPE = L"",
@@ -93,6 +94,9 @@ GUIHandleEntry groupElements[] = {
     {L"ImageMagick Path", L"PathsGroup", &hImageMagickPath},
     {L"ImageMagick Label", L"PathsGroup", &hImageMagickLabel},
     {L"ImageMagick Browse", L"PathsGroup", &hImageMagickBrowse},
+    {L"Mutoool Path", L"PathsGroup", &hMuToolPath},
+    {L"Mutool Label", L"PathsGroup", &hMuToolLabel},
+    {L"Mutool Browse", L"PathsGroup", &hMuToolBrowse},
 
     {L"Image Resize", L"ImageGroup", &hImageResize},
     {L"ImageTypeLabel", L"ImageGroup", &hImageTypeLabel},
@@ -258,6 +262,7 @@ BOOL isHoverOutput = FALSE;
 BOOL isHoverWinrar = FALSE;
 BOOL isHoverSevenZip = FALSE;
 BOOL isHoverImageMagick = FALSE;
+BOOL isHoverMuTool = FALSE;
 
 LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -294,6 +299,9 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       break;
    case ID_IMAGEMAGICK_PATH_BROWSE:
       hoverFlag = &isHoverImageMagick;
+      break;
+   case ID_MUTOOL_PATH_BROWSE:
+      hoverFlag = &isHoverMuTool;
       break;
    }
 
@@ -355,7 +363,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hGrayBrush = CreateSolidBrush(RGB(192, 192, 192));
 
       int defaultWidth = 960;  // 800 * 1.2 (20% increase)
-      int defaultHeight = 600; // Keep height unchanged unless needed
+      int defaultHeight = 625; // Keep height unchanged unless needed
       MoveWindow(hwnd, 100, 100, defaultWidth, defaultHeight, TRUE);
 
       HMENU hMenu = CreateMenu();
@@ -595,9 +603,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // MoveWindow(hStartButton, 20, rect.bottom - 50, 120, 30, TRUE);
 
       // **Keep Right Section Fixed, Move Elements Together**
-      MoveWindow(hSettingsGroup, rect.right - 360, 10, 350, 190, TRUE);
-      MoveWindow(hImageSettingsGroup, rect.right - 360, 210, 350, 180, TRUE);
-      MoveWindow(hOutputGroup, rect.right - 360, 400, 350, 120, TRUE);
+      MoveWindow(hSettingsGroup, rect.right - 360, 10, 350, 223, TRUE);
+      MoveWindow(hImageSettingsGroup, rect.right - 360, 243, 350, 180, TRUE);
+      MoveWindow(hOutputGroup, rect.right - 360, 433, 350, 120, TRUE);
 
       // **Settings Fields and Labels**
       MoveWindow(hTmpFolderLabel, rect.right - 350, 40, 100, 20, TRUE);
@@ -620,35 +628,39 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hImageMagickPath, rect.right - 240, 171, 180, 20, TRUE);
       MoveWindow(hImageMagickBrowse, rect.right - 50, 164, 30, 30, TRUE);
 
+      MoveWindow(hMuToolLabel, rect.right - 350, 204, 100, 20, TRUE);
+      MoveWindow(hMuToolPath, rect.right - 240, 204, 180, 20, TRUE);
+      MoveWindow(hMuToolBrowse, rect.right - 50, 197, 30, 30, TRUE);
+
       // **Image Settings Fields**
-      MoveWindow(hImageQualityLabel, rect.right - 350, 240, 100, 20, TRUE);
-      MoveWindow(hImageQualityValue, rect.right - 250, 240, 100, 20, TRUE);
-      MoveWindow(hImageQualitySlider, rect.right - 350, 265, 330, 30, TRUE);
-      MoveWindow(hImageTypeLabel, rect.right - 350, 310, 90, 20, TRUE);
-      MoveWindow(hImageType, rect.right - 270, 305, 120, 20, TRUE);
+      MoveWindow(hImageQualityLabel, rect.right - 350, 273, 100, 20, TRUE);
+      MoveWindow(hImageQualityValue, rect.right - 250, 273, 100, 20, TRUE);
+      MoveWindow(hImageQualitySlider, rect.right - 350, 298, 330, 30, TRUE);
+      MoveWindow(hImageTypeLabel, rect.right - 350, 343, 90, 20, TRUE);
+      MoveWindow(hImageType, rect.right - 270, 338, 120, 20, TRUE);
 
-      MoveWindow(hImageResizeTo, rect.right - 350, 340, 20, 20, TRUE);
-      MoveWindow(hImageResizeToLabel, rect.right - 330, 342, 80, 20, TRUE);
+      MoveWindow(hImageResizeTo, rect.right - 350, 373, 20, 20, TRUE);
+      MoveWindow(hImageResizeToLabel, rect.right - 330, 375, 80, 20, TRUE);
 
-      MoveWindow(hImageSizeWidthLabel, rect.right - 245, 340, 35, 20, TRUE);
-      MoveWindow(hImageSizeWidth, rect.right - 205, 340, 50, 20, TRUE);
-      MoveWindow(hImageSizeHeightLabel, rect.right - 130, 340, 45, 20, TRUE);
-      MoveWindow(hImageSizeHeight, rect.right - 85, 340, 50, 20, TRUE);
+      MoveWindow(hImageSizeWidthLabel, rect.right - 245, 373, 35, 20, TRUE);
+      MoveWindow(hImageSizeWidth, rect.right - 205, 373, 50, 20, TRUE);
+      MoveWindow(hImageSizeHeightLabel, rect.right - 130, 373, 45, 20, TRUE);
+      MoveWindow(hImageSizeHeight, rect.right - 85, 373, 50, 20, TRUE);
 
-      MoveWindow(hImageKeepAspectRatio, rect.right - 350, 365, 20, 20, TRUE);
-      MoveWindow(hImageKeepAspectRatioLabel, rect.right - 330, 367, 100, 20, TRUE);
+      MoveWindow(hImageKeepAspectRatio, rect.right - 350, 398, 20, 20, TRUE);
+      MoveWindow(hImageKeepAspectRatioLabel, rect.right - 330, 400, 100, 20, TRUE);
 
-      MoveWindow(hImageAllowUpscaling, rect.right - 150, 365, 20, 20, TRUE);
-      MoveWindow(hImageAllowUpscalingLabel, rect.right - 130, 367, 100, 20, TRUE);
+      MoveWindow(hImageAllowUpscaling, rect.right - 150, 398, 20, 20, TRUE);
+      MoveWindow(hImageAllowUpscalingLabel, rect.right - 130, 400, 100, 20, TRUE);
 
-      MoveWindow(hOutputTypeLabel, rect.right - 350, 430, 80, 20, TRUE);
-      MoveWindow(hOutputType, rect.right - 280, 425, 120, 20, TRUE);
-      MoveWindow(hOutputRunImageOptimizer, rect.right - 350, 460, 20, 20, TRUE);
-      MoveWindow(hOutputRunImageOptimizerLabel, rect.right - 330, 462, 140, 20, TRUE);
-      MoveWindow(hOutputRunCompressor, rect.right - 150, 460, 20, 20, TRUE);
-      MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 462, 110, 20, TRUE);
-      MoveWindow(hOutputKeepExtracted, rect.right - 350, 480, 20, 20, TRUE);
-      MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 482, 150, 20, TRUE);
+      MoveWindow(hOutputTypeLabel, rect.right - 350, 463, 80, 20, TRUE);
+      MoveWindow(hOutputType, rect.right - 280, 458, 120, 20, TRUE);
+      MoveWindow(hOutputRunImageOptimizer, rect.right - 350, 493, 20, 20, TRUE);
+      MoveWindow(hOutputRunImageOptimizerLabel, rect.right - 330, 495, 140, 20, TRUE);
+      MoveWindow(hOutputRunCompressor, rect.right - 150, 493, 20, 20, TRUE);
+      MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 495, 110, 20, TRUE);
+      MoveWindow(hOutputKeepExtracted, rect.right - 350, 513, 20, 20, TRUE);
+      MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 515, 150, 20, TRUE);
 
       InvalidateRect(hwnd, NULL, TRUE);
       break;
@@ -678,7 +690,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          BrowseFile(hwnd, g_config.WINRAR_PATH);
          WritePrivateProfileStringW(L"Paths", L"WINRAR_PATH", g_config.WINRAR_PATH, iniPath);
          SetWindowTextW(hWinrarPath, g_config.WINRAR_PATH);
-         update_output_type_dropdown(g_config.WINRAR_PATH); // clean, direct
+         update_output_type_dropdown(); // clean, direct
       }
       else if (LOWORD(wParam) == ID_SEVEN_ZIP_PATH_BROWSE)
       {
@@ -691,6 +703,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          BrowseFile(hwnd, g_config.IMAGEMAGICK_PATH);
          WritePrivateProfileStringW(L"Paths", L"IMAGEMAGICK_PATH", g_config.IMAGEMAGICK_PATH, iniPath);
          SetWindowTextW(hImageMagickPath, g_config.IMAGEMAGICK_PATH);
+      }
+      else if (LOWORD(wParam) == ID_MUTOOL_PATH_BROWSE)
+      {
+         BrowseFile(hwnd, g_config.MUTOOL_PATH);
+         WritePrivateProfileStringW(L"Paths", L"MUTOOL_PATH", g_config.MUTOOL_PATH, iniPath);
+         SetWindowTextW(hMuToolPath, g_config.MUTOOL_PATH);
+         update_output_type_dropdown(); // clean, direct
       }
       else if (HIWORD(wParam) == EN_KILLFOCUS)
       {
@@ -707,8 +726,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          }
 
          if ((HWND)lParam == hWinrarPath)
-            update_output_type_dropdown(g_config.WINRAR_PATH);
-
+            update_output_type_dropdown();
+         else if ((HWND)lParam == hMuToolPath)
+            update_output_type_dropdown();
          else if ((HWND)lParam == hImageSizeWidth)
          {
             wcscpy(g_config.IMAGE_SIZE_WIDTH, buffer);
@@ -944,7 +964,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
       else if (lpdis->CtlID == ID_TMP_FOLDER_BROWSE || lpdis->CtlID == ID_OUTPUT_FOLDER_BROWSE ||
                lpdis->CtlID == ID_IMAGEMAGICK_PATH_BROWSE || lpdis->CtlID == ID_SEVEN_ZIP_PATH_BROWSE ||
-               lpdis->CtlID == ID_WINRAR_PATH_BROWSE)
+               lpdis->CtlID == ID_WINRAR_PATH_BROWSE || lpdis->CtlID == ID_MUTOOL_PATH_BROWSE)
       {
          hBmp = hButtonBrowse;
          bmpW = 26;
@@ -965,6 +985,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
          case ID_IMAGEMAGICK_PATH_BROWSE:
             isHover = isHoverImageMagick;
+            break;
+         case ID_MUTOOL_PATH_BROWSE:
+            isHover = isHoverMuTool;
             break;
          }
       }
@@ -1122,7 +1145,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
        L"CBRZ Optimizer",       // lpWindowName
        WS_OVERLAPPEDWINDOW | WS_THICKFRAME,
        CW_USEDEFAULT, CW_USEDEFAULT,
-       500, 400,
+       500, 440,
        NULL, NULL, hInstance, NULL);
 
    SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)wc.hIcon);

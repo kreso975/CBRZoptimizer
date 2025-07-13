@@ -13,7 +13,9 @@
 ## ✨ Features
 
 - 📦 Extract `.cbz`, `.zip`, `.cbr`, `.rar` archives
-- 📄 Convert image folders to `.pdf` using [MuPDF](https://mupdf.com/)
+- 📄 Bidirectional PDF support:
+  - Convert `.cbz`, `.cbr`, `.zip`, `.rar` archives into `.pdf`
+  - Convert `.pdf` files into optimized comic archives (`.cbz`, `.cbr`)
 - 🧰 Uses built-in [MiniZ](https://github.com/richgel999/miniz) for ZIP/CBZ handling
 - 📂 Automatically flattens nested image folders
 - 🖼️ Image optimization with:
@@ -41,7 +43,7 @@
    - Optional tools:
    - [WinRAR](https://www.win-rar.com/) for `.cbr`, `.rar` support
    - [7-Zip CLI](https://www.7-zip.org/) for `.zip`, `.cbz` extraction and compression
-   - [MuPDF CLI](https://mupdf.com/) for PDF creation
+   - [MuPDF CLI](https://mupdf.com/) for PDF creation from archives and PDF extraction
    - [ImageMagick CLI](https://imagemagick.org/script/download.php) for advanced image optimization
 
 ---
@@ -63,6 +65,8 @@
 - STB fallback is used automatically when ImageMagick is unavailable
 - PDF creation supports mixed image formats (`.jpg`, `.png`, `.bmp`, `.tif`) and preserves alphabetical page order
 - 7-Zip is used for ZIP/CBZ extraction and compression if configured
+- Archives (`.cbz`, `.cbr`, `.zip`, `.rar`) can be directly converted to `.pdf` if MuPDF is configured
+- PDF files can be extracted into images and re-archived as `.cbz`, `.cbr`, or converted back to `.pdf`
 
 ---
 

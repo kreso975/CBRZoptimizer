@@ -23,7 +23,8 @@ extern HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlide
 extern HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
 extern HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
 
-
+// ⚙️ ✨ ℹ️✔️ ❗ ❓✏️☕ ☀️ ☁️ ☂️ ☃️ ☔️ ⚡️ ❄️ ☑️ ☢️ ☣️ ☠️ ☤ ☮️ ☯️ ☸️ ☹️ ☺️ ⚓ ⚡⚪
+// ⚫ ⚽ ⚾ ⛄ ⛅ ⛔ ⛪ ⛲ ⛳ ⛵ ⛹ ⛺ ⛽ ✅ ✉ ✊ ✋ ✌ ✍ ✨ ✪
 // ─────────────── Config Structure ───────────────
 #define IMAGE_TYPE_LEN 10
 #define IMG_DIM_LEN    16
@@ -84,6 +85,7 @@ typedef struct {
     HWND *hBrowse;
     HBITMAP *hBitmap;
     const wchar_t *bmpPath;
+     const wchar_t *tooltipText;    // Tooltip text for the browse button 
 } EditBrowseControl;
 
 extern EditBrowseControl inputs[];

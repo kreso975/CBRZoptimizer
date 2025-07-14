@@ -70,7 +70,7 @@ LRESULT CALLBACK InstructionsWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
           DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Emoji");
 
       SendMessageW(hRichEdit, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
-  // ⚙️ ✨ ℹ️✔️ ❗ ❓✏️☕ ☀️ ☁️ ☂️ ☃️ ☔️ ⚡️ ❄️ ☑️ ☢️ ☣️ ☠️ ☤ ☮️ ☯️ ☸️ ☹️ ☺️ ⚓ ⚡⚪ ⚫ ⚽ ⚾ ⛄ ⛅ ⛔ ⛪ ⛲ ⛳ ⛵ ⛹ ⛺ ⛽ ✅ ✉ ✊ ✋ ✌ ✍ ✨ ✪ 
+       
       const wchar_t *helpText =
           L"⚙️ Built-in Features:\r\n"
           L"- You can extract .cbr and .cbz comic archives directly.\r\n"

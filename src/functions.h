@@ -2,13 +2,15 @@
 
 #include <windows.h>
 
-typedef enum {
+typedef enum
+{
     IMAGE_TYPE_PORTRAIT = 0,
     IMAGE_TYPE_LANDSCAPE = 1,
     IMAGE_TYPE_COUNT
 } ImageType;
 
-typedef struct {
+typedef struct
+{
     const wchar_t *label;
     ImageType type;
 } ImageTypeEntry;
@@ -17,13 +19,15 @@ extern const ImageTypeEntry g_ImageTypeOptions[];
 
 typedef enum
 {
-   ARCHIVE_UNKNOWN,
-   ARCHIVE_CBR,
-   ARCHIVE_CBZ,
-   ARCHIVE_PDF
+    ARCHIVE_UNKNOWN,
+    ARCHIVE_CBZ,
+    ARCHIVE_CBR,
+    ARCHIVE_PDF,
+    ARCHIVE_FOLDER
 } ArchiveType;
 
-typedef struct {
+typedef struct
+{
     const wchar_t *name;
     BOOL isExtension;
 } SkipEntry;
@@ -49,4 +53,3 @@ void TrimTrailingWhitespace(wchar_t *str);
 
 DWORD WINAPI ProcessingThread(LPVOID lpParam);
 ArchiveType detect_archive_type(const wchar_t *file_path);
-

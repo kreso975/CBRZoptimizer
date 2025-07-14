@@ -4,7 +4,7 @@
 
 #include <windows.h>
 #include <commdlg.h>
-#include <shlobj.h>
+#include <commctrl.h> // For slider control, etc.
 #include <shellapi.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -25,9 +25,9 @@
 HINSTANCE g_hInstance;
 
 HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
-HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
+HBITMAP hButtonPlus, hButtonMinus, hButtonAddFolder, hButtonBrowse, hButtonStart, hButtonStop;
 // Main controls
-HWND hListBox, hStartButton, hStopButton, hAddButton, hRemoveButton, hLabelNumberOfFiles, hNumberOfFiles, hSettingsWnd;
+HWND hListBox, hTooltip, hStartButton, hStopButton, hAddButton, hRemoveButton, hAddFolderButton, hLabelNumberOfFiles, hNumberOfFiles, hSettingsWnd;
 // Paths
 HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hMuToolPath, hImageResize;
 HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse, hMuToolBrowse;
@@ -79,6 +79,7 @@ GUIHandleEntry groupElements[] = {
     {L"ListBox", L"FilesGroup", &hListBox},
     {L"AddButton", L"FilesGroup", &hAddButton},
     {L"RemoveButton", L"FilesGroup", &hRemoveButton},
+    {L"AddFolderButton", L"FilesGroup", &hAddFolderButton},
 
     {L"TmpFolder", L"PathsGroup", &hTmpFolder},
     {L"TmpFolder Label", L"PathsGroup", &hTmpFolderLabel},
@@ -256,6 +257,7 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 BOOL isHoverRemove = FALSE;
 BOOL isHoverAdd = FALSE;
+BOOL isHoverAddFolder = FALSE;
 BOOL isHoverStart = FALSE;
 BOOL isHoverStop = FALSE;
 BOOL isHoverTmp = FALSE;
@@ -279,6 +281,9 @@ LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       break;
    case ID_ADD_BUTTON:
       hoverFlag = &isHoverAdd;
+      break;
+   case ID_ADD_FOLDER_BUTTON:
+      hoverFlag = &isHoverAddFolder;
       break;
    case ID_START_BUTTON:
       hoverFlag = &isHoverStart;
@@ -392,40 +397,60 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hFilesGroup = CreateWindowW(L"BUTTON", L"Files", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                   10, 10, 300, 200, hwnd, NULL, NULL, NULL);
 
-      // Create static controls for images (borderless)
-      hRemoveButton = CreateWindowW(
-          L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-          20, 30, 32, 32, hwnd, (HMENU)ID_REMOVE_BUTTON, NULL, NULL);
-
-      hAddButton = CreateWindowW(
-          L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-          70, 30, 32, 32, hwnd, (HMENU)ID_ADD_BUTTON, NULL, NULL);
-
-      // Load BMP images
-      hButtonPlus = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_PLUS));
-      hButtonMinus = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_MINUS));
-
-      if (!hButtonPlus)
+      typedef struct
       {
-         MessageBeep(MB_ICONERROR); // Play error sound
-         MessageBoxCentered(hwnd, L"Failed to load plus image!", L"Error", MB_OK | MB_ICONERROR);
-      }
-      else
-         SendMessageW(hAddButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonPlus);
+         HWND *handle;
+         int x, y;
+         int id;
+         int bmpId;
+         const wchar_t *tooltip;
+         HBITMAP *bmpHandle;
+      } ButtonSpec;
 
-      if (!hButtonMinus)
+      ButtonSpec buttons[] = {
+          {&hRemoveButton, 20, 30, ID_REMOVE_BUTTON, IDB_BUTTON_MINUS, L"Remove selected item", &hButtonMinus},
+          {&hAddButton, 70, 30, ID_ADD_BUTTON, IDB_BUTTON_PLUS, L"Add file to list", &hButtonPlus},
+          {&hAddFolderButton, 120, 30, ID_ADD_FOLDER_BUTTON, IDB_BUTTON_ADD_FOLDER, L"Add folder to list", &hButtonAddFolder}};
+
+      hTooltip = CreateWindowExW(0, TOOLTIPS_CLASS, NULL, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+                                 CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                 hwnd, NULL, GetModuleHandleW(NULL), NULL);
+
+      TOOLINFO ti = {0};
+      ti.cbSize = sizeof(TOOLINFO);
+      ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+      ti.hwnd = hwnd;
+
+      for (size_t i = 0; i < ARRAYSIZE(buttons); ++i)
       {
-         MessageBeep(MB_ICONERROR); // Play error sound
-         MessageBoxCentered(hwnd, L"Failed to load minus image!", L"Error", MB_OK | MB_ICONERROR);
+         ButtonSpec *b = &buttons[i];
+
+         *b->handle = CreateWindowW(
+             L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
+             b->x, b->y, 32, 32, hwnd, (HMENU)(INT_PTR)b->id, NULL, NULL);
+
+         *b->bmpHandle = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(b->bmpId));
+         if (!*b->bmpHandle)
+         {
+            MessageBeep(MB_ICONERROR);
+            MessageBoxCentered(hwnd, L"Failed to load button image!", L"Error", MB_OK | MB_ICONERROR);
+         }
+         else
+         {
+            SendMessageW(*b->handle, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)*b->bmpHandle);
+         }
+
+         SetWindowLongPtr(*b->handle, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(*b->handle, GWLP_WNDPROC));
+         SetWindowLongPtr(*b->handle, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
+
+         ti.uId = (UINT_PTR)*b->handle;
+         ti.lpszText = (LPWSTR)b->tooltip;
+         SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
       }
-      else
-         SendMessageW(hRemoveButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonMinus);
 
-      SetWindowLongPtr(hRemoveButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hRemoveButton, GWLP_WNDPROC));
-      SetWindowLongPtr(hRemoveButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
-
-      SetWindowLongPtr(hAddButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hAddButton, GWLP_WNDPROC));
-      SetWindowLongPtr(hAddButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
+      // Optional: Set tooltip behavior
+      SendMessageW(hTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 100);
+      SendMessageW(hTooltip, TTM_SETMAXTIPWIDTH, 0, 300);
 
       // **Listbox settings**
       hListBox = CreateWindowW(L"LISTBOX", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_EXTENDEDSEL | LBS_NOINTEGRALHEIGHT | LBS_NOTIFY,
@@ -493,16 +518,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          *inputs[i].hBrowse = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 320, inputs[i].y, 32, 32, hwnd, (HMENU)(UINT_PTR)inputs[i].browseId, NULL, NULL);
 
          if (inputs[i].hBitmap && *inputs[i].hBitmap)
-         {
             SendMessageW(*inputs[i].hBrowse, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)*inputs[i].hBitmap);
-         }
 
          if (*inputs[i].hBrowse)
          {
             SendMessageW(*inputs[i].hLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
             SendMessageW(*inputs[i].hEdit, WM_SETFONT, (WPARAM)hFontInput, TRUE);
+
             SetWindowLongPtr(*inputs[i].hBrowse, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(*inputs[i].hBrowse, GWLP_WNDPROC));
             SetWindowLongPtr(*inputs[i].hBrowse, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
+
+            // Add tooltip if available
+            if (inputs[i].tooltipText && hTooltip)
+            {
+               ti.uId = (UINT_PTR)*inputs[i].hBrowse;
+               ti.lpszText = (LPWSTR)inputs[i].tooltipText;
+
+               SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
+            }
          }
       }
 
@@ -594,6 +627,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // **Resize and Move 'Files' Group**
       MoveWindow(hRemoveButton, 20, 30, 32, 32, TRUE);
       MoveWindow(hAddButton, 55, 30, 32, 32, TRUE);
+      MoveWindow(hAddFolderButton, rect.right - 420, 30, 32, 32, TRUE);
       MoveWindow(hFilesGroup, 10, 10, rect.right - 380, rect.bottom - 175, TRUE);
       MoveWindow(hListBox, 20, 70, rect.right - 400, rect.bottom - 245, TRUE);
       MoveWindow(hTerminalGroup, 10, rect.bottom - 150, rect.right - 380, 100, TRUE);
@@ -768,6 +802,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       else if (LOWORD(wParam) == ID_STOP_BUTTON)
       {
          g_StopProcessing = TRUE;
+      }
+      else if (LOWORD(wParam) == ID_ADD_FOLDER_BUTTON)
+      {
+         wchar_t folderPath[MAX_PATH];
+         BrowseFolder(hwnd, folderPath);
+         AddUniqueToListBox(hwnd, hListBox, folderPath);
       }
       else if (LOWORD(wParam) == ID_ADD_BUTTON)
       {
@@ -953,6 +993,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       {
          hBmp = hButtonPlus;
          isHover = isHoverAdd;
+      }
+      else if (lpdis->CtlID == ID_ADD_FOLDER_BUTTON)
+      {
+         hBmp = hButtonAddFolder;
+         isHover = isHoverAddFolder;
       }
       else if (lpdis->CtlID == ID_START_BUTTON)
       {

@@ -13,6 +13,9 @@
 ## ✨ Features
 
 - 📦 Extract `.cbz`, `.zip`, `.cbr`, `.rar` archives
+- 📁 Folder support:
+  - Convert entire folders of images into comic archives (`.cbz`, `.cbr`)
+  - Optimize folders of images without archiving
 - 📄 Bidirectional PDF support:
   - Convert `.cbz`, `.cbr`, `.zip`, `.rar` archives into `.pdf`
   - Convert `.pdf` files into optimized comic archives (`.cbz`, `.cbr`)

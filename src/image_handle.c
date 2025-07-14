@@ -1,8 +1,6 @@
 #include <windows.h>
-#include <shlobj.h>  // For SHFileOperation
 #include <shlwapi.h> // If not already present
 #include <commdlg.h>
-#include <commctrl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

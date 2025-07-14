@@ -3,10 +3,9 @@
 #endif
 
 #include <windows.h>
-#include <shlobj.h>  // For SHFileOperation
-#include <shlwapi.h> // If not already present
+#include <shobjidl.h> // For IFileDialog
+#include <shlwapi.h>  // If not already present
 #include <commdlg.h>
-#include <commctrl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +19,7 @@
 #include "zip_handle.h"
 #include "image_handle.h"
 #include "pdf_handle.h"
+#include "folder_handle.h"
 #include "debug.h"
 
 // List of files/extensions to ignore during extraction:
@@ -74,6 +74,10 @@ DWORD WINAPI ProcessingThread(LPVOID lpParam)
 
 ArchiveType detect_archive_type(const wchar_t *file_path)
 {
+    DWORD attr = GetFileAttributesW(file_path);
+    if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY))
+        return ARCHIVE_FOLDER;
+
     FILE *file = _wfopen(file_path, L"rb");
     if (!file)
         return ARCHIVE_UNKNOWN;
@@ -83,16 +87,16 @@ ArchiveType detect_archive_type(const wchar_t *file_path)
     fclose(file);
 
     if (read >= 4 && signature[0] == 'P' && signature[1] == 'K')
-        return ARCHIVE_CBZ; // ZIP-based (CBZ/ZIP mislabeled or not)
+        return ARCHIVE_CBZ;
 
     if (read >= 5 && memcmp(signature, "\x52\x61\x72\x21\x1A", 5) == 0)
-        return ARCHIVE_CBR; // RAR v4.x
+        return ARCHIVE_CBR;
 
     if (read == 8 && memcmp(signature, "\x52\x61\x72\x21\x1A\x07\x01\x00", 8) == 0)
-        return ARCHIVE_CBR; // RAR v5.x
+        return ARCHIVE_CBR;
 
     if (read >= 4 && memcmp(signature, "%PDF", 4) == 0)
-        return ARCHIVE_PDF; // PDF file
+        return ARCHIVE_PDF;
 
     return ARCHIVE_UNKNOWN;
 }
@@ -354,6 +358,21 @@ void process_file(HWND hwnd, const wchar_t *file_path)
             SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"✅ Images extracted.");
         }
     }
+    else if (type == ARCHIVE_FOLDER)
+    {
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"\xD83D\xDCC1 Folder: ", L"Detected folder.");
+
+        extracted = copy_folder_to_tmp(file_path, extracted_dir);
+
+        if (!extracted)
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"\xD83D\xDCC1 Folder: ", L"❌ Failed to copy folder.");
+        }
+        else
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"\xD83D\xDCC1 Folder: ", L"✅ Folder copied. Ready for processing.");
+        }
+    }
 
     if (!extracted)
     {
@@ -418,7 +437,6 @@ void process_file(HWND hwnd, const wchar_t *file_path)
                 SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ MuPDF not available.");
                 return;
             }
-
 
             if (!pdf_create_from_images(hwnd, extracted_dir, archive_name))
                 return;
@@ -485,36 +503,97 @@ void StartProcessing(HWND hwnd, HWND hListBox)
 
 void BrowseFolder(HWND hwnd, wchar_t *targetPath)
 {
-    BROWSEINFO bi = {0};
-    bi.hwndOwner = hwnd;
-    bi.lpszTitle = L"Select a folder:";
-    bi.ulFlags = BIF_NEWDIALOGSTYLE | BIF_RETURNONLYFSDIRS;
+    HRESULT hr;
+    IFileDialog *pfd = NULL;
 
-    // Required for BIF_NEWDIALOGSTYLE on older systems
-    OleInitialize(NULL);
+    // Initialize COM
+    hr = CoInitialize(NULL);
+    if (FAILED(hr))
+        return;
 
-    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
-    if (pidl != NULL)
+    // Create the FileOpenDialog object
+    hr = CoCreateInstance(&CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER,
+                          &IID_IFileDialog, (void **)&pfd);
+    if (SUCCEEDED(hr))
     {
-        SHGetPathFromIDListW(pidl, targetPath);
-        CoTaskMemFree(pidl);
+        // Set the options to pick folders
+        DWORD options = 0;
+        hr = pfd->lpVtbl->GetOptions(pfd, &options);
+        if (SUCCEEDED(hr))
+        {
+            pfd->lpVtbl->SetOptions(pfd, options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+        }
+
+        // Show the dialog
+        hr = pfd->lpVtbl->Show(pfd, hwnd);
+        if (SUCCEEDED(hr))
+        {
+            IShellItem *psi = NULL;
+            hr = pfd->lpVtbl->GetResult(pfd, &psi);
+            if (SUCCEEDED(hr))
+            {
+                PWSTR folderPath = NULL;
+                hr = psi->lpVtbl->GetDisplayName(psi, SIGDN_FILESYSPATH, &folderPath);
+                if (SUCCEEDED(hr))
+                {
+                    wcsncpy(targetPath, folderPath, MAX_PATH);
+                    CoTaskMemFree(folderPath);
+                }
+                psi->lpVtbl->Release(psi);
+            }
+        }
+        pfd->lpVtbl->Release(pfd);
     }
 
-    OleUninitialize();
+    // Uninitialize COM
+    CoUninitialize();
 }
 
 void BrowseFile(HWND hwnd, wchar_t *targetPath)
 {
-    OPENFILENAMEW ofn;
-    ZeroMemory(&ofn, sizeof(ofn));
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hwnd;
-    ofn.lpstrFile = targetPath;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.lpstrFilter = L"Executables\0*.exe\0All Files\0*.*\0";
-    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-    GetOpenFileNameW(&ofn);
+    HRESULT hr;
+    IFileDialog *pfd = NULL;
+
+    hr = CoInitialize(NULL);
+    if (FAILED(hr))
+        return;
+
+    hr = CoCreateInstance(&CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER,
+                          &IID_IFileDialog, (void **)&pfd);
+    if (SUCCEEDED(hr))
+    {
+        // Set file type filters
+        COMDLG_FILTERSPEC filters[] = {
+            {L"Executables", L"*.exe"},
+            {L"All Files", L"*.*"}
+        };
+        pfd->lpVtbl->SetFileTypes(pfd, ARRAYSIZE(filters), filters);
+        pfd->lpVtbl->SetTitle(pfd, L"Select an executable");
+
+        // Show the dialog
+        hr = pfd->lpVtbl->Show(pfd, hwnd);
+        if (SUCCEEDED(hr))
+        {
+            IShellItem *psi = NULL;
+            hr = pfd->lpVtbl->GetResult(pfd, &psi);
+            if (SUCCEEDED(hr))
+            {
+                PWSTR filePath = NULL;
+                hr = psi->lpVtbl->GetDisplayName(psi, SIGDN_FILESYSPATH, &filePath);
+                if (SUCCEEDED(hr))
+                {
+                    wcsncpy(targetPath, filePath, MAX_PATH);
+                    CoTaskMemFree(filePath);
+                }
+                psi->lpVtbl->Release(psi);
+            }
+        }
+        pfd->lpVtbl->Release(pfd);
+    }
+
+    CoUninitialize();
 }
+
 
 void OpenFileDialog(HWND hwnd, HWND hListBox)
 {

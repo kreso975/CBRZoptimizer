@@ -6,7 +6,7 @@
 
 #include <windows.h>
 #include <shlwapi.h>
-#include <commctrl.h>
+#include <commctrl.h> // Slider control, etc.
 #include <wchar.h>
 #include "window.h"
 #include "gui.h"
@@ -16,12 +16,12 @@
 
 
 EditBrowseControl inputs[] = {
-    { L"Temp Folder:",     L"TMP_FOLDER",       L"Paths", g_config.TMP_FOLDER,     30, 100, 200, ID_TMP_FOLDER_BROWSE,     &hTmpFolderLabel,     &hTmpFolder,     &hTmpBrowse,      &hButtonBrowse,     NULL },
-    { L"Output Folder:",   L"OUTPUT_FOLDER",    L"Paths", g_config.OUTPUT_FOLDER,  60, 100, 200, ID_OUTPUT_FOLDER_BROWSE,  &hOutputFolderLabel,  &hOutputFolder,  &hOutputBrowse,   &hButtonBrowse,     NULL },
-    { L"WinRAR Path:",     L"WINRAR_PATH",      L"Paths", g_config.WINRAR_PATH,    90, 100, 200, ID_WINRAR_PATH_BROWSE,    &hWinrarLabel,        &hWinrarPath,    &hWinrarBrowse,   &hButtonBrowse,     NULL },
-    { L"7-Zip Path:",      L"SEVEN_ZIP_PATH",   L"Paths", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel,      &hSevenZipPath,  &hSevenZipBrowse, &hButtonBrowse,     NULL },
-    { L"ImageMagick:",     L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH,150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE,&hImageMagickLabel,  &hImageMagickPath,&hImageMagickBrowse, &hButtonBrowse,    NULL },
-    { L"MuPDF Tool:",      L"MUTOOL_PATH",      L"Paths", g_config.MUTOOL_PATH,     180, 100, 200, ID_MUTOOL_PATH_BROWSE,   &hMuToolLabel,     &hMuToolPath,   &hMuToolBrowse,  &hButtonBrowse,    NULL }
+    { L"Temp Folder:",     L"TMP_FOLDER",       L"Paths", g_config.TMP_FOLDER,     30, 100, 200, ID_TMP_FOLDER_BROWSE,     &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, NULL, L"Select temporary folder for processing" },
+    { L"Output Folder:",   L"OUTPUT_FOLDER",    L"Paths", g_config.OUTPUT_FOLDER,  60, 100, 200, ID_OUTPUT_FOLDER_BROWSE,  &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, &hButtonBrowse, NULL, L"Select Output folder for copying" },
+    { L"WinRAR Path:",     L"WINRAR_PATH",      L"Paths", g_config.WINRAR_PATH,    90, 100, 200, ID_WINRAR_PATH_BROWSE,    &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, &hButtonBrowse, NULL, L"Select WinRar.exe" },
+    { L"7-Zip Path:",      L"SEVEN_ZIP_PATH",   L"Paths", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL, L"Select 7z.exe" },
+    { L"ImageMagick:",     L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH,150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE,&hImageMagickLabel, &hImageMagickPath,&hImageMagickBrowse, &hButtonBrowse, NULL, L"Select ImageMagick.exe" },
+    { L"MuPDF Tool:",      L"MUTOOL_PATH",      L"Paths", g_config.MUTOOL_PATH,     180, 100, 200, ID_MUTOOL_PATH_BROWSE,   &hMuToolLabel, &hMuToolPath, &hMuToolBrowse, &hButtonBrowse, NULL, L"Select mutool.exe" }
 };
 
 const size_t inputsCount = sizeof(inputs) / sizeof(inputs[0]);
@@ -224,18 +224,34 @@ void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
 // Process Dragged Files
 void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
 {
-   wchar_t filePath[MAX_PATH];
-   UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+    wchar_t filePath[MAX_PATH];
+    UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
 
-   for (UINT i = 0; i < fileCount; i++)
-   {
-      if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
-      {
-         AddUniqueToListBox(hwnd, hListBox, filePath);
-      }
-   }
+    for (UINT i = 0; i < fileCount; i++)
+    {
+        if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
+        {
+            DWORD attr = GetFileAttributesW(filePath);
+            if (attr != INVALID_FILE_ATTRIBUTES)
+            {
+                // Optionally prefix folders to distinguish them later - Not in use right now
+                if (attr & FILE_ATTRIBUTE_DIRECTORY)
+                {
+                    // You can prefix with "FOLDER:" or similar
+                    wchar_t folderEntry[MAX_PATH + 10];
+                    //swprintf(folderEntry, MAX_PATH + 10, L"\xD83D\xDCC1 %s", filePath);
+                    swprintf(folderEntry, MAX_PATH + 10, L"%s", filePath);
+                    AddUniqueToListBox(hwnd, hListBox, folderEntry);
+                }
+                else
+                {
+                    AddUniqueToListBox(hwnd, hListBox, filePath);
+                }
+            }
+        }
+    }
 
-   DragFinish(hDrop);
+    DragFinish(hDrop);
 }
 
 void RemoveSelectedItems(HWND hListBox)

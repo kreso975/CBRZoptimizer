@@ -6,14 +6,15 @@
 #define ID_STOP_BUTTON 104
 #define ID_ADD_BUTTON 105
 #define ID_REMOVE_BUTTON 106
-#define ID_SETTINGS 107
-#define ID_ABOUT 108
-#define ID_FILE_EXIT 109  // **Added Exit ID**
-#define ID_HELP_ABOUT 110 // **Added About ID**
-#define ID_INSTRUCTIONS_HELP 111
-#define ID_LISTBOX 112
-#define ID_OUTPUT_TYPE 113
-#define ID_IMAGE_TYPE 114
+#define ID_ADD_FOLDER_BUTTON 107
+#define ID_SETTINGS 108
+#define ID_ABOUT 109
+#define ID_FILE_EXIT 110  // **Added Exit ID**
+#define ID_HELP_ABOUT 111 // **Added About ID**
+#define ID_INSTRUCTIONS_HELP 112
+#define ID_LISTBOX 113
+#define ID_OUTPUT_TYPE 114
+#define ID_IMAGE_TYPE 115
 
 // Settings Window IDs
 #define ID_TMP_FOLDER_BROWSE 130
@@ -32,8 +33,9 @@
 #define IDB_BUTTON_PLUS 201
 #define IDB_BUTTON_MINUS 202
 #define IDB_BUTTON_ADD 203
-#define IDB_BUTTON_START 204
-#define IDB_BUTTON_STOP 205
+#define IDB_BUTTON_ADD_FOLDER 204
+#define IDB_BUTTON_START 205
+#define IDB_BUTTON_STOP 206
 
 #define IDC_ABOUT_BMP  301
 #define IDC_ABOUT_OK   302

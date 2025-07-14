@@ -17,6 +17,7 @@
 #include "gui.h"
 #include "functions.h"
 #include "aboutDialog.h"
+#include "instructionsDialog.h"
 #include "debug.h"
 
 #include <uxtheme.h>
@@ -368,20 +369,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       HMENU hMenu = CreateMenu();
       HMENU menuFile = CreatePopupMenu();
-      HMENU helpAboutMenu = CreatePopupMenu();
+      HMENU helpMenu = CreatePopupMenu(); // ✅ Single Help menu
 
       AppendMenuW(menuFile, MF_STRING, ID_FILE_EXIT, L"Exit");
-      AppendMenuW(helpAboutMenu, MF_STRING, ID_HELP_ABOUT, L"About");
+
+      AppendMenuW(helpMenu, MF_STRING, ID_INSTRUCTIONS_HELP, L"Instructions");
+      AppendMenuW(helpMenu, MF_STRING, ID_HELP_ABOUT, L"About");
 
       AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)menuFile, L"File");
-      AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)helpAboutMenu, L"Help");
+      AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)helpMenu, L"Help"); // ✅ Add combined Help menu
 
-      // Correct way to right-align "Help"
+      // Right-align "Help"
       MENUITEMINFO mii = {0};
       mii.cbSize = sizeof(MENUITEMINFO);
       mii.fMask = MIIM_FTYPE;
       mii.fType = MFT_RIGHTJUSTIFY;
-
       SetMenuItemInfo(hMenu, (UINT)(GetMenuItemCount(hMenu) - 1), TRUE, &mii);
 
       SetMenu(hwnd, hMenu);
@@ -445,7 +447,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       hTerminalText = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 430, 210, 50, 20, hwnd, NULL, NULL, NULL);
       if (hTerminalText)
-         SendMessageW(hTerminalText, WM_SETFONT, (WPARAM)hFontInput, TRUE);
+         SendMessageW(hTerminalText, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
 
       hStartButton = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
                                    20, 230, 70, 30, hwnd, (HMENU)ID_START_BUTTON, NULL, NULL);
@@ -778,6 +780,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       else if (LOWORD(wParam) == ID_HELP_ABOUT)
       {
          ShowAboutWindow(hwnd, g_hInstance);
+      }
+      else if (LOWORD(wParam) == ID_INSTRUCTIONS_HELP)
+      {
+         ShowInstructionsWindow(hwnd, g_hInstance);
       }
       else if (LOWORD(wParam) == ID_FILE_EXIT)
       {

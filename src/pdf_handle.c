@@ -63,7 +63,7 @@ BOOL pdf_extract_images(HWND hwnd, const wchar_t *pdf_path, const wchar_t *outpu
 
     PROCESS_INFORMATION pi = {0};
 
-    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"📄 Rendering pages...");
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"\xD83D\xDCC4 Rendering pages...");
 
     if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
     {

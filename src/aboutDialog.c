@@ -70,21 +70,13 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
    {
    case WM_CREATE:
    {
-      hIcon = (HICON)LoadImageW(
-          GetModuleHandleW(NULL),
-          MAKEINTRESOURCEW(IDI_ICON1),
-          IMAGE_ICON,
-          64, 64,
-          LR_DEFAULTCOLOR | LR_SHARED);
+      hIcon = (HICON)LoadImageW( GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON,
+         64, 64, LR_DEFAULTCOLOR | LR_SHARED);
 
       if (hIcon)
       {
-         HWND hIconCtrl = CreateWindowW(
-             L"STATIC", NULL,
-             WS_CHILD | WS_VISIBLE | SS_ICON,
-             20, 20, 64, 64,
-             hWnd, NULL,
-             (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+         HWND hIconCtrl = CreateWindowW( L"STATIC", NULL, WS_CHILD | WS_VISIBLE | SS_ICON, 20, 20, 64, 64,
+            hWnd, NULL, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
 
          SendMessageW(hIconCtrl, STM_SETIMAGE, IMAGE_ICON, (LPARAM)hIcon);
       }

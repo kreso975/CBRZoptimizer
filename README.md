@@ -92,4 +92,4 @@ This project is licensed under the [Apache License 2.0](LICENSE).
   
 **Dashboard**  
   
-<div style="display: flex; justify-content: center;"> <img src="img/CBRYoptimizer.png" alt="CBR & CBZ Optimizer" title="CBR & CBZ Optimizer" style="width: 100%;"> </div>
+<div style="display: flex; justify-content: center;"> <img src="img/CBRZoptimizer.png" alt="CBR & CBZ Optimizer" title="CBR & CBZ Optimizer" style="width: 100%;"> </div>

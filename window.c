@@ -134,8 +134,6 @@ const ImageTypeEntry g_ImageTypeOptions[] = {
     {L"Portrait", IMAGE_TYPE_PORTRAIT},
     {L"Landscape", IMAGE_TYPE_LANDSCAPE}};
 
-
-
 // Refresh Window after disabling
 void AdjustLayout(HWND hwnd)
 {
@@ -1145,6 +1143,20 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
 {
    (void)hPrevInstance; // Silence warnning - cannot be without it 16bi legacy
 
+   // 🔒 Single-instance protection
+   HANDLE hMutex = CreateMutexW(NULL, FALSE, L"Global\\CBRZoptimizerMutex");
+   if (hMutex == NULL || GetLastError() == ERROR_ALREADY_EXISTS)
+   {
+      HWND existing = FindWindowW(L"ResizableWindowClass", L"CBRZ Optimizer");
+      if (existing)
+      {
+         ShowWindow(existing, SW_RESTORE); // Restore if minimized
+         SetForegroundWindow(existing);    // Bring to front
+      }
+      // No message box needed — we’re handing control to the existing instance
+      return 0;
+   }
+
    g_hInstance = hInstance;
    INITCOMMONCONTROLSEX icex = {sizeof(icex), ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES};
    icex.dwICC = ICC_WIN95_CLASSES | ICC_STANDARD_CLASSES | ICC_BAR_CLASSES;
@@ -1215,6 +1227,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
          TranslateMessage(&msg);
          DispatchMessage(&msg);
       }
+   }
+
+   // 🧹 Clean up mutex
+   if (hMutex)
+   {
+      ReleaseMutex(hMutex);
+      CloseHandle(hMutex);
    }
 
    return (int)msg.wParam;

@@ -6,6 +6,7 @@
 #include <shobjidl.h> // For IFileDialog
 #include <shlwapi.h>  // If not already present
 #include <commdlg.h>
+#include <wininet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,7 @@
 #include "functions.h"
 #include "gui.h"
 #include "resource.h"
+#include "versioninfo.h"
 #include "rar_handle.h"
 #include "zip_handle.h"
 #include "image_handle.h"
@@ -565,8 +567,7 @@ void BrowseFile(HWND hwnd, wchar_t *targetPath)
         // Set file type filters
         COMDLG_FILTERSPEC filters[] = {
             {L"Executables", L"*.exe"},
-            {L"All Files", L"*.*"}
-        };
+            {L"All Files", L"*.*"}};
         pfd->lpVtbl->SetFileTypes(pfd, ARRAYSIZE(filters), filters);
         pfd->lpVtbl->SetTitle(pfd, L"Select an executable");
 
@@ -593,7 +594,6 @@ void BrowseFile(HWND hwnd, wchar_t *targetPath)
 
     CoUninitialize();
 }
-
 
 void OpenFileDialog(HWND hwnd, HWND hListBox)
 {
@@ -649,5 +649,101 @@ void OpenFileDialog(HWND hwnd, HWND hListBox)
                 p += wcslen(p) + 1;
             }
         }
+    }
+}
+
+int CompareVersions(const char *v1, const char *v2)
+{
+    int major1, minor1, patch1;
+    int major2, minor2, patch2;
+
+    sscanf(v1, "%d.%d.%d", &major1, &minor1, &patch1);
+    sscanf(v2, "%d.%d.%d", &major2, &minor2, &patch2);
+
+    if (major1 != major2)
+        return major1 - major2;
+    if (minor1 != minor2)
+        return minor1 - minor2;
+    return patch1 - patch2;
+}
+
+void CheckForUpdate(HWND hwnd)
+{
+    // Get current version from executable
+    AppVersionInfo info;
+    GetAppVersionFields(&info);
+
+    char currentVersion[64];
+    wcstombs(currentVersion, info.FileVersion, sizeof(currentVersion));
+    currentVersion[sizeof(currentVersion) - 1] = '\0';
+
+    // Strip leading 'v' from local version if present
+    if (currentVersion[0] == 'v' || currentVersion[0] == 'V')
+    {
+        memmove(currentVersion, currentVersion + 1, strlen(currentVersion));
+    }
+
+    HINTERNET hInternet = InternetOpenW(L"CBRZoptimizer Updater", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (hInternet)
+    {
+        HINTERNET hConnect = InternetOpenUrlW(hInternet,
+                                              L"https://api.github.com/repos/kreso975/CBRZoptimizer/releases/latest",
+                                              NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+
+        if (hConnect)
+        {
+            char buffer[4096];
+            DWORD bytesRead;
+            if (InternetReadFile(hConnect, buffer, sizeof(buffer) - 1, &bytesRead))
+            {
+                buffer[bytesRead] = '\0';
+
+                const char *tagStart = strstr(buffer, "\"tag_name\":\"");
+                if (tagStart)
+                {
+                    tagStart += strlen("\"tag_name\":\"");
+                    const char *tagEnd = strchr(tagStart, '"');
+                    if (tagEnd)
+                    {
+                        char latestVersion[32] = {0};
+                        strncpy(latestVersion, tagStart, (size_t)(tagEnd - tagStart));
+                        latestVersion[tagEnd - tagStart] = '\0';
+
+                        // Strip leading 'v' from GitHub version
+                        char strippedVersion[32];
+                        if (latestVersion[0] == 'v' || latestVersion[0] == 'V')
+                        {
+                            strncpy(strippedVersion, latestVersion + 1, sizeof(strippedVersion) - 1);
+                        }
+                        else
+                        {
+                            strncpy(strippedVersion, latestVersion, sizeof(strippedVersion) - 1);
+                        }
+                        strippedVersion[sizeof(strippedVersion) - 1] = '\0';
+
+                        // Compare versions
+                        if (CompareVersions(currentVersion, strippedVersion) < 0)
+                        {
+                            wchar_t wCurrent[64], wLatest[64];
+                            mbstowcs(wCurrent, currentVersion, sizeof(wCurrent) / sizeof(wchar_t));
+                            mbstowcs(wLatest, strippedVersion, sizeof(wLatest) / sizeof(wchar_t));
+
+                            wchar_t message[256];
+                            swprintf(message, sizeof(message) / sizeof(wchar_t),
+                                     L"A new version is available: %s\nYou are running: %s",
+                                     wLatest, wCurrent);
+
+                            MessageBoxCentered(hwnd, message, L"Update Available", MB_OK | MB_ICONINFORMATION);
+                        }
+                        else
+                        {
+                            MessageBoxCentered(hwnd, L"You are running the latest version.", L"No Update", MB_OK | MB_ICONINFORMATION);
+                        }
+                    }
+                }
+            }
+            InternetCloseHandle(hConnect);
+        }
+        InternetCloseHandle(hInternet);
     }
 }

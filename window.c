@@ -134,32 +134,7 @@ const ImageTypeEntry g_ImageTypeOptions[] = {
     {L"Portrait", IMAGE_TYPE_PORTRAIT},
     {L"Landscape", IMAGE_TYPE_LANDSCAPE}};
 
-static HHOOK hHook;
-LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
-{
-   if (nCode == HCBT_ACTIVATE)
-   {
-      HWND hMsgBox = (HWND)wParam;
 
-      RECT rcOwner, rcMsgBox;
-      GetWindowRect(GetParent(hMsgBox), &rcOwner);
-      GetWindowRect(hMsgBox, &rcMsgBox);
-
-      int x = rcOwner.left + ((rcOwner.right - rcOwner.left) - (rcMsgBox.right - rcMsgBox.left)) / 2;
-      int y = rcOwner.top + ((rcOwner.bottom - rcOwner.top) - (rcMsgBox.bottom - rcMsgBox.top)) / 2;
-
-      SetWindowPos(hMsgBox, NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
-      UnhookWindowsHookEx(hHook);
-   }
-
-   return CallNextHookEx(hHook, nCode, wParam, lParam);
-}
-
-int MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type)
-{
-   hHook = SetWindowsHookEx(WH_CBT, CBTProc, NULL, GetCurrentThreadId());
-   return MessageBoxW(hwnd, text, caption, type);
-}
 
 // Refresh Window after disabling
 void AdjustLayout(HWND hwnd)
@@ -379,6 +354,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       AppendMenuW(menuFile, MF_STRING, ID_FILE_EXIT, L"Exit");
 
       AppendMenuW(helpMenu, MF_STRING, ID_INSTRUCTIONS_HELP, L"Instructions");
+      AppendMenuW(helpMenu, MF_STRING, ID_CHECK_FOR_UPDATE, L"Check for Update");
       AppendMenuW(helpMenu, MF_STRING, ID_HELP_ABOUT, L"About");
 
       AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)menuFile, L"File");
@@ -756,7 +732,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          {
             if (*(inputs[i].hEdit) == (HWND)lParam)
             {
-               ValidateAndSaveInput((HWND)lParam, iniPath);
+               ValidateAndSaveInput(hwnd, (HWND)lParam, iniPath);
                break;
             }
          }
@@ -824,6 +800,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       else if (LOWORD(wParam) == ID_INSTRUCTIONS_HELP)
       {
          ShowInstructionsWindow(hwnd, g_hInstance);
+      }
+      else if (LOWORD(wParam) == ID_CHECK_FOR_UPDATE)
+      {
+         CheckForUpdate(hwnd);
       }
       else if (LOWORD(wParam) == ID_FILE_EXIT)
       {
@@ -1188,8 +1168,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
    if (!RegisterClassExW(&wc))
       return -1;
 
-   // HWND hwnd = CreateWindowW(L"ResizableWindowClass", L"CBRZ Optimizer", WS_OVERLAPPEDWINDOW | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT,
-   //                           500, 400, NULL, NULL, hInstance, NULL);
    HWND hwnd = CreateWindowExW(
        0,                       // dwExStyle
        L"ResizableWindowClass", // lpClassName

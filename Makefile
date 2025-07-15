@@ -20,7 +20,7 @@ RES = $(OBJ_DIR)/resources.res
 INCLUDES = -Iexternal -Isrc -Isrc/miniz -Isrc/stb -I.
 
 # Libraries
-LIBS = -lmsimg32 -lcomctl32 -luxtheme -lversion -lshlwapi -lole32 -luuid
+LIBS = -lmsimg32 -lcomctl32 -luxtheme -lversion -lshlwapi -lole32 -luuid -lwininet
 
 # Build mode
 BUILD ?= debug

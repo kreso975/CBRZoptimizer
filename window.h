@@ -3,7 +3,7 @@
 
 #include <windows.h>
 
-LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam);
+
 LRESULT CALLBACK ListBoxProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);

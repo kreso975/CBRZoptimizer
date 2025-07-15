@@ -1,8 +1,8 @@
 #ifndef UNICODE
 #define UNICODE
 #endif
-#define _WIN32_IE 0x0400     // Or higher like 0x0600 if needed
-#define _WIN32_WINNT 0x0501  // Or match your MinGW target
+#define _WIN32_IE 0x0400    // Or higher like 0x0600 if needed
+#define _WIN32_WINNT 0x0501 // Or match your MinGW target
 
 #include <windows.h>
 #include <shlwapi.h>
@@ -14,15 +14,13 @@
 #include "functions.h"
 #include "debug.h"
 
-
 EditBrowseControl inputs[] = {
-    { L"Temp Folder:",     L"TMP_FOLDER",       L"Paths", g_config.TMP_FOLDER,     30, 100, 200, ID_TMP_FOLDER_BROWSE,     &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, NULL, L"Select temporary folder for processing" },
-    { L"Output Folder:",   L"OUTPUT_FOLDER",    L"Paths", g_config.OUTPUT_FOLDER,  60, 100, 200, ID_OUTPUT_FOLDER_BROWSE,  &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, &hButtonBrowse, NULL, L"Select Output folder for copying" },
-    { L"WinRAR Path:",     L"WINRAR_PATH",      L"Paths", g_config.WINRAR_PATH,    90, 100, 200, ID_WINRAR_PATH_BROWSE,    &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, &hButtonBrowse, NULL, L"Select WinRar.exe" },
-    { L"7-Zip Path:",      L"SEVEN_ZIP_PATH",   L"Paths", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL, L"Select 7z.exe" },
-    { L"ImageMagick:",     L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH,150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE,&hImageMagickLabel, &hImageMagickPath,&hImageMagickBrowse, &hButtonBrowse, NULL, L"Select ImageMagick.exe" },
-    { L"MuPDF Tool:",      L"MUTOOL_PATH",      L"Paths", g_config.MUTOOL_PATH,     180, 100, 200, ID_MUTOOL_PATH_BROWSE,   &hMuToolLabel, &hMuToolPath, &hMuToolBrowse, &hButtonBrowse, NULL, L"Select mutool.exe" }
-};
+    {L"Temp Folder:", L"TMP_FOLDER", L"Paths", g_config.TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, NULL, L"Select temporary folder for processing"},
+    {L"Output Folder:", L"OUTPUT_FOLDER", L"Paths", g_config.OUTPUT_FOLDER, 60, 100, 200, ID_OUTPUT_FOLDER_BROWSE, &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, &hButtonBrowse, NULL, L"Select Output folder for copying"},
+    {L"WinRAR Path:", L"WINRAR_PATH", L"Paths", g_config.WINRAR_PATH, 90, 100, 200, ID_WINRAR_PATH_BROWSE, &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, &hButtonBrowse, NULL, L"Select WinRar.exe"},
+    {L"7-Zip Path:", L"SEVEN_ZIP_PATH", L"Paths", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL, L"Select 7z.exe"},
+    {L"ImageMagick:", L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH, 150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE, &hImageMagickLabel, &hImageMagickPath, &hImageMagickBrowse, &hButtonBrowse, NULL, L"Select ImageMagick.exe"},
+    {L"MuPDF Tool:", L"MUTOOL_PATH", L"Paths", g_config.MUTOOL_PATH, 180, 100, 200, ID_MUTOOL_PATH_BROWSE, &hMuToolLabel, &hMuToolPath, &hMuToolBrowse, &hButtonBrowse, NULL, L"Select mutool.exe"}};
 
 const size_t inputsCount = sizeof(inputs) / sizeof(inputs[0]);
 
@@ -37,14 +35,12 @@ LabelCheckboxPair controls[] = {
 
 const int controlCount = sizeof(controls) / sizeof(controls[0]);
 
-
 void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info)
 {
    wchar_t buffer[512];
    swprintf(buffer, 512, L"%s%s", prefix, info);
    PostMessageW(hwnd, messageId, 0, (LPARAM)_wcsdup(buffer));
 }
-
 
 void EnableGroupElements(LPCWSTR groupName, BOOL enable)
 {
@@ -61,99 +57,99 @@ void EnableGroupElements(LPCWSTR groupName, BOOL enable)
 // EnableGroupElements(L"FilesGroup", TRUE);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
 {
-    // 1. Handle "Resize To" checkbox and label independently
-    BOOL forceEnableResizeToggle = enable && g_config.runImageOptimizer;
-    EnableWindow(hImageResizeToLabel, forceEnableResizeToggle);
-    EnableWindow(hImageResizeTo,     forceEnableResizeToggle);
+   // 1. Handle "Resize To" checkbox and label independently
+   BOOL forceEnableResizeToggle = enable && g_config.runImageOptimizer;
+   EnableWindow(hImageResizeToLabel, forceEnableResizeToggle);
+   EnableWindow(hImageResizeTo, forceEnableResizeToggle);
 
-    // 2. If disabling the group, turn off all other group controls (except the two above)
-    if (!enable)
-    {
-        for (int i = 0; i < groupElementsCount; ++i)
-        {
-            if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr)
-            {
-                HWND h = *groupElements[i].hwndPtr;
-                if (h != hImageResizeTo && h != hImageResizeToLabel)
-                {
-                    EnableWindow(h, FALSE);
-                }
-            }
-        }
-        return;
-    }
-
-    // 3. General enable for non-special group controls
-    for (int i = 0; i < groupElementsCount; ++i)
-    {
-        if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr)
-        {
+   // 2. If disabling the group, turn off all other group controls (except the two above)
+   if (!enable)
+   {
+      for (int i = 0; i < groupElementsCount; ++i)
+      {
+         if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr)
+         {
             HWND h = *groupElements[i].hwndPtr;
             if (h != hImageResizeTo && h != hImageResizeToLabel)
             {
-                EnableWindow(h, TRUE);
+               EnableWindow(h, FALSE);
             }
-        }
-    }
+         }
+      }
+      return;
+   }
 
-    // 4. Toggle advanced controls based on resize settings
-    EnableWindow(hImageKeepAspectRatioLabel, g_config.resizeTo);
-    EnableWindow(hImageKeepAspectRatio, g_config.resizeTo);
-    EnableWindow(hImageAllowUpscalingLabel, g_config.resizeTo);
-    EnableWindow(hImageAllowUpscaling, g_config.resizeTo);
+   // 3. General enable for non-special group controls
+   for (int i = 0; i < groupElementsCount; ++i)
+   {
+      if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr)
+      {
+         HWND h = *groupElements[i].hwndPtr;
+         if (h != hImageResizeTo && h != hImageResizeToLabel)
+         {
+            EnableWindow(h, TRUE);
+         }
+      }
+   }
 
-    DEBUG_PRINT(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE\n" : L"[DEBUG] ResizeTo = FALSE\n");
+   // 4. Toggle advanced controls based on resize settings
+   EnableWindow(hImageKeepAspectRatioLabel, g_config.resizeTo);
+   EnableWindow(hImageKeepAspectRatio, g_config.resizeTo);
+   EnableWindow(hImageAllowUpscalingLabel, g_config.resizeTo);
+   EnableWindow(hImageAllowUpscaling, g_config.resizeTo);
 
-    if (!g_config.resizeTo)
-    {
-        DEBUG_PRINT(L"[DEBUG] ResizeTo is OFF → disabling dimensions\n");
-        EnableWindow(hImageSizeWidthLabel, FALSE);
-        EnableWindow(hImageSizeWidth, FALSE);
-        EnableWindow(hImageSizeHeightLabel, FALSE);
-        EnableWindow(hImageSizeHeight, FALSE);
-        return;
-    }
+   DEBUG_PRINT(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE\n" : L"[DEBUG] ResizeTo = FALSE\n");
 
-    if (g_config.keepAspectRatio)
-    {
-        DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = TRUE\n");
+   if (!g_config.resizeTo)
+   {
+      DEBUG_PRINT(L"[DEBUG] ResizeTo is OFF → disabling dimensions\n");
+      EnableWindow(hImageSizeWidthLabel, FALSE);
+      EnableWindow(hImageSizeWidth, FALSE);
+      EnableWindow(hImageSizeHeightLabel, FALSE);
+      EnableWindow(hImageSizeHeight, FALSE);
+      return;
+   }
 
-        if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
-        {
-            DEBUG_PRINT(L"[DEBUG] Portrait mode\n");
-            EnableWindow(hImageSizeWidthLabel, FALSE);
-            EnableWindow(hImageSizeWidth, FALSE);
-            EnableWindow(hImageSizeHeightLabel, TRUE);
-            EnableWindow(hImageSizeHeight, TRUE);
-        }
-        else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
-        {
-            DEBUG_PRINT(L"[DEBUG] Landscape mode\n");
-            EnableWindow(hImageSizeWidthLabel, TRUE);
-            EnableWindow(hImageSizeWidth, TRUE);
-            EnableWindow(hImageSizeHeightLabel, FALSE);
-            EnableWindow(hImageSizeHeight, FALSE);
-        }
-        else
-        {
-            DEBUG_PRINT(L"[DEBUG] Unknown orientation — disabling both\n");
-            EnableWindow(hImageSizeWidthLabel, FALSE);
-            EnableWindow(hImageSizeWidth, FALSE);
-            EnableWindow(hImageSizeHeightLabel, FALSE);
-            EnableWindow(hImageSizeHeight, FALSE);
-        }
-    }
-    else
-    {
-        DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = FALSE → enabling both dimensions\n");
-        EnableWindow(hImageSizeWidthLabel, TRUE);
-        EnableWindow(hImageSizeWidth, TRUE);
-        EnableWindow(hImageSizeHeightLabel, TRUE);
-        EnableWindow(hImageSizeHeight, TRUE);
-    }
+   if (g_config.keepAspectRatio)
+   {
+      DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = TRUE\n");
+
+      if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
+      {
+         DEBUG_PRINT(L"[DEBUG] Portrait mode\n");
+         EnableWindow(hImageSizeWidthLabel, FALSE);
+         EnableWindow(hImageSizeWidth, FALSE);
+         EnableWindow(hImageSizeHeightLabel, TRUE);
+         EnableWindow(hImageSizeHeight, TRUE);
+      }
+      else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
+      {
+         DEBUG_PRINT(L"[DEBUG] Landscape mode\n");
+         EnableWindow(hImageSizeWidthLabel, TRUE);
+         EnableWindow(hImageSizeWidth, TRUE);
+         EnableWindow(hImageSizeHeightLabel, FALSE);
+         EnableWindow(hImageSizeHeight, FALSE);
+      }
+      else
+      {
+         DEBUG_PRINT(L"[DEBUG] Unknown orientation — disabling both\n");
+         EnableWindow(hImageSizeWidthLabel, FALSE);
+         EnableWindow(hImageSizeWidth, FALSE);
+         EnableWindow(hImageSizeHeightLabel, FALSE);
+         EnableWindow(hImageSizeHeight, FALSE);
+      }
+   }
+   else
+   {
+      DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = FALSE → enabling both dimensions\n");
+      EnableWindow(hImageSizeWidthLabel, TRUE);
+      EnableWindow(hImageSizeWidth, TRUE);
+      EnableWindow(hImageSizeHeightLabel, TRUE);
+      EnableWindow(hImageSizeHeight, TRUE);
+   }
 }
 
-void ValidateAndSaveInput(HWND changedControl, const wchar_t *iniPath)
+void ValidateAndSaveInput(HWND hwnd, HWND changedControl, const wchar_t *iniPath)
 {
    for (size_t i = 0; i < inputsCount; ++i)
    {
@@ -184,7 +180,7 @@ void ValidateAndSaveInput(HWND changedControl, const wchar_t *iniPath)
          {
             wchar_t msg[512];
             swprintf(msg, 512, L"The folder \"%s\" does not exist.\n\nThe previous value will be kept.", buffer);
-            MessageBoxW(changedControl, msg, L"Invalid Folder", MB_OK | MB_ICONWARNING);
+            MessageBoxCentered(hwnd, msg, L"Invalid Folder", MB_OK | MB_ICONWARNING);
             SetWindowTextW(changedControl, inputs[i].defaultText);
             return;
          }
@@ -224,34 +220,34 @@ void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText)
 // Process Dragged Files
 void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop)
 {
-    wchar_t filePath[MAX_PATH];
-    UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+   wchar_t filePath[MAX_PATH];
+   UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
 
-    for (UINT i = 0; i < fileCount; i++)
-    {
-        if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
-        {
-            DWORD attr = GetFileAttributesW(filePath);
-            if (attr != INVALID_FILE_ATTRIBUTES)
+   for (UINT i = 0; i < fileCount; i++)
+   {
+      if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0)
+      {
+         DWORD attr = GetFileAttributesW(filePath);
+         if (attr != INVALID_FILE_ATTRIBUTES)
+         {
+            // Optionally prefix folders to distinguish them later - Not in use right now
+            if (attr & FILE_ATTRIBUTE_DIRECTORY)
             {
-                // Optionally prefix folders to distinguish them later - Not in use right now
-                if (attr & FILE_ATTRIBUTE_DIRECTORY)
-                {
-                    // You can prefix with "FOLDER:" or similar
-                    wchar_t folderEntry[MAX_PATH + 10];
-                    //swprintf(folderEntry, MAX_PATH + 10, L"\xD83D\xDCC1 %s", filePath);
-                    swprintf(folderEntry, MAX_PATH + 10, L"%s", filePath);
-                    AddUniqueToListBox(hwnd, hListBox, folderEntry);
-                }
-                else
-                {
-                    AddUniqueToListBox(hwnd, hListBox, filePath);
-                }
+               // You can prefix with "FOLDER:" or similar
+               wchar_t folderEntry[MAX_PATH + 10];
+               // swprintf(folderEntry, MAX_PATH + 10, L"\xD83D\xDCC1 %s", filePath);
+               swprintf(folderEntry, MAX_PATH + 10, L"%s", filePath);
+               AddUniqueToListBox(hwnd, hListBox, folderEntry);
             }
-        }
-    }
+            else
+            {
+               AddUniqueToListBox(hwnd, hListBox, filePath);
+            }
+         }
+      }
+   }
 
-    DragFinish(hDrop);
+   DragFinish(hDrop);
 }
 
 void RemoveSelectedItems(HWND hListBox)
@@ -276,26 +272,26 @@ void RemoveSelectedItems(HWND hListBox)
 
 void update_output_type_dropdown()
 {
-    BOOL hasWinRAR = is_valid_winrar(3);   // Mode 3 = compression
-    BOOL hasMuPDF  = is_valid_mutool();
+   BOOL hasWinRAR = is_valid_winrar(3); // Mode 3 = compression
+   BOOL hasMuPDF = is_valid_mutool();
 
-    SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
-    SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
+   SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
+   SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
 
-    if (hasWinRAR)
-    {
-        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
-        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
-    }
+   if (hasWinRAR)
+   {
+      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
+      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
+   }
 
-    if (hasMuPDF)
-    {
-        SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"PDF");
-    }
+   if (hasMuPDF)
+   {
+      SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"PDF");
+   }
 
-    // Default selection
-    LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, (WPARAM)-1, (LPARAM)L"Keep original");
-    SendMessageW(hOutputType, CB_SETCURSEL, (WPARAM)(index != CB_ERR ? index : 0), 0);
+   // Default selection
+   LRESULT index = SendMessageW(hOutputType, CB_FINDSTRINGEXACT, (WPARAM)-1, (LPARAM)L"Keep original");
+   SendMessageW(hOutputType, CB_SETCURSEL, (WPARAM)(index != CB_ERR ? index : 0), 0);
 }
 
 void load_config_values(void)
@@ -381,4 +377,31 @@ void load_config_values(void)
    }
 
    update_output_type_dropdown();
+}
+
+static HHOOK hHook;
+LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+   if (nCode == HCBT_ACTIVATE)
+   {
+      HWND hMsgBox = (HWND)wParam;
+
+      RECT rcOwner, rcMsgBox;
+      GetWindowRect(GetParent(hMsgBox), &rcOwner);
+      GetWindowRect(hMsgBox, &rcMsgBox);
+
+      int x = rcOwner.left + ((rcOwner.right - rcOwner.left) - (rcMsgBox.right - rcMsgBox.left)) / 2;
+      int y = rcOwner.top + ((rcOwner.bottom - rcOwner.top) - (rcMsgBox.bottom - rcMsgBox.top)) / 2;
+
+      SetWindowPos(hMsgBox, NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
+      UnhookWindowsHookEx(hHook);
+   }
+
+   return CallNextHookEx(hHook, nCode, wParam, lParam);
+}
+
+int MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type)
+{
+   hHook = SetWindowsHookEx(WH_CBT, CBTProc, NULL, GetCurrentThreadId());
+   return MessageBoxW(hwnd, text, caption, type);
 }

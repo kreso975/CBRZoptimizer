@@ -106,7 +106,7 @@ void EnableGroupElements(LPCWSTR groupName, BOOL enable);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable);
 int  MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type);
 void AdjustLayout(HWND hwnd);
-void ValidateAndSaveInput(HWND changedControl, const wchar_t *iniPath);
+void ValidateAndSaveInput(HWND hwnd, HWND changedControl, const wchar_t *iniPath);
 void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info);
 void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText);
 void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop);
@@ -114,5 +114,6 @@ void RemoveSelectedItems(HWND hListBox);
 void update_output_type_dropdown();
 void load_config_values(void);
 
+LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam);
 
 #endif // GUI_H

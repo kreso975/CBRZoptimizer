@@ -4,6 +4,7 @@
 #include <commctrl.h> // Required for SysLink
 
 #include "aboutDialog.h"
+#include "versioninfo.h"
 #include "resource.h"
 
 void GetAppVersionFields(AppVersionInfo *info)

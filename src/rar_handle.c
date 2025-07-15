@@ -51,7 +51,7 @@ BOOL extract_unrar_dll(HWND hwnd, const wchar_t *archive_path, const wchar_t *un
    {
       if (!CreateDirectoryW(baseFolder, NULL))
       {
-         MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
+         MessageBoxCentered(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
          return FALSE;
       }
       SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting (DLL): ", baseFolder);

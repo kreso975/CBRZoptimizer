@@ -41,7 +41,7 @@ BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
 
     if (GetFileAttributesW(baseFolder) == INVALID_FILE_ATTRIBUTES && !CreateDirectoryW(baseFolder, NULL))
     {
-        MessageBoxW(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
+        MessageBoxCentered(hwnd, L"Failed to create extraction directory", baseFolder, MB_OK | MB_ICONERROR);
         return FALSE;
     }
 
@@ -51,7 +51,7 @@ BOOL extract_cbz(HWND hwnd, const wchar_t *file_path, wchar_t *final_dir)
     mz_zip_archive zip = {0};
     if (!mz_zip_reader_init_file(&zip, zip_utf8, 0))
     {
-        MessageBoxW(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
+        MessageBoxCentered(hwnd, L"Failed to open CBZ archive", file_path, MB_OK | MB_ICONERROR);
         return FALSE;
     }
 

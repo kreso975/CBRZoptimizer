@@ -50,6 +50,8 @@ void BrowseFolder(HWND hwnd, wchar_t *targetPath);
 void BrowseFile(HWND hwnd, wchar_t *targetPath);
 void OpenFileDialog(HWND hwnd, HWND hListBox);
 void TrimTrailingWhitespace(wchar_t *str);
+int CompareVersions(const char* v1, const char* v2);
+void CheckForUpdate(HWND hwnd);
 
 DWORD WINAPI ProcessingThread(LPVOID lpParam);
 ArchiveType detect_archive_type(const wchar_t *file_path);

@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <wchar.h>
 #include <stdio.h>
+#include <commctrl.h> // Required for SysLink
 
 #include "aboutDialog.h"
 #include "resource.h"
@@ -24,7 +25,6 @@ void GetAppVersionFields(AppVersionInfo *info)
       return;
    }
 
-   // Get translation info
    struct LANGANDCODEPAGE
    {
       WORD wLanguage;
@@ -69,6 +69,7 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
    switch (msg)
    {
    case WM_CREATE:
+   {
       hIcon = (HICON)LoadImageW(
           GetModuleHandleW(NULL),
           MAKEINTRESOURCEW(IDI_ICON1),
@@ -92,33 +93,44 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
       GetAppVersionFields(&info);
 
       CreateWindowW(L"STATIC", info.ProductName, WS_CHILD | WS_VISIBLE, 140, 20, 200, 20, hWnd, NULL, NULL, NULL);
+      HWND hwndAppVersionStatic = CreateWindowW(L"STATIC", info.ProductVersion, WS_CHILD | WS_VISIBLE, 170, 48, 200, 20, hWnd, NULL, NULL, NULL);
+      HWND hwndCopyRightStatic = CreateWindowW(L"STATIC", L"© 2025 by Krešimir Kokanović", WS_CHILD | WS_VISIBLE, 120, 70, 200, 20, hWnd, NULL, NULL, NULL);
 
-      HWND hwndAppVersionStatic = CreateWindowW(L"STATIC", info.ProductVersion, WS_CHILD | WS_VISIBLE, 170, 50, 200, 20, hWnd, NULL, NULL, NULL);
-
-      HWND hwndCopyRightStatic = CreateWindowW(L"STATIC", L"© 2025 by Krešimir Kokanović", WS_CHILD | WS_VISIBLE, 120, 75, 200, 20, hWnd, NULL, NULL, NULL);
+      HWND hwndIconsLink = CreateWindowExW( 0, WC_LINK, L"Icons by <A HREF=\"https://icons8.com\">Icons8</A>",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP, 135, 95, 200, 20, hWnd, NULL, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
 
       LOGFONT lf = {0};
       GetObject((HFONT)GetStockObject(DEFAULT_GUI_FONT), sizeof(LOGFONT), &lf);
-      lf.lfHeight = -12;       // Negative = height in pixels; positive = point size (sort of)
-      lf.lfWeight = FW_NORMAL; // FW_NORMAL for regular weight
-      // lf.lfItalic = TRUE; // uncomment for italic
+      lf.lfHeight = -12;
+      lf.lfWeight = FW_NORMAL;
 
       HFONT hAboutFont = CreateFontIndirect(&lf);
 
       SendMessageW(hwndCopyRightStatic, WM_SETFONT, (WPARAM)hAboutFont, TRUE);
       SendMessageW(hwndAppVersionStatic, WM_SETFONT, (WPARAM)hAboutFont, TRUE);
+      SendMessageW(hwndIconsLink, WM_SETFONT, (WPARAM)hAboutFont, TRUE);
 
-      CreateWindowW(L"BUTTON", L"OK",
-                    WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                    110, 125, 80, 25,
-                    hWnd, (HMENU)IDC_ABOUT_OK,
+      CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                    110, 125, 80, 25, hWnd, (HMENU)IDC_ABOUT_OK,
                     (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
       break;
+   }
 
    case WM_COMMAND:
       if (LOWORD(wParam) == IDC_ABOUT_OK)
          DestroyWindow(hWnd);
       break;
+
+   case WM_NOTIFY:
+   {
+      NMHDR *nmh = (NMHDR *)lParam;
+      if (nmh->code == NM_CLICK || nmh->code == NM_RETURN)
+      {
+         NMLINK *link = (NMLINK *)lParam;
+         ShellExecuteW(NULL, L"open", link->item.szUrl, NULL, NULL, SW_SHOWNORMAL);
+      }
+      break;
+   }
 
    case WM_DESTROY:
       if (hIcon)
@@ -131,13 +143,16 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void ShowAboutWindow(HWND hwndOwner, HINSTANCE hInst)
 {
+   INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_LINK_CLASS };
+   InitCommonControlsEx(&icex);
+
    const wchar_t CLASS_NAME[] = L"AboutWindowClass";
 
    WNDCLASSW wc = {0};
    wc.lpfnWndProc = AboutWndProc;
    wc.hInstance = hInst;
    wc.lpszClassName = CLASS_NAME;
-   wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1); // Dialog-like gray
+   wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
 
    RegisterClassW(&wc);
 
@@ -150,7 +165,6 @@ void ShowAboutWindow(HWND hwndOwner, HINSTANCE hInst)
    int x = rcOwner.left + ((rcOwner.right - rcOwner.left) - width) / 2;
    int y = rcOwner.top + ((rcOwner.bottom - rcOwner.top) - height) / 2;
 
-   // Disable the main window to simulate modal behavior
    EnableWindow(hwndOwner, FALSE);
 
    HWND hWnd = CreateWindowExW(
@@ -170,7 +184,6 @@ void ShowAboutWindow(HWND hwndOwner, HINSTANCE hInst)
       DispatchMessageW(&msg);
    }
 
-   // Re-enable the main window when done
    EnableWindow(hwndOwner, TRUE);
    SetActiveWindow(hwndOwner);
 }

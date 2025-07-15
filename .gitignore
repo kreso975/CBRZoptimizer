@@ -58,3 +58,6 @@ dkms.conf
 
 /obj/
 !/obj/.keep
+
+# Image working Files
+/icons_test/

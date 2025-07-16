@@ -29,12 +29,19 @@ LabelCheckboxPair controls[] = {
     {L"Compress folder", L"OUTPUT_RUN_COMPRESSOR", L"Output", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel, &g_config.runCompressor},
     {L"Keep extracted folders", L"OUTPUT_KEEP_EXTRACTED", L"Output", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel, &g_config.keepExtracted},
     {L"Extract cover image", L"OUTPUT_EXTRACT_COVER", L"Output", 510, &hOutputExtractCover, &hOutputExtractCoverLabel, &g_config.extractCover},
-
     {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 490, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo},
     {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio},
     {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling}};
 
 const int controlCount = sizeof(controls) / sizeof(controls[0]);
+
+ImageFieldBinding imageFields[] = {
+    {L"IMAGE_SIZE_WIDTH", g_config.IMAGE_SIZE_WIDTH, IMG_DIM_LEN, &hImageSizeWidth, FALSE, FALSE},
+    {L"IMAGE_SIZE_HEIGHT", g_config.IMAGE_SIZE_HEIGHT, IMG_DIM_LEN, &hImageSizeHeight, FALSE, FALSE},
+    {L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, QUALITY_LEN, &hImageQualityValue, TRUE, FALSE},
+    {L"IMAGE_TYPE", g_config.IMAGE_TYPE, IMAGE_TYPE_LEN, &hImageType, FALSE, TRUE}};
+
+size_t imageFieldsCount = ARRAYSIZE(imageFields);
 
 void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info)
 {
@@ -264,9 +271,7 @@ void RemoveSelectedItems(HWND hListBox)
       SendMessageW(hListBox, LB_GETSELITEMS, (WPARAM)(INT_PTR)selectedCount, (LPARAM)selectedIndexes); // Get indexes
 
       for (int i = selectedCount - 1; i >= 0; i--)
-      {
          SendMessageW(hListBox, LB_DELETESTRING, (WPARAM)(INT_PTR)selectedIndexes[i], 0);
-      }
 
       free(selectedIndexes); // Free memory
    }
@@ -322,44 +327,33 @@ void load_config_values(void)
 
    // 2. Load "Image" section values from config.ini and update corresponding UI controls.
    //    Handles text fields, slider (IMAGE_QUALITY), and dropdown (IMAGE_TYPE) in one unified loop.
-   struct
-   {
-      const wchar_t *key; // INI key name
-      wchar_t *target;    // Pointer to config field
-      DWORD size;         // Max buffer size
-      HWND hwnd;          // Associated UI control
-      BOOL isSlider;      // TRUE if value should update a slider
-      BOOL isDropdown;    // TRUE if value should update a dropdown
-   } imageFields[] = {
-       {L"IMAGE_SIZE_WIDTH", g_config.IMAGE_SIZE_WIDTH, IMG_DIM_LEN, hImageSizeWidth, FALSE, FALSE},
-       {L"IMAGE_SIZE_HEIGHT", g_config.IMAGE_SIZE_HEIGHT, IMG_DIM_LEN, hImageSizeHeight, FALSE, FALSE},
-       {L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, QUALITY_LEN, hImageQualityValue, TRUE, FALSE},
-       {L"IMAGE_TYPE", g_config.IMAGE_TYPE, IMAGE_TYPE_LEN, hImageType, FALSE, TRUE}};
-
    for (size_t i = 0; i < ARRAYSIZE(imageFields); ++i)
    {
       GetPrivateProfileStringW(L"Image", imageFields[i].key, L"", buffer, imageFields[i].size, iniPath);
 
-      wcsncpy(imageFields[i].target, buffer, imageFields[i].size - 1);
-      imageFields[i].target[imageFields[i].size - 1] = L'\0';
+      // Safe copy with bounds checking
+      wcsncpy_s(imageFields[i].target, imageFields[i].size, buffer, _TRUNCATE);
 
-      if (imageFields[i].isDropdown)
+      if (imageFields[i].hwnd && *imageFields[i].hwnd)
       {
-         for (int j = 0; j < IMAGE_TYPE_COUNT; ++j)
+         if (imageFields[i].isDropdown)
          {
-            if (wcscmp(buffer, g_ImageTypeOptions[j].label) == 0)
+            for (int j = 0; j < IMAGE_TYPE_COUNT; ++j)
             {
-               SendMessageW(imageFields[i].hwnd, CB_SETCURSEL, (WPARAM)j, 0);
-               break;
+               if (wcscmp(buffer, g_ImageTypeOptions[j].label) == 0)
+               {
+                  SendMessageW(*imageFields[i].hwnd, CB_SETCURSEL, (WPARAM)j, 0);
+                  break;
+               }
             }
          }
-      }
-      else
-      {
-         SetWindowTextW(imageFields[i].hwnd, buffer);
+         else
+         {
+            SetWindowTextW(*imageFields[i].hwnd, buffer);
 
-         if (imageFields[i].isSlider)
-            SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
+            if (imageFields[i].isSlider)
+               SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
+         }
       }
    }
 

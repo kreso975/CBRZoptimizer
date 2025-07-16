@@ -116,9 +116,7 @@ BOOL extract_cover_image(const wchar_t *folderPath, const wchar_t *outputFolderP
     if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
     {
         if (!CreateDirectoryW(coverFolderPath, NULL))
-        {
             return FALSE; // Failed to create folder
-        }
     }
 
     // 🔍 Search for image file in extracted folder
@@ -150,13 +148,9 @@ BOOL extract_cover_image(const wchar_t *folderPath, const wchar_t *outputFolderP
                 const wchar_t *ext = wcsrchr(findData.cFileName, L'.');
                 wchar_t newFileName[MAX_PATH];
                 if (ext)
-                {
                     swprintf(newFileName, MAX_PATH, L"%s%s", folderName, ext);
-                }
                 else
-                {
                     swprintf(newFileName, MAX_PATH, L"%s", folderName); // No extension
-                }
 
                 // 📥 Build destination path
                 wchar_t destPath[MAX_PATH];

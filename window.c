@@ -841,9 +841,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             // Optional direct struct write
             if (controls[i].configField)
-            {
                *(controls[i].configField) = (checked == BST_CHECKED);
-            }
 
             // Handle image optimizer + resize state + cover extract + Compress folder
             if (wcscmp(key, L"OUTPUT_RUN_IMAGE_OPTIMIZER") == 0 || wcscmp(key, L"IMAGE_RESIZE_TO") == 0 ||

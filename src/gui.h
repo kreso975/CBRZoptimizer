@@ -19,6 +19,7 @@ extern HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hIm
 extern HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
 
 extern HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
+extern HWND hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
 // Output options
 extern HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputKeepExtractedLabel, hOutputExtractCover, hOutputExtractCoverLabel, hOutputRunExtractLabel, hOutputRunExtract;
 extern HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
@@ -101,6 +102,22 @@ typedef struct {
 
 extern GUIHandleEntry groupElements[];
 extern int groupElementsCount;
+
+// ─────────────── Image Field Binding Struct ───────────────
+// Represents a binding between an INI key and its associated UI control and config field.
+typedef struct {
+    const wchar_t *key;        // INI key name
+    wchar_t *target;           // Pointer to config field
+    DWORD size;                // Max buffer size
+    HWND *hwnd;                // Associated UI control
+    BOOL isSlider;             // TRUE if value should update a slider
+    BOOL isDropdown;           // TRUE if value should update a dropdown
+} ImageFieldBinding;
+
+// External declaration of image field bindings
+extern ImageFieldBinding imageFields[];
+extern size_t imageFieldsCount;
+
 
 // ─────────────── Utility Prototypes ───────────────
 void SetControlsEnabled(BOOL enable, int count, ...);

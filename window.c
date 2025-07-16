@@ -195,13 +195,13 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                WritePrivateProfileStringW(section, key, value, iniPath);
 
                // Update g_config if needed
-               if (wcscmp(key, L"hOutputRunImageOptimizer") == 0)
+               if (wcscmp(key, L"OUTPUT_RUN_IMAGE_OPTIMIZER") == 0)
                   g_config.runImageOptimizer = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"hOutputRunCompressor") == 0)
+               else if (wcscmp(key, L"OUTPUT_RUN_COMPRESSOR") == 0)
                   g_config.runCompressor = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"hOutputKeepExtracted") == 0)
+               else if (wcscmp(key, L"OUTPUT_KEEP_EXTRACTED") == 0)
                   g_config.keepExtracted = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"hOutputExtractCover") == 0)
+               else if (wcscmp(key, L"OUTPUT_EXTRACT_COVER") == 0)
                   g_config.extractCover = (newState == BST_CHECKED);
                else if (wcscmp(key, L"IMAGE_RESIZE_TO") == 0)
                   g_config.resizeTo = (newState == BST_CHECKED);
@@ -846,8 +846,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
 
             // Handle image optimizer + resize state + cover extract + Compress folder
-            if (wcscmp(key, L"hOutputRunImageOptimizer") == 0 || wcscmp(key, L"IMAGE_RESIZE_TO") == 0 ||
-                wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0 || wcscmp(key, L"hOutputExtractCover") == 0 || wcscmp(key, L"hOutputRunCompressor") == 0)
+            if (wcscmp(key, L"OUTPUT_RUN_IMAGE_OPTIMIZER") == 0 || wcscmp(key, L"IMAGE_RESIZE_TO") == 0 ||
+                wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0 || wcscmp(key, L"OUTPUT_EXTRACT_COVER") == 0 || wcscmp(key, L"OUTPUT_RUN_COMPRESSOR") == 0)
             {
                // Single clear call to update the group state based on current config
                EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer);

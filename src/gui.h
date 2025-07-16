@@ -103,6 +103,7 @@ extern GUIHandleEntry groupElements[];
 extern int groupElementsCount;
 
 // ─────────────── Utility Prototypes ───────────────
+void SetControlsEnabled(BOOL enable, int count, ...);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable);
 int  MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type);
 void AdjustLayout(HWND hwnd);

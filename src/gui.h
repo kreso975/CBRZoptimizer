@@ -71,7 +71,7 @@ typedef struct {
 } LabelCheckboxPair;
 
 extern LabelCheckboxPair controls[];
-extern const int controlCount;
+extern const size_t controlCount;
 
 // ─────────────── Browse Field Struct ───────────────
 typedef struct {
@@ -117,7 +117,7 @@ typedef struct {
 
 // External declaration of image field bindings
 extern ImageFieldBinding imageFields[];
-extern size_t imageFieldsCount;
+extern const size_t imageFieldsCount;
 
 
 // ─────────────── Utility Prototypes ───────────────

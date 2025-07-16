@@ -34,7 +34,7 @@ LabelCheckboxPair controls[] = {
     {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling, FALSE}
 };
 
-const int controlCount = sizeof(controls) / sizeof(controls[0]);
+const size_t controlCount = sizeof(controls) / sizeof(controls[0]);
 
 ImageFieldBinding imageFields[] = {
     {L"IMAGE_SIZE_WIDTH", g_config.IMAGE_SIZE_WIDTH, IMG_DIM_LEN, &hImageSizeWidth, FALSE, FALSE},
@@ -42,7 +42,7 @@ ImageFieldBinding imageFields[] = {
     {L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, QUALITY_LEN, &hImageQualityValue, TRUE, FALSE},
     {L"IMAGE_TYPE", g_config.IMAGE_TYPE, IMAGE_TYPE_LEN, &hImageType, FALSE, TRUE}};
 
-size_t imageFieldsCount = ARRAYSIZE(imageFields);
+const size_t imageFieldsCount = sizeof(imageFields) / sizeof(imageFields[0]);
 
 void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info)
 {
@@ -359,7 +359,7 @@ void load_config_values(void)
    }
 
    // 3. Load checkbox states from controls[]
-   for (int i = 0; i < controlCount; ++i)
+   for (size_t i = 0; i < controlCount; ++i)
    {
       GetPrivateProfileStringW(controls[i].configSegment, controls[i].configKey, L"false", buffer, MAX_PATH, iniPath);
 

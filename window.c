@@ -74,7 +74,7 @@ AppConfig g_config = {
     .extractCover = TRUE};
 
 extern LabelCheckboxPair controls[];
-extern const int controlCount;
+extern const size_t controlCount;
 
 GUIHandleEntry groupElements[] = {
     {L"ListBox", L"FilesGroup", &hListBox},
@@ -182,7 +182,7 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             *(lastSlash + 1) = L'\0';
          wcscat(iniPath, L"config.ini");
 
-         for (int i = 0; i < controlCount; ++i)
+         for (size_t i = 0; i < controlCount; ++i)
          {
             if (hCheckbox == *controls[i].hCheckbox)
             {
@@ -211,7 +211,7 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
          }
 
-         for (int i = 0; i < controlCount; ++i)
+         for (size_t i = 0; i < controlCount; ++i)
          {
             if (hwnd == *controls[i].hLabel && controls[i].triggersGroupLogic)
             {
@@ -573,7 +573,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       SendMessageW(hOutputType, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
-      for (int i = 0; i < controlCount; ++i)
+      for (size_t i = 0; i < controlCount; ++i)
       {
          *controls[i].hCheckbox = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 350, controls[i].y, 20, 20, hwnd, NULL, NULL, NULL);
          *controls[i].hLabel = CreateWindowW(L"STATIC", controls[i].labelText, WS_CHILD | WS_VISIBLE | SS_NOTIFY, 330, controls[i].y, 180, 20, hwnd, NULL, NULL, NULL);
@@ -826,7 +826,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          }
       }
 
-      for (int i = 0; i < controlCount; ++i)
+      for (size_t i = 0; i < controlCount; ++i)
       {
          if ((HWND)lParam == *controls[i].hCheckbox && HIWORD(wParam) == BN_CLICKED)
          {

@@ -67,6 +67,7 @@ typedef struct {
     HWND *hCheckbox;
     HWND *hLabel;
     BOOL *configField;
+    BOOL triggersGroupLogic; // If TRUE, toggling this checkbox will trigger group logic listen for clicks on label and checkbox
 } LabelCheckboxPair;
 
 extern LabelCheckboxPair controls[];

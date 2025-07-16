@@ -25,13 +25,14 @@ EditBrowseControl inputs[] = {
 const size_t inputsCount = sizeof(inputs) / sizeof(inputs[0]);
 
 LabelCheckboxPair controls[] = {
-    {L"Image optimization", L"OUTPUT_RUN_IMAGE_OPTIMIZER", L"Output", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel, &g_config.runImageOptimizer},
-    {L"Compress folder", L"OUTPUT_RUN_COMPRESSOR", L"Output", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel, &g_config.runCompressor},
-    {L"Keep extracted folders", L"OUTPUT_KEEP_EXTRACTED", L"Output", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel, &g_config.keepExtracted},
-    {L"Extract cover image", L"OUTPUT_EXTRACT_COVER", L"Output", 510, &hOutputExtractCover, &hOutputExtractCoverLabel, &g_config.extractCover},
-    {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 490, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo},
-    {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio},
-    {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling}};
+    {L"Image optimization", L"OUTPUT_RUN_IMAGE_OPTIMIZER", L"Output", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel, &g_config.runImageOptimizer, TRUE},
+    {L"Compress folder", L"OUTPUT_RUN_COMPRESSOR", L"Output", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel, &g_config.runCompressor, TRUE},
+    {L"Keep extracted folders", L"OUTPUT_KEEP_EXTRACTED", L"Output", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel, &g_config.keepExtracted, FALSE},
+    {L"Extract cover image", L"OUTPUT_EXTRACT_COVER", L"Output", 510, &hOutputExtractCover, &hOutputExtractCoverLabel, &g_config.extractCover, TRUE},
+    {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 490, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo, TRUE},
+    {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio, TRUE},
+    {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling, FALSE}
+};
 
 const int controlCount = sizeof(controls) / sizeof(controls[0]);
 

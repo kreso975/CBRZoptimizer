@@ -71,8 +71,7 @@ AppConfig g_config = {
     .runImageOptimizer = TRUE,
     .runCompressor = TRUE,
     .keepExtracted = TRUE,
-    .extractCover = TRUE
-};
+    .extractCover = TRUE};
 
 extern LabelCheckboxPair controls[];
 extern const int controlCount;
@@ -129,9 +128,8 @@ GUIHandleEntry groupElements[] = {
     {L"hOutputRunImageOptimizerLabel", L"OutputGroup", &hOutputRunImageOptimizerLabel},
     {L"hOutputRunCompressor", L"OutputGroup", &hOutputRunCompressor},
     {L"hOutputRunCompressorLabel", L"OutputGroup", &hOutputRunCompressorLabel},
-   {L"hOutputExtractCover", L"OutputGroup", &hOutputExtractCover},
-   {L"hOutputExtractCoverLabel", L"OutputGroup", &hOutputExtractCoverLabel}
-   };
+    {L"hOutputExtractCover", L"OutputGroup", &hOutputExtractCover},
+    {L"hOutputExtractCoverLabel", L"OutputGroup", &hOutputExtractCoverLabel}};
 
 int groupElementsCount = sizeof(groupElements) / sizeof(groupElements[0]);
 
@@ -213,17 +211,18 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
          }
 
-         if (hwnd == hImageResizeToLabel || hwnd == hImageKeepAspectRatioLabel || hwnd == hOutputRunImageOptimizerLabel 
-            || hwnd == hOutputExtractCoverLabel || hwnd == hOutputRunCompressorLabel)
+         for (int i = 0; i < controlCount; ++i)
          {
-            BOOL shouldEnable = g_config.runImageOptimizer;
-
-            EnableResizeGroupWithLogic(L"ImageGroup", shouldEnable);
-
-            // If the group is visible and needs layout attention
-            if (shouldEnable)
+            if (hwnd == *controls[i].hLabel && controls[i].triggersGroupLogic)
             {
-               AdjustLayout(GetParent(hwnd)); // VERY IMPORTANT: GetParent(hwnd) only this works for Label
+               BOOL shouldEnable = g_config.runImageOptimizer;
+
+               EnableResizeGroupWithLogic(L"ImageGroup", shouldEnable);
+
+               if (shouldEnable)
+                  AdjustLayout(GetParent(hwnd)); // ✅ Only GetParent(hwnd) works for label
+
+               break;
             }
          }
       }
@@ -827,34 +826,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          }
       }
 
-      // Save checkbox state when any of them is toggled
       for (int i = 0; i < controlCount; ++i)
       {
          if ((HWND)lParam == *controls[i].hCheckbox && HIWORD(wParam) == BN_CLICKED)
          {
             LRESULT checked = SendMessageW(*controls[i].hCheckbox, BM_GETCHECK, 0, 0);
             const wchar_t *value = (checked == BST_CHECKED) ? L"true" : L"false";
-            const wchar_t *section = controls[i].configSegment;
-            const wchar_t *key = controls[i].configKey;
 
-            WritePrivateProfileStringW(section, key, value, iniPath);
+            WritePrivateProfileStringW(controls[i].configSegment, controls[i].configKey, value, iniPath);
 
-            // Optional direct struct write
             if (controls[i].configField)
                *(controls[i].configField) = (checked == BST_CHECKED);
 
-            // Handle image optimizer + resize state + cover extract + Compress folder
-            if (wcscmp(key, L"OUTPUT_RUN_IMAGE_OPTIMIZER") == 0 || wcscmp(key, L"IMAGE_RESIZE_TO") == 0 ||
-                wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0 || wcscmp(key, L"OUTPUT_EXTRACT_COVER") == 0 || wcscmp(key, L"OUTPUT_RUN_COMPRESSOR") == 0)
+            // ✅ Simplified layout logic using triggersGroupLogic flag
+            if (controls[i].triggersGroupLogic)
             {
-               // Single clear call to update the group state based on current config
                EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer);
 
-               // Only update layout if the group is actually visible
                if (g_config.runImageOptimizer || g_config.extractCover || g_config.runCompressor)
-               {
                   AdjustLayout(hwnd);
-               }
             }
 
             break; // processed the toggle

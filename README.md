@@ -19,6 +19,7 @@
 - 📄 Bidirectional PDF support:
   - Convert `.cbz`, `.cbr`, `.zip`, `.rar` archives into `.pdf`
   - Convert `.pdf` files into optimized comic archives (`.cbz`, `.cbr`)
+- 🖼️ Extract Cover image from archive  
 - 🧰 Uses built-in [MiniZ](https://github.com/richgel999/miniz) for ZIP/CBZ handling
 - 📂 Automatically flattens nested image folders
 - 🖼️ Image optimization with:

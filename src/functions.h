@@ -43,7 +43,7 @@ void get_clean_name(wchar_t *path);
 BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex);
 
 void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wchar_t *final_folder_name);
-void delete_folder_recursive(const wchar_t *path);
+BOOL delete_folder_recursive(const wchar_t *path);
 void process_file(HWND hwnd, const wchar_t *file_path);
 void StartProcessing(HWND hwnd, HWND hListBox);
 void BrowseFolder(HWND hwnd, wchar_t *targetPath);

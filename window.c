@@ -42,7 +42,7 @@ HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHei
 // Image settings
 HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
 // Output options
-HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
+HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputExtractCover, hOutputExtractCoverLabel, hOutputRunExtractLabel, hOutputRunExtract;
 HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
 
 AppConfig g_config;
@@ -70,7 +70,9 @@ AppConfig g_config = {
     // Output defaults
     .runImageOptimizer = TRUE,
     .runCompressor = TRUE,
-    .keepExtracted = TRUE};
+    .keepExtracted = TRUE,
+    .extractCover = TRUE
+};
 
 extern LabelCheckboxPair controls[];
 extern const int controlCount;
@@ -126,7 +128,10 @@ GUIHandleEntry groupElements[] = {
     {L"hOutputRunImageOptimizer", L"OutputGroup", &hOutputRunImageOptimizer},
     {L"hOutputRunImageOptimizerLabel", L"OutputGroup", &hOutputRunImageOptimizerLabel},
     {L"hOutputRunCompressor", L"OutputGroup", &hOutputRunCompressor},
-    {L"hOutputRunCompressorLabel", L"OutputGroup", &hOutputRunCompressorLabel}};
+    {L"hOutputRunCompressorLabel", L"OutputGroup", &hOutputRunCompressorLabel},
+   {L"hOutputExtractCover", L"OutputGroup", &hOutputExtractCover},
+   {L"hOutputExtractCoverLabel", L"OutputGroup", &hOutputExtractCoverLabel}
+   };
 
 int groupElementsCount = sizeof(groupElements) / sizeof(groupElements[0]);
 
@@ -196,6 +201,8 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                   g_config.runCompressor = (newState == BST_CHECKED);
                else if (wcscmp(key, L"hOutputKeepExtracted") == 0)
                   g_config.keepExtracted = (newState == BST_CHECKED);
+               else if (wcscmp(key, L"hOutputExtractCover") == 0)
+                  g_config.extractCover = (newState == BST_CHECKED);
                else if (wcscmp(key, L"IMAGE_RESIZE_TO") == 0)
                   g_config.resizeTo = (newState == BST_CHECKED);
                else if (wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0)
@@ -206,7 +213,8 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
          }
 
-         if (hwnd == hImageResizeToLabel || hwnd == hImageKeepAspectRatioLabel || hwnd == hOutputRunImageOptimizerLabel)
+         if (hwnd == hImageResizeToLabel || hwnd == hImageKeepAspectRatioLabel || hwnd == hOutputRunImageOptimizerLabel 
+            || hwnd == hOutputExtractCoverLabel || hwnd == hOutputRunCompressorLabel)
          {
             BOOL shouldEnable = g_config.runImageOptimizer;
 
@@ -326,16 +334,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       hBoldFont = CreateFontIndirect(&lf);
 
-      hFontInput = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+      hFontInput = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 
-      hFontLabel = CreateFontW(-13, 0, 0, 0, FW_THIN, FALSE, FALSE, FALSE,
-                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+      hFontLabel = CreateFontW(-13, 0, 0, 0, FW_THIN, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 
-      hFontEmoji = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+      hFontEmoji = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Emoji");
 
       static HBRUSH hGrayBrush = NULL;
@@ -367,9 +372,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       SetMenu(hwnd, hMenu);
 
+      hTooltip = CreateWindowExW(0, TOOLTIPS_CLASS, NULL, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, CW_USEDEFAULT, CW_USEDEFAULT,
+                                 CW_USEDEFAULT, CW_USEDEFAULT, hwnd, NULL, GetModuleHandleW(NULL), NULL);
+
+      TOOLINFO ti = {0};
+      ti.cbSize = sizeof(TOOLINFO);
+      ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+      ti.hwnd = hwnd;
+
       // **Files Group (Left)**
-      hFilesGroup = CreateWindowW(L"BUTTON", L"Files", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                                  10, 10, 300, 200, hwnd, NULL, NULL, NULL);
+      hFilesGroup = CreateWindowW(L"BUTTON", L"Files", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 10, 10, 300, 200, hwnd, NULL, NULL, NULL);
 
       typedef struct
       {
@@ -385,15 +397,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
           {&hRemoveButton, 20, 30, ID_REMOVE_BUTTON, IDB_BUTTON_MINUS, L"Remove selected item", &hButtonMinus},
           {&hAddButton, 70, 30, ID_ADD_BUTTON, IDB_BUTTON_PLUS, L"Add file to list", &hButtonPlus},
           {&hAddFolderButton, 120, 30, ID_ADD_FOLDER_BUTTON, IDB_BUTTON_ADD_FOLDER, L"Add folder to list", &hButtonAddFolder}};
-
-      hTooltip = CreateWindowExW(0, TOOLTIPS_CLASS, NULL, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
-                                 CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                 hwnd, NULL, GetModuleHandleW(NULL), NULL);
-
-      TOOLINFO ti = {0};
-      ti.cbSize = sizeof(TOOLINFO);
-      ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
-      ti.hwnd = hwnd;
 
       for (size_t i = 0; i < ARRAYSIZE(buttons); ++i)
       {
@@ -671,6 +674,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 495, 110, 20, TRUE);
       MoveWindow(hOutputKeepExtracted, rect.right - 350, 513, 20, 20, TRUE);
       MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 515, 150, 20, TRUE);
+      MoveWindow(hOutputExtractCover, rect.right - 150, 513, 20, 20, TRUE);
+      MoveWindow(hOutputExtractCoverLabel, rect.right - 130, 515, 110, 20, TRUE);
 
       InvalidateRect(hwnd, NULL, TRUE);
       break;
@@ -840,16 +845,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                *(controls[i].configField) = (checked == BST_CHECKED);
             }
 
-            // Handle image optimizer + resize state
-            if (wcscmp(key, L"hOutputRunImageOptimizer") == 0 ||
-                wcscmp(key, L"IMAGE_RESIZE_TO") == 0 ||
-                wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0)
+            // Handle image optimizer + resize state + cover extract + Compress folder
+            if (wcscmp(key, L"hOutputRunImageOptimizer") == 0 || wcscmp(key, L"IMAGE_RESIZE_TO") == 0 ||
+                wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0 || wcscmp(key, L"hOutputExtractCover") == 0 || wcscmp(key, L"hOutputRunCompressor") == 0)
             {
                // Single clear call to update the group state based on current config
                EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer);
 
                // Only update layout if the group is actually visible
-               if (g_config.runImageOptimizer)
+               if (g_config.runImageOptimizer || g_config.extractCover || g_config.runCompressor)
                {
                   AdjustLayout(hwnd);
                }

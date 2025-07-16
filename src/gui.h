@@ -20,7 +20,7 @@ extern HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImage
 
 extern HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
 // Output options
-extern HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputRunExtractLabel, hOutputRunExtract;
+extern HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputKeepExtractedLabel, hOutputExtractCover, hOutputExtractCoverLabel, hOutputRunExtractLabel, hOutputRunExtract;
 extern HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
 
 // ⚙️ ✨ ℹ️✔️ ❗ ❓✏️☕ ☀️ ☁️ ☂️ ☃️ ☔️ ⚡️ ❄️ ☑️ ☢️ ☣️ ☠️ ☤ ☮️ ☯️ ☸️ ☹️ ☺️ ⚓ ⚡⚪
@@ -52,6 +52,7 @@ typedef struct {
     BOOL runImageOptimizer;
     BOOL runCompressor;
     BOOL keepExtracted;
+    BOOL extractCover;
 } AppConfig;
 
 extern AppConfig g_config;
@@ -102,7 +103,6 @@ extern GUIHandleEntry groupElements[];
 extern int groupElementsCount;
 
 // ─────────────── Utility Prototypes ───────────────
-void EnableGroupElements(LPCWSTR groupName, BOOL enable);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable);
 int  MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type);
 void AdjustLayout(HWND hwnd);

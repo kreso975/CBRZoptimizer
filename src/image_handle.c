@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <shlwapi.h> // If not already present
+#include <shlobj.h>  // For SHFileOperationW
 #include <commdlg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +31,146 @@
 #include "stb_image_resize2.h"
 
 #pragma GCC diagnostic pop
+
+#define MAX_IMAGES 1024
+#define MAX_PATH_LEN MAX_PATH
+
+BOOL is_image_file(const wchar_t *filename)
+{
+    const wchar_t *ext = wcsrchr(filename, L'.');
+    if (!ext)
+        return FALSE;
+    return _wcsicmp(ext, L".jpg") == 0 || _wcsicmp(ext, L".jpeg") == 0 ||
+           _wcsicmp(ext, L".png") == 0 || _wcsicmp(ext, L".bmp") == 0 ||
+           _wcsicmp(ext, L".webp") == 0 || _wcsicmp(ext, L".gif") == 0;
+}
+
+BOOL preserve_only_cover_image(const wchar_t *folderPath)
+{
+    wchar_t imageFiles[MAX_IMAGES][MAX_PATH];
+    int imageCount = 0;
+
+    wchar_t searchPath[MAX_PATH];
+    swprintf(searchPath, MAX_PATH, L"%s\\*", folderPath);
+
+    WIN32_FIND_DATAW findData;
+    HANDLE hFind = FindFirstFileW(searchPath, &findData);
+    if (hFind == INVALID_HANDLE_VALUE)
+        return FALSE;
+
+    do
+    {
+        if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            if (is_image_file(findData.cFileName) && imageCount < MAX_IMAGES)
+            {
+                wcscpy(imageFiles[imageCount++], findData.cFileName);
+            }
+            else
+            {
+                // Delete non-image files immediately
+                wchar_t filePath[MAX_PATH];
+                swprintf(filePath, MAX_PATH, L"%s\\%s", folderPath, findData.cFileName);
+                DeleteFileW(filePath);
+            }
+        }
+    } while (FindNextFileW(hFind, &findData));
+    FindClose(hFind);
+
+    if (imageCount == 0)
+        return FALSE;
+
+    // Sort image files
+    for (int i = 0; i < imageCount - 1; ++i)
+    {
+        for (int j = i + 1; j < imageCount; ++j)
+        {
+            if (_wcsicmp(imageFiles[i], imageFiles[j]) > 0)
+            {
+                wchar_t temp[MAX_PATH];
+                wcscpy(temp, imageFiles[i]);
+                wcscpy(imageFiles[i], imageFiles[j]);
+                wcscpy(imageFiles[j], temp);
+            }
+        }
+    }
+
+    // Delete all except first image
+    for (int i = 1; i < imageCount; ++i)
+    {
+        wchar_t filePath[MAX_PATH];
+        swprintf(filePath, MAX_PATH, L"%s\\%s", folderPath, imageFiles[i]);
+        DeleteFileW(filePath);
+    }
+
+    return TRUE;
+}
+
+BOOL extract_cover_image(const wchar_t *folderPath, const wchar_t *outputFolderPath)
+{
+    wchar_t coverFolderPath[MAX_PATH];
+    swprintf(coverFolderPath, MAX_PATH, L"%s\\Covers", outputFolderPath);
+
+    // 🏗️ Create Covers folder if it doesn't exist
+    DWORD attr = GetFileAttributesW(coverFolderPath);
+    if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        if (!CreateDirectoryW(coverFolderPath, NULL))
+        {
+            return FALSE; // Failed to create folder
+        }
+    }
+
+    // 🔍 Search for image file in extracted folder
+    WIN32_FIND_DATAW findData;
+    wchar_t searchPath[MAX_PATH];
+    swprintf(searchPath, MAX_PATH, L"%s\\*", folderPath);
+
+    HANDLE hFind = FindFirstFileW(searchPath, &findData);
+    if (hFind == INVALID_HANDLE_VALUE)
+        return FALSE;
+
+    BOOL copied = FALSE;
+
+    do
+    {
+        if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            if (is_image_file(findData.cFileName))
+            {
+                // 📦 Build source path
+                wchar_t srcPath[MAX_PATH];
+                swprintf(srcPath, MAX_PATH, L"%s\\%s", folderPath, findData.cFileName);
+
+                // 🧠 Extract folder name from folderPath
+                const wchar_t *folderName = wcsrchr(folderPath, L'\\');
+                folderName = folderName ? folderName + 1 : folderPath;
+
+                // 🧠 Extract file extension
+                const wchar_t *ext = wcsrchr(findData.cFileName, L'.');
+                wchar_t newFileName[MAX_PATH];
+                if (ext)
+                {
+                    swprintf(newFileName, MAX_PATH, L"%s%s", folderName, ext);
+                }
+                else
+                {
+                    swprintf(newFileName, MAX_PATH, L"%s", folderName); // No extension
+                }
+
+                // 📥 Build destination path
+                wchar_t destPath[MAX_PATH];
+                swprintf(destPath, MAX_PATH, L"%s\\%s", coverFolderPath, newFileName);
+
+                copied = CopyFileW(srcPath, destPath, FALSE);
+                break; // Only one image should remain
+            }
+        }
+    } while (FindNextFileW(hFind, &findData));
+
+    FindClose(hFind);
+    return copied;
+}
 
 // STB safe write callback
 void stb_write_func(void *context, void *data, int size)

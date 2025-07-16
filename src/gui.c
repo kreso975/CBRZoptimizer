@@ -28,6 +28,7 @@ LabelCheckboxPair controls[] = {
     {L"Image optimization", L"hOutputRunImageOptimizer", L"Output", 450, &hOutputRunImageOptimizer, &hOutputRunImageOptimizerLabel, &g_config.runImageOptimizer},
     {L"Compress folder", L"hOutputRunCompressor", L"Output", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel, &g_config.runCompressor},
     {L"Keep extracted folders", L"hOutputKeepExtracted", L"Output", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel, &g_config.keepExtracted},
+    {L"Extract cover image", L"hOutputExtractCover", L"Output", 510, &hOutputExtractCover, &hOutputExtractCoverLabel, &g_config.extractCover},
 
     {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 490, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo},
     {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio},
@@ -42,19 +43,8 @@ void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t 
    PostMessageW(hwnd, messageId, 0, (LPARAM)_wcsdup(buffer));
 }
 
-void EnableGroupElements(LPCWSTR groupName, BOOL enable)
-{
-   for (int i = 0; i < groupElementsCount; ++i)
-   {
-      if (wcscmp(groupElements[i].group, groupName) == 0 && *groupElements[i].hwndPtr)
-      {
-         EnableWindow(*groupElements[i].hwndPtr, enable);
-      }
-   }
-}
-
-// EnableGroupElements(L"FilesGroup", FALSE);
-// EnableGroupElements(L"FilesGroup", TRUE);
+// EnableResizeGroupWithLogic(L"FilesGroup", FALSE);
+// EnableResizeGroupWithLogic(L"FilesGroup", TRUE);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
 {
    // 1. Handle "Resize To" checkbox and label independently
@@ -100,6 +90,36 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
 
    DEBUG_PRINT(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE\n" : L"[DEBUG] ResizeTo = FALSE\n");
 
+   // 🧠 If ExtractCover is TRUE, disable all compression-related controls
+   if (g_config.extractCover)
+   {
+      DEBUG_PRINT(L"[DEBUG] ExtractCover = TRUE → disabling compression controls\n");
+      EnableWindow(hOutputRunCompressor, FALSE);
+      EnableWindow(hOutputRunCompressorLabel, FALSE);
+      EnableWindow(hOutputType, FALSE);
+      EnableWindow(hOutputTypeLabel, FALSE);
+   }
+   // 🧠 Otherwise, control compression visibility based on runCompressor
+   else
+   {
+      DEBUG_PRINT(L"[DEBUG] ExtractCover = FALSE → compression controls depend on RunCompressor\n");
+
+      EnableWindow(hOutputRunCompressor, TRUE);
+      EnableWindow(hOutputRunCompressorLabel, TRUE);
+
+      if (g_config.runCompressor)
+      {
+         DEBUG_PRINT(L"[DEBUG] RunCompressor = TRUE → enabling format selection\n");
+         EnableWindow(hOutputType, TRUE);
+         EnableWindow(hOutputTypeLabel, TRUE);
+      }
+      else
+      {
+         DEBUG_PRINT(L"[DEBUG] RunCompressor = FALSE → disabling format selection\n");
+         EnableWindow(hOutputType, FALSE);
+         EnableWindow(hOutputTypeLabel, FALSE);
+      }
+   }
    if (!g_config.resizeTo)
    {
       DEBUG_PRINT(L"[DEBUG] ResizeTo is OFF → disabling dimensions\n");

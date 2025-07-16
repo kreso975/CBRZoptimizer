@@ -259,10 +259,10 @@ void flatten_and_clean_folder(const wchar_t *source, const wchar_t *target, wcha
     FindClose(hFind);
 }
 
-void delete_folder_recursive(const wchar_t *path)
+BOOL delete_folder_recursive(const wchar_t *path)
 {
     if (!path || wcslen(path) == 0)
-        return;
+        return FALSE;
 
     // Prepare buffer with double null-termination
     wchar_t temp[MAX_PATH + 2] = {0};
@@ -285,9 +285,11 @@ void delete_folder_recursive(const wchar_t *path)
     // Optional: Handle errors (result == 0 means success)
     if (result != 0)
     {
+        return FALSE;
         // You can log or fallback here if deletion failed
         // MessageBoxW(NULL, L"Failed to delete folder.", L"Error", MB_OK | MB_ICONERROR);
     }
+    return TRUE;
 }
 
 void process_file(HWND hwnd, const wchar_t *file_path)
@@ -319,9 +321,7 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     if (type == ARCHIVE_CBR)
     {
         // Case #1: CBR/RAR extraction
-        extracted = is_valid_winrar(1)
-                        ? extract_cbr(hwnd, file_path, extracted_dir)
-                        : extract_unrar_dll(hwnd, file_path, extracted_dir);
+        extracted = is_valid_winrar(1) ? extract_cbr(hwnd, file_path, extracted_dir) : extract_unrar_dll(hwnd, file_path, extracted_dir);
     }
     else if (type == ARCHIVE_CBZ)
     {
@@ -333,17 +333,11 @@ void process_file(HWND hwnd, const wchar_t *file_path)
                        !(GetFileAttributesW(g_config.SEVEN_ZIP_PATH) & FILE_ATTRIBUTE_DIRECTORY);
 
         if (hasWinRAR)
-        {
             extracted = extract_external_cbz(hwnd, file_path, extracted_dir, EXTERNAL_APP_WINRAR);
-        }
         else if (!extracted && has7zip)
-        {
             extracted = extract_external_cbz(hwnd, file_path, extracted_dir, EXTERNAL_APP_7ZIP);
-        }
         else
-        {
             extracted = extract_cbz(hwnd, file_path, extracted_dir); // fallback
-        }
     }
     else if (type == ARCHIVE_PDF)
     {
@@ -352,13 +346,9 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         extracted = pdf_extract_images(hwnd, file_path, extracted_dir);
 
         if (!extracted)
-        {
             SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ Failed to extract images.");
-        }
         else
-        {
             SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"✅ Images extracted.");
-        }
     }
     else if (type == ARCHIVE_FOLDER)
     {
@@ -367,13 +357,9 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         extracted = copy_folder_to_tmp(file_path, extracted_dir);
 
         if (!extracted)
-        {
             SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"\xD83D\xDCC1 Folder: ", L"❌ Failed to copy folder.");
-        }
         else
-        {
             SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"\xD83D\xDCC1 Folder: ", L"✅ Folder copied. Ready for processing.");
-        }
     }
 
     if (!extracted)
@@ -384,6 +370,13 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     }
 
     SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Extracting: ", L"Unpacking complete.");
+
+    if (g_StopProcessing)
+        return;
+
+    // Cover image extraction
+    if (g_config.extractCover)
+        preserve_only_cover_image(extracted_dir); // 🧹 Keep only the first image
 
     if (g_StopProcessing)
         return;
@@ -415,9 +408,20 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     if (g_StopProcessing)
         return;
 
+    // Preserve only the cover image if enabled
+    if (g_config.extractCover)
+    {
+        if (!extract_cover_image(extracted_dir, g_config.OUTPUT_FOLDER))
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Cover extraction: ", L"⚠️ Failed to copy cover image.");
+        else
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Cover extraction: ", L"✅ Cover image copied.");
+    }
+
+    if (g_StopProcessing)
+        return;
+
     // Output format
-    // Output format
-    if (g_config.runCompressor)
+    if (g_config.runCompressor && !g_config.extractCover)
     {
         wchar_t selectedText[32] = L"";
         int selected = (int)SendMessageW(hOutputType, CB_GETCURSEL, 0, 0);
@@ -459,10 +463,45 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         }
     }
 
+    if (g_config.extractCover)
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Compressor: ", L"⏭️ Skipped due to cover extraction mode.");
+
     // Cleanup if selected
     if (!g_config.keepExtracted)
     {
-        delete_folder_recursive(extracted_dir);
+        // 🧪 Confirm we're entering the block
+        //MessageBox(hwnd, L"🧹 Cleanup triggered: keepExtracted is FALSE", L"Debug", MB_OK | MB_ICONINFORMATION);
+
+        DWORD attr = GetFileAttributesW(extracted_dir);
+        if (attr == INVALID_FILE_ATTRIBUTES)
+        {
+            wchar_t msg[MAX_PATH + 64];
+            swprintf(msg, MAX_PATH + 64, L"❌ Folder does not exist:\n%s", extracted_dir);
+            //MessageBox(hwnd, msg, L"Delete Folder", MB_OK | MB_ICONERROR);
+        }
+        else if (!(attr & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            wchar_t msg[MAX_PATH + 64];
+            swprintf(msg, MAX_PATH + 64, L"⚠️ Path is not a directory:\n%s", extracted_dir);
+            //MessageBox(hwnd, msg, L"Delete Folder", MB_OK | MB_ICONWARNING);
+        }
+        else
+        {
+            // 🧪 Attempt deletion
+            BOOL deleted = delete_folder_recursive(extracted_dir);
+            if (!deleted)
+            {
+                wchar_t msg[MAX_PATH + 64];
+                swprintf(msg, MAX_PATH + 64, L"❌ Failed to delete folder:\n%s", extracted_dir);
+                //MessageBox(hwnd, msg, L"Delete Folder", MB_OK | MB_ICONERROR);
+            }
+            else
+            {
+                wchar_t msg[MAX_PATH + 64];
+                swprintf(msg, MAX_PATH + 64, L"✅ Folder deleted:\n%s", extracted_dir);
+                //MessageBox(hwnd, msg, L"Delete Folder", MB_OK | MB_ICONINFORMATION);
+            }
+        }
     }
 }
 

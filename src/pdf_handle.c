@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <shlwapi.h>
+#include <shlobj.h> // For SHChangeNotify
 #include <wchar.h>
 
 #include "pdf_handle.h"
@@ -151,7 +152,7 @@ BOOL pdf_create_from_images(HWND hwnd, const wchar_t *image_folder, const wchar_
 
     // Build mutool command
     swprintf(command, 8192, L"\"%s\" convert -o \"%s\" %s", g_config.MUTOOL_PATH, pdf_file, fileList);
-
+    // create -o output.pdf (Get-ChildItem *.jpg | Sort-Object Name | ForEach-Object { $_.Name })"
     STARTUPINFOW si = {0};
     si.cb = sizeof(si);
     si.dwFlags = STARTF_USESHOWWINDOW;
@@ -180,6 +181,9 @@ BOOL pdf_create_from_images(HWND hwnd, const wchar_t *image_folder, const wchar_
         wchar_t dest_pdf[MAX_PATH];
         swprintf(dest_pdf, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, pdf_name);
         MoveFileW(pdf_file, dest_pdf);
+
+        // 🔄 Refresh Explorer for the destination folder
+        SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW, g_config.OUTPUT_FOLDER, NULL);
 
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"✔ PDF moved to OUTPUT_FOLDER.");
     }

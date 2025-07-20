@@ -73,90 +73,109 @@ void SetControlsEnabled(BOOL enable, int count, ...)
 // EnableResizeGroupWithLogic(L"FilesGroup", TRUE);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
 {
-   // 1. Handle "Resize To" checkbox and label independently
-   BOOL forceEnableResizeToggle = enable && g_config.runImageOptimizer;
-   SetControlsEnabled(forceEnableResizeToggle, 2, hImageResizeToLabel, hImageResizeTo);
+    DEBUG_PRINTF(L"[DEBUG] EnableResizeGroupWithLogic entered: group = \"%s\", enable = %s\n",
+                 groupName, enable ? L"TRUE" : L"FALSE");
 
-   // 2–3. Toggle group controls based on 'enable' flag (excluding "Resize To" checkbox and label)
-   for (int i = 0; i < groupElementsCount; ++i)
-   {
-      if (wcscmp(groupElements[i].group, groupName) != 0 || !*groupElements[i].hwndPtr)
-         continue;
+    // 1. Handle "Resize To" checkbox and label independently
+    BOOL forceEnableResizeToggle = enable && g_config.runImageOptimizer;
+    SetControlsEnabled(forceEnableResizeToggle, 2, hImageResizeToLabel, hImageResizeTo);
+    DEBUG_PRINTF(L"[DEBUG] Resize toggle = %s\n", forceEnableResizeToggle ? L"TRUE" : L"FALSE");
 
-      HWND h = *groupElements[i].hwndPtr;
+    // 2–3. Toggle group controls based on 'enable' flag (excluding "Resize To")
+    for (int i = 0; i < groupElementsCount; ++i)
+    {
+        if (wcscmp(groupElements[i].group, groupName) != 0 || !*groupElements[i].hwndPtr)
+            continue;
 
-      // Skip "Resize To" controls—they're handled separately above
-      if (h == hImageResizeTo || h == hImageResizeToLabel)
-         continue;
+        HWND h = *groupElements[i].hwndPtr;
 
-      EnableWindow(h, enable);
-   }
+        // Skip ResizeTo controls
+        if (h == hImageResizeTo || h == hImageResizeToLabel)
+            continue;
 
-   // If disabling the group, exit early to avoid further logic execution
-   if (!enable)
-      return;
+        EnableWindow(h, enable);
+    }
 
-   // 4. Toggle advanced controls based on resize settings
-   SetControlsEnabled(g_config.resizeTo, 4, hImageKeepAspectRatioLabel, hImageKeepAspectRatio, hImageAllowUpscalingLabel, hImageAllowUpscaling);
+    // ⚠️ Do not exit early — continue to refresh all dependent UI
 
-   DEBUG_PRINT(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE\n" : L"[DEBUG] ResizeTo = FALSE\n");
+    // 4. Toggle advanced controls based on resize settings
+    if (g_config.runImageOptimizer)
+    {
+        DEBUG_PRINT(L"[DEBUG] runImageOptimizer = TRUE → processing image UI");
+        SetControlsEnabled(g_config.resizeTo, 4,
+            hImageKeepAspectRatioLabel, hImageKeepAspectRatio,
+            hImageAllowUpscalingLabel, hImageAllowUpscaling);
 
-   DEBUG_PRINT(g_config.extractCover
-                   ? L"[DEBUG] ExtractCover = TRUE → disabling compression controls\n"
-                   : L"[DEBUG] ExtractCover = FALSE → compression controls depend on RunCompressor\n");
+        DEBUG_PRINT(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE" : L"[DEBUG] ResizeTo = FALSE");
 
-   // Always set compressor checkbox + label based on extractCover
-   SetControlsEnabled(!g_config.extractCover, 2, hOutputRunCompressor, hOutputRunCompressorLabel);
-
-   // Format selection depends on runCompressor, but only if extractCover is false
-   if (!g_config.extractCover)
-   {
-      DEBUG_PRINT(g_config.runCompressor
-                      ? L"[DEBUG] RunCompressor = TRUE → enabling format selection\n"
-                      : L"[DEBUG] RunCompressor = FALSE → disabling format selection\n");
-
-      SetControlsEnabled(g_config.runCompressor, 2, hOutputType, hOutputTypeLabel);
-   }
-   else
-   {
-      SetControlsEnabled(FALSE, 2, hOutputType, hOutputTypeLabel);
-   }
-
-   if (!g_config.resizeTo)
-   {
-      DEBUG_PRINT(L"[DEBUG] ResizeTo is OFF → disabling dimensions\n");
-      SetControlsEnabled(FALSE, 4, hImageSizeWidthLabel, hImageSizeWidth, hImageSizeHeightLabel, hImageSizeHeight);
-      return;
-   }
-
-   DEBUG_PRINTF(L"[DEBUG] KeepAspectRatio = %s\n", g_config.keepAspectRatio ? L"TRUE" : L"FALSE");
-
-   if (!g_config.keepAspectRatio)
-   {
-      DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = FALSE → enabling both dimensions\n");
-      SetControlsEnabled(TRUE, 4, hImageSizeWidthLabel, hImageSizeWidth, hImageSizeHeightLabel, hImageSizeHeight);
-   }
-   else
-   {
-      if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
-      {
-         DEBUG_PRINT(L"[DEBUG] Portrait mode\n");
-         SetControlsEnabled(FALSE, 2, hImageSizeWidthLabel, hImageSizeWidth);
-         SetControlsEnabled(TRUE, 2, hImageSizeHeightLabel, hImageSizeHeight);
-      }
-      else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
-      {
-         DEBUG_PRINT(L"[DEBUG] Landscape mode\n");
-         SetControlsEnabled(TRUE, 2, hImageSizeWidthLabel, hImageSizeWidth);
-         SetControlsEnabled(FALSE, 2, hImageSizeHeightLabel, hImageSizeHeight);
-      }
+        if (!g_config.resizeTo)
+        {
+            DEBUG_PRINT(L"[DEBUG] ResizeTo is OFF → disabling dimensions");
+            SetControlsEnabled(FALSE, 4,
+                hImageSizeWidthLabel, hImageSizeWidth,
+                hImageSizeHeightLabel, hImageSizeHeight);
+        }
+        else if (!g_config.keepAspectRatio)
+        {
+            DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = FALSE → enabling both dimensions");
+            SetControlsEnabled(TRUE, 4,
+                hImageSizeWidthLabel, hImageSizeWidth,
+                hImageSizeHeightLabel, hImageSizeHeight);
+        }
+        else
+        {
+            if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
+            {
+                DEBUG_PRINT(L"[DEBUG] Portrait mode");
+                SetControlsEnabled(FALSE, 2, hImageSizeWidthLabel, hImageSizeWidth);
+                SetControlsEnabled(TRUE, 2, hImageSizeHeightLabel, hImageSizeHeight);
+            }
+            else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
+            {
+                DEBUG_PRINT(L"[DEBUG] Landscape mode");
+                SetControlsEnabled(TRUE, 2, hImageSizeWidthLabel, hImageSizeWidth);
+                SetControlsEnabled(FALSE, 2, hImageSizeHeightLabel, hImageSizeHeight);
+            }
 #ifdef _DEBUG
-      else
-      {
-         DEBUG_PRINTF(L"[DEBUG] Unexpected IMAGE_TYPE: %s\n", g_config.IMAGE_TYPE);
-      }
+            else
+            {
+                DEBUG_PRINTF(L"[DEBUG] Unexpected IMAGE_TYPE: %s\n", g_config.IMAGE_TYPE);
+                SetControlsEnabled(FALSE, 4,
+                    hImageSizeWidthLabel, hImageSizeWidth,
+                    hImageSizeHeightLabel, hImageSizeHeight);
+            }
 #endif
-   }
+        }
+    }
+    else
+    {
+        DEBUG_PRINT(L"[DEBUG] runImageOptimizer = FALSE → disabling all image resize controls");
+        SetControlsEnabled(FALSE, 10,
+            hImageResizeToLabel, hImageResizeTo,
+            hImageKeepAspectRatioLabel, hImageKeepAspectRatio,
+            hImageAllowUpscalingLabel, hImageAllowUpscaling,
+            hImageSizeWidthLabel, hImageSizeWidth,
+            hImageSizeHeightLabel, hImageSizeHeight);
+    }
+
+    // Compressor logic is always refreshed
+    DEBUG_PRINT(g_config.extractCover
+        ? L"[DEBUG] ExtractCover = TRUE → disabling compression controls"
+        : L"[DEBUG] ExtractCover = FALSE → compression controls depend on RunCompressor");
+
+    SetControlsEnabled(!g_config.extractCover, 2,
+        hOutputRunCompressor, hOutputRunCompressorLabel);
+
+    if (!g_config.extractCover && g_config.runCompressor)
+    {
+        DEBUG_PRINT(L"[DEBUG] Format selection ENABLED");
+        SetControlsEnabled(TRUE, 2, hOutputType, hOutputTypeLabel);
+    }
+    else
+    {
+        DEBUG_PRINT(L"[DEBUG] Format selection DISABLED");
+        SetControlsEnabled(FALSE, 2, hOutputType, hOutputTypeLabel);
+    }
 }
 
 void ValidateAndSaveInput(HWND hwnd, HWND changedControl, const wchar_t *iniPath)

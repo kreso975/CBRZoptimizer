@@ -841,7 +841,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // ✅ Simplified layout logic using triggersGroupLogic flag
             if (controls[i].triggersGroupLogic)
             {
-               EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer);
+               EnableResizeGroupWithLogic(L"ImageGroup", TRUE);
 
                if (g_config.runImageOptimizer || g_config.extractCover || g_config.runCompressor)
                   AdjustLayout(hwnd);

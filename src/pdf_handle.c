@@ -2,11 +2,15 @@
 #include <shlwapi.h>
 #include <shlobj.h> // For SHChangeNotify
 #include <wchar.h>
+#include <strsafe.h> // Required for StringCchCatW
 
 #include "pdf_handle.h"
 #include "functions.h"
 #include "gui.h"
 #include "debug.h"
+
+#define MAX_IMAGES 1024
+#define MAX_IMAGE_PATH 512
 
 BOOL pdf_extract_images(HWND hwnd, const wchar_t *pdf_path, const wchar_t *output_folder)
 {
@@ -99,16 +103,44 @@ BOOL pdf_extract_images(HWND hwnd, const wchar_t *pdf_path, const wchar_t *outpu
     return TRUE;
 }
 
+/**
+ * @brief Creates a PDF file from a set of images in a specified folder.
+ *
+ * This function scans the given image folder for supported image files
+ * (JPG, JPEG, PNG, BMP, TIF, TIFF), sorts them alphabetically, and uses
+ * MuPDF's `mutool` utility to convert the images into a single PDF file.
+ * The resulting PDF is optionally moved to a configured output folder.
+ * Status updates and error messages are sent to the provided window handle.
+ *
+ * @param hwnd          Handle to the window for status updates.
+ * @param image_folder  Path to the folder containing image files.
+ * @param archive_name  Base name for the output PDF file.
+ *
+ * @return TRUE if the PDF was created successfully, FALSE otherwise.
+ *
+ * @note
+ * - Requires MuPDF's `mutool` to be configured and accessible.
+ * - Only processes up to MAX_IMAGES images.
+ * - Supported image formats: .jpg, .jpeg, .png, .bmp, .tif, .tiff
+ * - Uses Windows API for file operations and process creation.
+ */
 BOOL pdf_create_from_images(HWND hwnd, const wchar_t *image_folder, const wchar_t *archive_name)
 {
-    wchar_t cleanName[MAX_PATH], pdf_file[MAX_PATH], command[8192];
-    wcscpy(cleanName, archive_name);
+    DEBUG_PRINT(L"[DEBUG] Entered pdf_create_from_images\n");
+
+    wchar_t cleanName[MAX_PATH], pdf_file[MAX_PATH], command[32768];
+    wchar_t imageList[MAX_IMAGES][MAX_IMAGE_PATH];
+    int imageCount = 0;
+
+    wcscpy_s(cleanName, MAX_PATH, archive_name);
     get_clean_name(cleanName); // Strip known extensions
 
-    swprintf(pdf_file, MAX_PATH, L"%s.pdf", cleanName);
+    swprintf_s(pdf_file, MAX_PATH, L"%s.pdf", cleanName);
+    DEBUG_PRINTF(L"[DEBUG] PDF target filename: %s\n", pdf_file);
 
     if (!is_valid_mutool())
     {
+        DEBUG_PRINT(L"[DEBUG] MuPDF path invalid\n");
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ MUTOOL_PATH is invalid or not set.");
         return FALSE;
     }
@@ -116,43 +148,72 @@ BOOL pdf_create_from_images(HWND hwnd, const wchar_t *image_folder, const wchar_
     // Scan folder and collect supported image files
     WIN32_FIND_DATAW fd;
     wchar_t searchPath[MAX_PATH];
-    swprintf(searchPath, MAX_PATH, L"%s\\*", image_folder);
+    swprintf_s(searchPath, MAX_PATH, L"%s\\*", image_folder);
 
     HANDLE hFind = FindFirstFileW(searchPath, &fd);
     if (hFind == INVALID_HANDLE_VALUE)
     {
+        DEBUG_PRINT(L"[DEBUG] No files found in image folder\n");
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ No images found.");
         return FALSE;
     }
 
-    // Build file list
-    wchar_t fileList[8192] = L"";
     do
     {
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-            continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
 
         const wchar_t *ext = PathFindExtensionW(fd.cFileName);
-        if (_wcsicmp(ext, L".jpg") == 0 || _wcsicmp(ext, L".jpeg") == 0 ||
-            _wcsicmp(ext, L".png") == 0 || _wcsicmp(ext, L".bmp") == 0 ||
-            _wcsicmp(ext, L".tif") == 0 || _wcsicmp(ext, L".tiff") == 0)
+        if (!_wcsicmp(ext, L".jpg") || !_wcsicmp(ext, L".jpeg") || !_wcsicmp(ext, L".png") ||
+            !_wcsicmp(ext, L".bmp") || !_wcsicmp(ext, L".tif") || !_wcsicmp(ext, L".tiff"))
         {
-            wchar_t fullPath[MAX_PATH];
-            swprintf(fullPath, MAX_PATH, L"\"%s\\%s\" ", image_folder, fd.cFileName);
-            wcscat(fileList, fullPath);
+            swprintf_s(imageList[imageCount], MAX_IMAGE_PATH, L"%s\\%s", image_folder, fd.cFileName);
+            imageCount++;
+            if (imageCount >= MAX_IMAGES) break;
         }
     } while (FindNextFileW(hFind, &fd));
     FindClose(hFind);
 
-    if (wcslen(fileList) == 0)
+    if (imageCount == 0)
     {
+        DEBUG_PRINT(L"[DEBUG] No supported image files\n");
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ No supported images found.");
         return FALSE;
     }
 
-    // Build mutool command
-    swprintf(command, 8192, L"\"%s\" convert -o \"%s\" %s", g_config.MUTOOL_PATH, pdf_file, fileList);
-    // create -o output.pdf (Get-ChildItem *.jpg | Sort-Object Name | ForEach-Object { $_.Name })"
+    // Sort alphabetically
+    for (int i = 0; i < imageCount - 1; ++i)
+    {
+        for (int j = 0; j < imageCount - i - 1; ++j)
+        {
+            if (wcscmp(imageList[j], imageList[j + 1]) > 0)
+            {
+                wchar_t temp[MAX_IMAGE_PATH];
+                wcscpy_s(temp, MAX_IMAGE_PATH, imageList[j]);
+                wcscpy_s(imageList[j], MAX_IMAGE_PATH, imageList[j + 1]);
+                wcscpy_s(imageList[j + 1], MAX_IMAGE_PATH, temp);
+            }
+        }
+    }
+
+    // Build image path list
+    wchar_t fileList[32768] = L"";
+    for (int i = 0; i < imageCount; ++i)
+    {
+        if (FAILED(StringCchCatW(fileList, 32768, L"\""))) continue;
+        if (FAILED(StringCchCatW(fileList, 32768, imageList[i]))) continue;
+        if (FAILED(StringCchCatW(fileList, 32768, L"\" "))) continue;
+    }
+
+    // Build command
+    if (FAILED(swprintf_s(command, 32768, L"\"%s\" convert -o \"%s\" %s", g_config.MUTOOL_PATH, pdf_file, fileList)))
+    {
+        DEBUG_PRINT(L"[DEBUG] Failed to build command string\n");
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ Failed to build MuPDF command.");
+        return FALSE;
+    }
+
+    DEBUG_PRINTF(L"[DEBUG] MuPDF Command: %s\n", command);
+
     STARTUPINFOW si = {0};
     si.cb = sizeof(si);
     si.dwFlags = STARTF_USESHOWWINDOW;
@@ -163,6 +224,7 @@ BOOL pdf_create_from_images(HWND hwnd, const wchar_t *image_folder, const wchar_
 
     if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
     {
+        DEBUG_PRINT(L"[DEBUG] CreateProcessW failed\n");
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ Failed to start MuPDF.");
         return FALSE;
     }
@@ -172,19 +234,18 @@ BOOL pdf_create_from_images(HWND hwnd, const wchar_t *image_folder, const wchar_
     CloseHandle(pi.hThread);
 
     SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"✅ PDF created.");
+    DEBUG_PRINT(L"[DEBUG] PDF creation complete\n");
 
+    // Move to output folder if set
     if (g_config.OUTPUT_FOLDER[0] != L'\0')
     {
         const wchar_t *pdf_name = wcsrchr(pdf_file, L'\\');
         pdf_name = pdf_name ? pdf_name + 1 : pdf_file;
 
         wchar_t dest_pdf[MAX_PATH];
-        swprintf(dest_pdf, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, pdf_name);
+        swprintf_s(dest_pdf, MAX_PATH, L"%s\\%s", g_config.OUTPUT_FOLDER, pdf_name);
         MoveFileW(pdf_file, dest_pdf);
-
-        // 🔄 Refresh Explorer for the destination folder
         SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW, g_config.OUTPUT_FOLDER, NULL);
-
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"✔ PDF moved to OUTPUT_FOLDER.");
     }
     else
@@ -192,5 +253,6 @@ BOOL pdf_create_from_images(HWND hwnd, const wchar_t *image_folder, const wchar_
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"📁 OUTPUT_FOLDER not set. Leaving PDF in TMP.");
     }
 
+    DEBUG_PRINT(L"[DEBUG] pdf_create_from_images finished successfully\n");
     return TRUE;
 }

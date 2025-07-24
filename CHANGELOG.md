@@ -8,6 +8,7 @@
 
 ### Changed
 - Full rewrite of image button creation logic for better structure and reuse.
+- Added 16x16 Menu icon
 
 ### Fixed
 - **GUI Selection Fixes**  

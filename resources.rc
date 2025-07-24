@@ -44,4 +44,4 @@ IDB_BUTTON_ADD BITMAP "icons/new_add_insert_file_32.bmp"
 IDB_BUTTON_START BITMAP "icons/start_icon_30.bmp"
 IDB_BUTTON_STOP BITMAP "icons/stop_icon_30e.bmp"
 IDB_OPEN_IN_FOLDER BITMAP "icons/link-simple-small-16.bmp"
-
+IDB_INSTRUCTIONS_ICON BITMAP "icons/book-16.bmp"

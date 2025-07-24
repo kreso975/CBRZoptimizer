@@ -336,6 +336,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       mii.fType = MFT_RIGHTJUSTIFY;
       SetMenuItemInfo(hMenu, (UINT)(GetMenuItemCount(hMenu) - 1), TRUE, &mii);
 
+      // Load bitmap for "Instructions"
+      HBITMAP hInstructionsBmp = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_INSTRUCTIONS_ICON));
+      MENUITEMINFO miiInstructions = {0};
+      miiInstructions.cbSize = sizeof(MENUITEMINFO);
+      miiInstructions.fMask = MIIM_BITMAP;
+      miiInstructions.hbmpItem = hInstructionsBmp;
+      SetMenuItemInfoW(helpMenu, 0, TRUE, &miiInstructions); // Index 0 = "Instructions"
+
       SetMenu(hwnd, hMenu);
 
       hTooltip = CreateWindowExW(0, TOOLTIPS_CLASS, NULL, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, CW_USEDEFAULT, CW_USEDEFAULT,

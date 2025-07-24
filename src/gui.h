@@ -135,7 +135,7 @@ extern const size_t buttonsCount;
 
 // ─────────────── Utility Prototypes ───────────────
 void SetControlsEnabled(BOOL enable, int count, ...);
-void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable);
+void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable, BOOL earlyExit);
 int  MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type);
 void AdjustLayout(HWND hwnd);
 void ValidateAndSaveInput(HWND hwnd, HWND changedControl, const wchar_t *iniPath);

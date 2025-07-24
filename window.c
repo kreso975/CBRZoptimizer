@@ -87,8 +87,6 @@ GUIHandleEntry groupElements[] = {
     {L"TmpFolder Label", L"PathsGroup", &hTmpFolderLabel},
     {L"TmpFolder Browse", L"PathsGroup", &hTmpBrowse},
     {L"OutputFolder", L"PathsGroup", &hOutputFolder},
-    {L"Open Tmp Folder", L"PathsGroup", &hOpenInTmpFolderButton},
-    {L"Open Output Folder", L"PathsGroup", &hOpenInOutputFolderButton},
     {L"OutputFolder Label", L"PathsGroup", &hOutputFolderLabel},
     {L"OutputFolder Browse", L"PathsGroup", &hOutputBrowse},
     {L"WinRAR Path", L"PathsGroup", &hWinrarPath},
@@ -103,6 +101,9 @@ GUIHandleEntry groupElements[] = {
     {L"Mutoool Path", L"PathsGroup", &hMuToolPath},
     {L"Mutool Label", L"PathsGroup", &hMuToolLabel},
     {L"Mutool Browse", L"PathsGroup", &hMuToolBrowse},
+
+    {L"Open Tmp Folder", L"AlwaysLiveGroup", &hOpenInTmpFolderButton},
+    {L"Open Output Folder", L"AlwaysLiveGroup", &hOpenInOutputFolderButton},
 
     {L"Image Resize", L"ImageGroup", &hImageResize},
     {L"ImageTypeLabel", L"ImageGroup", &hImageTypeLabel},
@@ -220,7 +221,7 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                BOOL shouldEnable = g_config.runImageOptimizer;
 
-               EnableResizeGroupWithLogic(L"ImageGroup", shouldEnable);
+               EnableResizeGroupWithLogic(L"ImageGroup", shouldEnable, FALSE);
 
                if (shouldEnable)
                   AdjustLayout(GetParent(hwnd)); // ✅ Only GetParent(hwnd) works for label
@@ -542,7 +543,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       load_config_values();
 
-      EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer); // Must be last to update Controls
+      EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer, FALSE); // Must be last to update Controls
 
       InvalidateRect(hwnd, NULL, TRUE); // Ensure background updates
       UpdateWindow(hwnd);               // Force immediate redraw
@@ -733,10 +734,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          ShowWindow(hStopButton, SW_SHOW);
          ShowWindow(hTerminalProcessingLabel, SW_SHOW);
          ShowWindow(hTerminalProcessingText, SW_SHOW);
-         EnableResizeGroupWithLogic(L"FilesGroup", FALSE);
-         EnableResizeGroupWithLogic(L"OutputGroup", FALSE);
-         EnableResizeGroupWithLogic(L"PathsGroup", FALSE);
-         EnableResizeGroupWithLogic(L"ImageGroup", FALSE);
+         EnableResizeGroupWithLogic(L"FilesGroup", FALSE, TRUE);
+         EnableResizeGroupWithLogic(L"OutputGroup", FALSE, TRUE);
+         EnableResizeGroupWithLogic(L"PathsGroup", FALSE, TRUE);
+         EnableResizeGroupWithLogic(L"ImageGroup", FALSE, TRUE);
          CreateThread(NULL, 0, ProcessingThread, hwnd, 0, NULL);
       }
 
@@ -782,7 +783,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // Copy the label from the struct array into global IMAGE_TYPE buffer
             wcsncpy(g_config.IMAGE_TYPE, g_ImageTypeOptions[selectedIndex].label, sizeof(g_config.IMAGE_TYPE) / sizeof(wchar_t) - 1);
             g_config.IMAGE_TYPE[sizeof(g_config.IMAGE_TYPE) / sizeof(wchar_t) - 1] = L'\0'; // Ensure null-termination
-            EnableResizeGroupWithLogic(L"ImageGroup", TRUE);                                // React to change
+            EnableResizeGroupWithLogic(L"ImageGroup", TRUE, FALSE);                                // React to change
 
             // Save the selected image type to the .ini file
             WritePrivateProfileStringW(L"Image", L"IMAGE_TYPE", g_config.IMAGE_TYPE, iniPath);
@@ -804,7 +805,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // ✅ Simplified layout logic using triggersGroupLogic flag
             if (controls[i].triggersGroupLogic)
             {
-               EnableResizeGroupWithLogic(L"ImageGroup", TRUE);
+               EnableResizeGroupWithLogic(L"ImageGroup", TRUE, FALSE);
 
                if (g_config.runImageOptimizer || g_config.extractCover || g_config.runCompressor)
                   AdjustLayout(hwnd);
@@ -1012,10 +1013,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       ShowWindow(hStopButton, SW_HIDE);
       ShowWindow(hTerminalProcessingLabel, SW_HIDE);
       ShowWindow(hTerminalProcessingText, SW_HIDE);
-      EnableResizeGroupWithLogic(L"FilesGroup", TRUE);
-      EnableResizeGroupWithLogic(L"OutputGroup", TRUE);
-      EnableResizeGroupWithLogic(L"PathsGroup", TRUE);
-      EnableResizeGroupWithLogic(L"ImageGroup", TRUE);
+      EnableResizeGroupWithLogic(L"FilesGroup", TRUE, TRUE);
+      EnableResizeGroupWithLogic(L"OutputGroup", TRUE, TRUE);
+      EnableResizeGroupWithLogic(L"PathsGroup", TRUE, TRUE);
+      EnableResizeGroupWithLogic(L"ImageGroup", TRUE, FALSE); // When Enabling after Proccess end it needs propper setup
       AdjustLayout(hwnd);
       break;
 

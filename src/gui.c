@@ -90,7 +90,7 @@ void SetControlsEnabled(BOOL enable, int count, ...)
 
 // EnableResizeGroupWithLogic(L"FilesGroup", FALSE);
 // EnableResizeGroupWithLogic(L"FilesGroup", TRUE);
-void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
+void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable, BOOL earlyExit)
 {
    DEBUG_PRINTF(L"[DEBUG] EnableResizeGroupWithLogic entered: group = \"%s\", enable = %s\n",
                 groupName, enable ? L"TRUE" : L"FALSE");
@@ -100,20 +100,26 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
    SetControlsEnabled(forceEnableResizeToggle, 2, hImageResizeToLabel, hImageResizeTo);
    DEBUG_PRINTF(L"[DEBUG] Resize toggle = %s\n", forceEnableResizeToggle ? L"TRUE" : L"FALSE");
 
-   // 2–3. Toggle group controls based on 'enable' flag (excluding "Resize To")
-   for (int i = 0; i < groupElementsCount; ++i)
+   // We will exit early if we are doing this for Start and Stop Process
+   if (earlyExit)
    {
-      if (wcscmp(groupElements[i].group, groupName) != 0 || !*groupElements[i].hwndPtr)
-         continue;
+      // 2–3. Toggle group controls based on 'enable' flag (excluding "Resize To")
+      for (int i = 0; i < groupElementsCount; ++i)
+      {
+         if (wcscmp(groupElements[i].group, groupName) != 0 || !*groupElements[i].hwndPtr)
+            continue;
 
-      HWND h = *groupElements[i].hwndPtr;
+         HWND h = *groupElements[i].hwndPtr;
 
-      // Skip ResizeTo controls
-      if (h == hImageResizeTo || h == hImageResizeToLabel)
-         continue;
+         // Skip ResizeTo controls
+         if (h == hImageResizeTo || h == hImageResizeToLabel)
+            continue;
 
-      EnableWindow(h, enable);
+         EnableWindow(h, enable);
+      }
+      return;
    }
+      
 
    // ⚠️ Do not exit early — continue to refresh all dependent UI
 
@@ -121,25 +127,21 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
    if (g_config.runImageOptimizer)
    {
       DEBUG_PRINT(L"[DEBUG] runImageOptimizer = TRUE → processing image UI");
-      SetControlsEnabled(g_config.resizeTo, 4,
-                         hImageKeepAspectRatioLabel, hImageKeepAspectRatio,
-                         hImageAllowUpscalingLabel, hImageAllowUpscaling);
+      //SetControlsEnabled(g_config.resizeTo, 4, hImageKeepAspectRatioLabel, hImageKeepAspectRatio, hImageAllowUpscalingLabel, hImageAllowUpscaling);
+      EnableResizeGroupWithLogic(L"ImageGroup", enable, TRUE);
 
       DEBUG_PRINT(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE" : L"[DEBUG] ResizeTo = FALSE");
 
       if (!g_config.resizeTo)
       {
          DEBUG_PRINT(L"[DEBUG] ResizeTo is OFF → disabling dimensions");
-         SetControlsEnabled(FALSE, 4,
-                            hImageSizeWidthLabel, hImageSizeWidth,
-                            hImageSizeHeightLabel, hImageSizeHeight);
+         SetControlsEnabled(FALSE, 10, hImageSizeWidthLabel, hImageSizeWidth, hImageSizeHeightLabel, hImageSizeHeight, hImageKeepAspectRatioLabel,
+                  hImageKeepAspectRatio, hImageAllowUpscalingLabel, hImageAllowUpscaling, hImageType, hImageTypeLabel );
       }
       else if (!g_config.keepAspectRatio)
       {
          DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = FALSE → enabling both dimensions");
-         SetControlsEnabled(TRUE, 4,
-                            hImageSizeWidthLabel, hImageSizeWidth,
-                            hImageSizeHeightLabel, hImageSizeHeight);
+         SetControlsEnabled(TRUE, 4, hImageSizeWidthLabel, hImageSizeWidth, hImageSizeHeightLabel, hImageSizeHeight);
       }
       else
       {
@@ -159,9 +161,7 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
          else
          {
             DEBUG_PRINTF(L"[DEBUG] Unexpected IMAGE_TYPE: %s\n", g_config.IMAGE_TYPE);
-            SetControlsEnabled(FALSE, 4,
-                               hImageSizeWidthLabel, hImageSizeWidth,
-                               hImageSizeHeightLabel, hImageSizeHeight);
+            SetControlsEnabled(FALSE, 4, hImageSizeWidthLabel, hImageSizeWidth, hImageSizeHeightLabel, hImageSizeHeight);
          }
 #endif
       }
@@ -169,12 +169,9 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
    else
    {
       DEBUG_PRINT(L"[DEBUG] runImageOptimizer = FALSE → disabling all image resize controls");
-      SetControlsEnabled(FALSE, 10,
-                         hImageResizeToLabel, hImageResizeTo,
-                         hImageKeepAspectRatioLabel, hImageKeepAspectRatio,
-                         hImageAllowUpscalingLabel, hImageAllowUpscaling,
-                         hImageSizeWidthLabel, hImageSizeWidth,
-                         hImageSizeHeightLabel, hImageSizeHeight);
+      //SetControlsEnabled(FALSE, 10, hImageResizeToLabel, hImageResizeTo, hImageKeepAspectRatioLabel, hImageKeepAspectRatio, hImageAllowUpscalingLabel,
+      //                  hImageAllowUpscaling, hImageSizeWidthLabel, hImageSizeWidth, hImageSizeHeightLabel, hImageSizeHeight);
+      EnableResizeGroupWithLogic(L"ImageGroup", FALSE, TRUE);
    }
 
    // Compressor logic is always refreshed
@@ -182,8 +179,7 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
                    ? L"[DEBUG] ExtractCover = TRUE → disabling compression controls"
                    : L"[DEBUG] ExtractCover = FALSE → compression controls depend on RunCompressor");
 
-   SetControlsEnabled(!g_config.extractCover, 2,
-                      hOutputRunCompressor, hOutputRunCompressorLabel);
+   SetControlsEnabled(!g_config.extractCover, 2, hOutputRunCompressor, hOutputRunCompressorLabel);
 
    if (!g_config.extractCover && g_config.runCompressor)
    {

@@ -305,6 +305,8 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     TrimTrailingWhitespace(base);
 
     wchar_t extracted_dir[MAX_PATH], archive_name[MAX_PATH];
+
+    // g_config.TMP_FOLDER if not set we must have some DIR
     swprintf(extracted_dir, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
     swprintf(archive_name, MAX_PATH, L"%s\\%s", g_config.TMP_FOLDER, base);
 
@@ -642,15 +644,13 @@ void OpenFileDialog(HWND hwnd, HWND hListBox)
 
     // Build dynamic filter
     wcscpy(filter, L"Comic & Archive Files (*.cbr;*.cbz;*.rar;*.zip");
-    if (wcslen(g_config.MUTOOL_PATH) > 0 &&
-        GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
+    if (wcslen(g_config.MUTOOL_PATH) > 0 && GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
         !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY))
     {
         wcscat(filter, L";*.pdf");
     }
     wcscat(filter, L")\0*.cbr;*.cbz;*.rar;*.zip");
-    if (wcslen(g_config.MUTOOL_PATH) > 0 &&
-        GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
+    if (wcslen(g_config.MUTOOL_PATH) > 0 && GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
         !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY))
     {
         wcscat(filter, L";*.pdf");
@@ -706,7 +706,18 @@ int CompareVersions(const char *v1, const char *v2)
     return patch1 - patch2;
 }
 
-void CheckForUpdate(HWND hwnd)
+/**
+ * @brief Checks for a newer version of the application by querying the latest release from GitHub.
+ *
+ * This function retrieves the current application version, fetches the latest release information
+ * from the GitHub API, and compares the versions. If a newer version is available, it notifies
+ * the user via a centered message box. If the application is up-to-date and the 'silent' parameter
+ * is FALSE, it informs the user that they are running the latest version.
+ *
+ * @param hwnd   Handle to the parent window for message boxes.
+ * @param silent If TRUE, suppresses notifications when the application is up-to-date. Used on startup
+ */
+void CheckForUpdate(HWND hwnd, BOOL silent)
 {
     // Get current version from executable
     AppVersionInfo info;
@@ -716,7 +727,7 @@ void CheckForUpdate(HWND hwnd)
     wcstombs(currentVersion, info.FileVersion, sizeof(currentVersion));
     currentVersion[sizeof(currentVersion) - 1] = '\0';
 
-    // Strip leading 'v' from local version if present
+    // Strip leading 'v' if present
     if (currentVersion[0] == 'v' || currentVersion[0] == 'V')
     {
         memmove(currentVersion, currentVersion + 1, strlen(currentVersion));
@@ -725,9 +736,8 @@ void CheckForUpdate(HWND hwnd)
     HINTERNET hInternet = InternetOpenW(L"CBRZoptimizer Updater", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
     if (hInternet)
     {
-        HINTERNET hConnect = InternetOpenUrlW(hInternet,
-                                              L"https://api.github.com/repos/kreso975/CBRZoptimizer/releases/latest",
-                                              NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+        HINTERNET hConnect = InternetOpenUrlW(hInternet, L"https://api.github.com/repos/kreso975/CBRZoptimizer/releases/latest",
+            NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
 
         if (hConnect)
         {
@@ -748,7 +758,7 @@ void CheckForUpdate(HWND hwnd)
                         strncpy(latestVersion, tagStart, (size_t)(tagEnd - tagStart));
                         latestVersion[tagEnd - tagStart] = '\0';
 
-                        // Strip leading 'v' from GitHub version
+                        // Strip leading 'v' if present
                         char strippedVersion[32];
                         if (latestVersion[0] == 'v' || latestVersion[0] == 'V')
                         {
@@ -774,7 +784,7 @@ void CheckForUpdate(HWND hwnd)
 
                             MessageBoxCentered(hwnd, message, L"Update Available", MB_OK | MB_ICONINFORMATION);
                         }
-                        else
+                        else if (!silent)
                         {
                             MessageBoxCentered(hwnd, L"You are running the latest version.", L"No Update", MB_OK | MB_ICONINFORMATION);
                         }

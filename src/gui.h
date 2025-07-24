@@ -10,7 +10,8 @@
 #define WM_PROCESSING_DONE        (WM_USER + 3)
 
 extern volatile BOOL g_StopProcessing;
-extern HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop;
+extern HBITMAP hButtonPlus, hButtonMinus, hButtonBrowse, hButtonStart, hButtonStop, hButtonAddFolder, hButtonOpenInFolder;
+extern HWND hStartButton, hStopButton, hRemoveButton, hAddButton, hAddFolderButton, hOpenInTmpFolderButton, hOpenInOutputFolderButton;
 extern HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hMuToolPath, hImageResize;
 extern HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse, hMuToolBrowse;
 extern HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
@@ -73,22 +74,17 @@ typedef struct {
 extern LabelCheckboxPair controls[];
 extern const size_t controlCount;
 
-// ─────────────── Browse Field Struct ───────────────
 typedef struct {
-    const wchar_t *labelText;      // Label displayed next to the field
-    const wchar_t *configKey;      // INI key name
-    const wchar_t *configSection;  // INI section name (e.g. "Paths")
-    wchar_t *defaultText;          // Pointer to current config value (e.g. g_config.FIELD)
+    const wchar_t *labelText;
+    const wchar_t *configKey;
+    const wchar_t *configSection;
+    wchar_t *defaultText;
     int y;
     int labelWidth;
     int editWidth;
-    int browseId;
     HWND *hLabel;
     HWND *hEdit;
-    HWND *hBrowse;
-    HBITMAP *hBitmap;
-    const wchar_t *bmpPath;
-     const wchar_t *tooltipText;    // Tooltip text for the browse button 
+    const wchar_t *tooltipText;
 } EditBrowseControl;
 
 extern EditBrowseControl inputs[];
@@ -119,6 +115,23 @@ typedef struct {
 extern ImageFieldBinding imageFields[];
 extern const size_t imageFieldsCount;
 
+// ─────────────── Button Image Struct ───────────────
+typedef struct
+{
+    HWND *handle;
+    int x, y;
+    UINT id;
+    int bmpId;
+    const wchar_t *tooltip;
+    HBITMAP *bmpHandle;
+    int imageW, imageH;
+    BOOL isHover; // Hover state stored directly
+    BOOL visible; // field to control initial visibility
+} ButtonSpec;
+
+// External declaration of the array and its count
+extern ButtonSpec buttons[];
+extern const size_t buttonsCount;
 
 // ─────────────── Utility Prototypes ───────────────
 void SetControlsEnabled(BOOL enable, int count, ...);

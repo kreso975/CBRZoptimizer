@@ -25,9 +25,10 @@
 HINSTANCE g_hInstance;
 
 HFONT hBoldFont, hFontLabel, hFontInput, hFontEmoji;
-HBITMAP hButtonPlus, hButtonMinus, hButtonAddFolder, hButtonBrowse, hButtonStart, hButtonStop;
+HBITMAP hButtonPlus, hButtonMinus, hButtonAddFolder, hButtonBrowse, hButtonStart, hButtonStop, hButtonOpenInFolder;
 // Main controls
 HWND hListBox, hTooltip, hStartButton, hStopButton, hAddButton, hRemoveButton, hAddFolderButton, hLabelNumberOfFiles, hNumberOfFiles, hSettingsWnd;
+HWND hOpenInTmpFolderButton, hOpenInOutputFolderButton;
 // Paths
 HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hMuToolPath, hImageResize;
 HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse, hMuToolBrowse;
@@ -86,6 +87,8 @@ GUIHandleEntry groupElements[] = {
     {L"TmpFolder Label", L"PathsGroup", &hTmpFolderLabel},
     {L"TmpFolder Browse", L"PathsGroup", &hTmpBrowse},
     {L"OutputFolder", L"PathsGroup", &hOutputFolder},
+    {L"Open Tmp Folder", L"PathsGroup", &hOpenInTmpFolderButton},
+    {L"Open Output Folder", L"PathsGroup", &hOpenInOutputFolderButton},
     {L"OutputFolder Label", L"PathsGroup", &hOutputFolderLabel},
     {L"OutputFolder Browse", L"PathsGroup", &hOutputBrowse},
     {L"WinRAR Path", L"PathsGroup", &hWinrarPath},
@@ -235,87 +238,50 @@ LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    return CallWindowProc(orig ? orig : DefWindowProc, hwnd, msg, wParam, lParam);
 }
 
-BOOL isHoverRemove = FALSE;
-BOOL isHoverAdd = FALSE;
-BOOL isHoverAddFolder = FALSE;
-BOOL isHoverStart = FALSE;
-BOOL isHoverStop = FALSE;
-BOOL isHoverTmp = FALSE;
-BOOL isHoverOutput = FALSE;
-BOOL isHoverWinrar = FALSE;
-BOOL isHoverSevenZip = FALSE;
-BOOL isHoverImageMagick = FALSE;
-BOOL isHoverMuTool = FALSE;
-
 LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
    static TRACKMOUSEEVENT tme;
-   int ctlId = GetDlgCtrlID(hwnd);
+   int rawId = GetDlgCtrlID(hwnd);
+   if (rawId == -1)
+      return DefWindowProc(hwnd, msg, wParam, lParam);
 
-   BOOL *hoverFlag = NULL;
+   UINT ctlId = (UINT)rawId;
 
-   switch (ctlId)
+   for (size_t i = 0; i < buttonsCount; ++i)
    {
-   case ID_REMOVE_BUTTON:
-      hoverFlag = &isHoverRemove;
-      break;
-   case ID_ADD_BUTTON:
-      hoverFlag = &isHoverAdd;
-      break;
-   case ID_ADD_FOLDER_BUTTON:
-      hoverFlag = &isHoverAddFolder;
-      break;
-   case ID_START_BUTTON:
-      hoverFlag = &isHoverStart;
-      break;
-   case ID_STOP_BUTTON:
-      hoverFlag = &isHoverStop;
-      break;
-   case ID_TMP_FOLDER_BROWSE:
-      hoverFlag = &isHoverTmp;
-      break;
-   case ID_OUTPUT_FOLDER_BROWSE:
-      hoverFlag = &isHoverOutput;
-      break;
-   case ID_WINRAR_PATH_BROWSE:
-      hoverFlag = &isHoverWinrar;
-      break;
-   case ID_SEVEN_ZIP_PATH_BROWSE:
-      hoverFlag = &isHoverSevenZip;
-      break;
-   case ID_IMAGEMAGICK_PATH_BROWSE:
-      hoverFlag = &isHoverImageMagick;
-      break;
-   case ID_MUTOOL_PATH_BROWSE:
-      hoverFlag = &isHoverMuTool;
-      break;
+      if (buttons[i].id == ctlId)
+      {
+         BOOL *hoverFlag = &buttons[i].isHover;
+
+         switch (msg)
+         {
+         case WM_MOUSEMOVE:
+            if (!*hoverFlag)
+            {
+               *hoverFlag = TRUE;
+               tme = (TRACKMOUSEEVENT){sizeof(tme), TME_LEAVE, hwnd, 0};
+               TrackMouseEvent(&tme);
+               InvalidateRect(hwnd, NULL, TRUE);
+            }
+            break;
+
+         case WM_MOUSELEAVE:
+            if (*hoverFlag)
+            {
+               *hoverFlag = FALSE;
+               InvalidateRect(hwnd, NULL, TRUE);
+            }
+            break;
+
+         default:
+            return CallWindowProc((WNDPROC)GetWindowLongPtr(hwnd, GWLP_USERDATA), hwnd, msg, wParam, lParam);
+         }
+
+         return 0;
+      }
    }
 
-   switch (msg)
-   {
-   case WM_MOUSEMOVE:
-      if (hoverFlag && !*hoverFlag)
-      {
-         *hoverFlag = TRUE;
-         tme = (TRACKMOUSEEVENT){sizeof(tme), TME_LEAVE, hwnd, 0};
-         TrackMouseEvent(&tme);
-         InvalidateRect(hwnd, NULL, TRUE);
-      }
-      break;
-
-   case WM_MOUSELEAVE:
-      if (hoverFlag && *hoverFlag)
-      {
-         *hoverFlag = FALSE;
-         InvalidateRect(hwnd, NULL, TRUE);
-      }
-      break;
-
-   default:
-      return CallWindowProc((WNDPROC)GetWindowLongPtr(hwnd, GWLP_USERDATA), hwnd, msg, wParam, lParam);
-   }
-
-   return 0;
+   return CallWindowProc((WNDPROC)GetWindowLongPtr(hwnd, GWLP_USERDATA), hwnd, msg, wParam, lParam);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -379,39 +345,65 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
       ti.hwnd = hwnd;
 
-      // **Files Group (Left)**
-      hFilesGroup = CreateWindowW(L"BUTTON", L"Files", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 10, 10, 300, 200, hwnd, NULL, NULL, NULL);
-
-      typedef struct
-      {
-         HWND *handle;
-         int x, y;
-         int id;
-         int bmpId;
-         const wchar_t *tooltip;
-         HBITMAP *bmpHandle;
-      } ButtonSpec;
-
-      ButtonSpec buttons[] = {
-          {&hRemoveButton, 20, 30, ID_REMOVE_BUTTON, IDB_BUTTON_MINUS, L"Remove selected item", &hButtonMinus},
-          {&hAddButton, 70, 30, ID_ADD_BUTTON, IDB_BUTTON_PLUS, L"Add file to list", &hButtonPlus},
-          {&hAddFolderButton, 120, 30, ID_ADD_FOLDER_BUTTON, IDB_BUTTON_ADD_FOLDER, L"Add folder to list", &hButtonAddFolder}};
-
-      for (size_t i = 0; i < ARRAYSIZE(buttons); ++i)
+      /*
+       * Iterates over an array of ButtonSpec structures to create and initialize custom owner-drawn buttons.
+       * 
+       * For each button:
+       *   - Determines the window style, including visibility.
+       *   - Creates the button window and stores its handle.
+       *   - Checks if the bitmap image for the button has already been loaded by a previous button with the same bmpId.
+       *     - If already loaded, reuses the existing bitmap handle.
+       *     - Otherwise, loads the bitmap resource and handles loading errors with a message box and beep.
+       *   - Sets the loaded bitmap as the button image.
+       *   - Subclasses the button window procedure to use a custom ButtonProc.
+       *   - Adds a tooltip for the button using the provided tooltip text.
+       *
+       * Parameters:
+       *   - buttons: Array of ButtonSpec structures describing each button.
+       *   - buttonsCount: Number of buttons in the array.
+       *   - hwnd: Handle to the parent window.
+       *   - hTooltip: Handle to the tooltip control.
+       *   - ti: TOOLINFO structure used for tooltip configuration.
+       *
+       * Assumptions:
+       *   - Each ButtonSpec contains pointers to window and bitmap handles, position, size, resource IDs, and tooltip text.
+       *   - ButtonProc is a valid window procedure for custom button handling.
+       *   - MessageBoxCentered is a helper function to display centered message boxes.
+       */
+      for (size_t i = 0; i < buttonsCount; ++i)
       {
          ButtonSpec *b = &buttons[i];
 
-         *b->handle = CreateWindowW(
-             L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-             b->x, b->y, 32, 32, hwnd, (HMENU)(INT_PTR)b->id, NULL, NULL);
+         DWORD style = WS_CHILD | BS_OWNERDRAW | WS_TABSTOP;
+         if (b->visible)
+            style |= WS_VISIBLE;
 
-         *b->bmpHandle = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(b->bmpId));
-         if (!*b->bmpHandle)
+         *b->handle = CreateWindowW( L"BUTTON", L"", style, b->x, b->y, b->imageW, b->imageH, hwnd, (HMENU)(INT_PTR)b->id, NULL, NULL);
+
+         // Check if bitmap already loaded by previous button
+         BOOL alreadyLoaded = FALSE;
+         for (size_t j = 0; j < i; ++j)
          {
-            MessageBeep(MB_ICONERROR);
-            MessageBoxCentered(hwnd, L"Failed to load button image!", L"Error", MB_OK | MB_ICONERROR);
+            if (buttons[j].bmpId == b->bmpId)
+            {
+                  *b->bmpHandle = *buttons[j].bmpHandle;
+                  alreadyLoaded = TRUE;
+                  break;
+            }
          }
-         else
+
+         // Load only if not already loaded
+         if (!alreadyLoaded)
+         {
+            *b->bmpHandle = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(b->bmpId));
+            if (!*b->bmpHandle)
+            {
+                  MessageBeep(MB_ICONERROR);
+                  MessageBoxCentered(hwnd, L"Failed to load button image!", L"Error", MB_OK | MB_ICONERROR);
+            }
+         }
+
+         if (*b->bmpHandle)
          {
             SendMessageW(*b->handle, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)*b->bmpHandle);
          }
@@ -424,9 +416,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
       }
 
+      // -----------------------------------------------------------------------------------------------
+
       // Optional: Set tooltip behavior
       SendMessageW(hTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 100);
       SendMessageW(hTooltip, TTM_SETMAXTIPWIDTH, 0, 300);
+
+      // **Files Group (Left)**
+      hFilesGroup = CreateWindowW(L"BUTTON", L"Files", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 10, 10, 300, 200, hwnd, NULL, NULL, NULL);
 
       // **Listbox settings**
       hListBox = CreateWindowW(L"LISTBOX", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_EXTENDEDSEL | LBS_NOINTEGRALHEIGHT | LBS_NOTIFY,
@@ -450,69 +447,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       if (hTerminalText)
          SendMessageW(hTerminalText, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
 
-      hStartButton = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_TABSTOP,
-                                   20, 230, 70, 30, hwnd, (HMENU)ID_START_BUTTON, NULL, NULL);
-
-      hButtonStart = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_START));
-      hButtonStop = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_STOP));
-
-      if (!hButtonStart)
-      {
-         MessageBeep(MB_ICONERROR); // Play error sound
-         MessageBoxCentered(hwnd, L"Failed to load start image!", L"Error", MB_OK | MB_ICONERROR);
-      }
-      else
-         SendMessageW(hStartButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonStart);
-
-      SetWindowLongPtr(hStartButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hStartButton, GWLP_WNDPROC));
-      SetWindowLongPtr(hStartButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
-
-      hStopButton = CreateWindowW(L"BUTTON", L"Stop", WS_CHILD | BS_OWNERDRAW | WS_TABSTOP,
-                                  20, 230, 70, 30, hwnd, (HMENU)ID_STOP_BUTTON, NULL, NULL);
-
-      if (!hButtonStop)
-      {
-         MessageBeep(MB_ICONERROR); // Play error sound
-         MessageBoxCentered(hwnd, L"Failed to load stop image!", L"Error", MB_OK | MB_ICONERROR);
-      }
-      else
-         SendMessageW(hStopButton, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hButtonStop);
-
-      SetWindowLongPtr(hStopButton, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(hStopButton, GWLP_WNDPROC));
-      SetWindowLongPtr(hStopButton, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
-
       // **Settings Group (Right)**
       hSettingsGroup = CreateWindowW(L"BUTTON", L"Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                      320, 10, 480, 210, hwnd, NULL, NULL, NULL);
 
-      hButtonBrowse = LoadBitmapW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDB_BUTTON_ADD));
-
       for (size_t i = 0; i < inputsCount; ++i)
       {
-         *inputs[i].hLabel = CreateWindowW(L"STATIC", inputs[i].labelText, WS_CHILD | WS_VISIBLE, 20, inputs[i].y, inputs[i].labelWidth, 20, hwnd, NULL, NULL, NULL);
-         *inputs[i].hEdit = CreateWindowW(L"EDIT", inputs[i].defaultText, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 120, inputs[i].y, inputs[i].editWidth, 20, hwnd, NULL, NULL, NULL);
-         *inputs[i].hBrowse = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 320, inputs[i].y, 32, 32, hwnd, (HMENU)(UINT_PTR)inputs[i].browseId, NULL, NULL);
+         // Create label
+         *inputs[i].hLabel = CreateWindowW( L"STATIC", inputs[i].labelText, WS_CHILD | WS_VISIBLE,
+             20, inputs[i].y, inputs[i].labelWidth, 20, hwnd, NULL, NULL, NULL);
 
-         if (inputs[i].hBitmap && *inputs[i].hBitmap)
-            SendMessageW(*inputs[i].hBrowse, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)*inputs[i].hBitmap);
+         // Create edit field
+         *inputs[i].hEdit = CreateWindowW( L"EDIT", inputs[i].defaultText, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP,
+             120, inputs[i].y, inputs[i].editWidth, 20, hwnd, NULL, NULL, NULL);
 
-         if (*inputs[i].hBrowse)
-         {
-            SendMessageW(*inputs[i].hLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
-            SendMessageW(*inputs[i].hEdit, WM_SETFONT, (WPARAM)hFontInput, TRUE);
-
-            SetWindowLongPtr(*inputs[i].hBrowse, GWLP_USERDATA, (LONG_PTR)GetWindowLongPtr(*inputs[i].hBrowse, GWLP_WNDPROC));
-            SetWindowLongPtr(*inputs[i].hBrowse, GWLP_WNDPROC, (LONG_PTR)ButtonProc);
-
-            // Add tooltip if available
-            if (inputs[i].tooltipText && hTooltip)
-            {
-               ti.uId = (UINT_PTR)*inputs[i].hBrowse;
-               ti.lpszText = (LPWSTR)inputs[i].tooltipText;
-
-               SendMessageW(hTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
-            }
-         }
+         // Apply fonts
+         SendMessageW(*inputs[i].hLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+         SendMessageW(*inputs[i].hEdit, WM_SETFONT, (WPARAM)hFontInput, TRUE);
       }
 
       // **Image Settings Group (Right)**
@@ -621,10 +572,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       // **Settings Fields and Labels**
       MoveWindow(hTmpFolderLabel, rect.right - 350, 40, 100, 20, TRUE);
+      MoveWindow(hOpenInTmpFolderButton, rect.right - 260, 42, 16, 16, TRUE);
       MoveWindow(hTmpFolder, rect.right - 240, 40, 180, 20, TRUE);
       MoveWindow(hTmpBrowse, rect.right - 50, 32, 30, 30, TRUE);
 
       MoveWindow(hOutputFolderLabel, rect.right - 350, 72, 100, 20, TRUE);
+      MoveWindow(hOpenInOutputFolderButton, rect.right - 260, 74, 16, 16, TRUE);
       MoveWindow(hOutputFolder, rect.right - 240, 72, 180, 20, TRUE);
       MoveWindow(hOutputBrowse, rect.right - 50, 65, 30, 30, TRUE);
 
@@ -725,6 +678,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          SetWindowTextW(hMuToolPath, g_config.MUTOOL_PATH);
          update_output_type_dropdown(); // clean, direct
       }
+      else if (LOWORD(wParam) == ID_OPEN_IN_TMP_FOLDER_BUTTON)
+      {
+         // Open File Explorer at TMP_FOLDER
+         ShellExecuteW(NULL, L"open", g_config.TMP_FOLDER, NULL, NULL, SW_SHOWNORMAL);
+      }
+      else if (LOWORD(wParam) == ID_OPEN_IN_OUTPUT_FOLDER_BUTTON)
+      {
+         // Open File Explorer at OUTPUT_FOLDER
+         ShellExecuteW(NULL, L"open", g_config.OUTPUT_FOLDER, NULL, NULL, SW_SHOWNORMAL);
+      }
       else if (HIWORD(wParam) == EN_KILLFOCUS)
       {
          wchar_t buffer[MAX_PATH];
@@ -805,7 +768,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       }
       else if (LOWORD(wParam) == ID_CHECK_FOR_UPDATE)
       {
-         CheckForUpdate(hwnd);
+         CheckForUpdate(hwnd, FALSE);
       }
       else if (LOWORD(wParam) == ID_FILE_EXIT)
       {
@@ -951,97 +914,46 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       LPDRAWITEMSTRUCT lpdis = (LPDRAWITEMSTRUCT)lParam;
       HBITMAP hBmp = NULL;
       BOOL isHover = FALSE;
-      int bmpW = 32, bmpH = 32; // Default size
+      int bmpW = 0, bmpH = 0;
 
-      // Select the appropriate bitmap and hover state
-      if (lpdis->CtlID == ID_REMOVE_BUTTON)
+      // First: try to match a ButtonSpec
+      for (size_t i = 0; i < buttonsCount; ++i)
       {
-         hBmp = hButtonMinus;
-         isHover = isHoverRemove;
-      }
-      else if (lpdis->CtlID == ID_ADD_BUTTON)
-      {
-         hBmp = hButtonPlus;
-         isHover = isHoverAdd;
-      }
-      else if (lpdis->CtlID == ID_ADD_FOLDER_BUTTON)
-      {
-         hBmp = hButtonAddFolder;
-         isHover = isHoverAddFolder;
-      }
-      else if (lpdis->CtlID == ID_START_BUTTON)
-      {
-         hBmp = hButtonStart;
-         bmpW = 70;
-         bmpH = 30;
-         isHover = isHoverStart;
-      }
-      else if (lpdis->CtlID == ID_STOP_BUTTON)
-      {
-         hBmp = hButtonStop;
-         bmpW = 70;
-         bmpH = 30;
-         isHover = isHoverStop;
-      }
-      else if (lpdis->CtlID == ID_TMP_FOLDER_BROWSE || lpdis->CtlID == ID_OUTPUT_FOLDER_BROWSE ||
-               lpdis->CtlID == ID_IMAGEMAGICK_PATH_BROWSE || lpdis->CtlID == ID_SEVEN_ZIP_PATH_BROWSE ||
-               lpdis->CtlID == ID_WINRAR_PATH_BROWSE || lpdis->CtlID == ID_MUTOOL_PATH_BROWSE)
-      {
-         hBmp = hButtonBrowse;
-         bmpW = 26;
-         bmpH = 26;
-         switch (lpdis->CtlID)
+         if (lpdis->CtlID == buttons[i].id)
          {
-         case ID_TMP_FOLDER_BROWSE:
-            isHover = isHoverTmp;
-            break;
-         case ID_OUTPUT_FOLDER_BROWSE:
-            isHover = isHoverOutput;
-            break;
-         case ID_WINRAR_PATH_BROWSE:
-            isHover = isHoverWinrar;
-            break;
-         case ID_SEVEN_ZIP_PATH_BROWSE:
-            isHover = isHoverSevenZip;
-            break;
-         case ID_IMAGEMAGICK_PATH_BROWSE:
-            isHover = isHoverImageMagick;
-            break;
-         case ID_MUTOOL_PATH_BROWSE:
-            isHover = isHoverMuTool;
+            hBmp = *buttons[i].bmpHandle;
+            bmpW = buttons[i].imageW;
+            bmpH = buttons[i].imageH;
+            isHover = buttons[i].isHover; // 👈 Use hover state directly from struct
             break;
          }
       }
 
+      // If we have a valid bitmap, draw it
       if (hBmp)
       {
          HDC hdcMem = CreateCompatibleDC(lpdis->hDC);
          HGDIOBJ oldBmp = SelectObject(hdcMem, hBmp);
 
-         // Apply hover effect correctly to hButtonStart
-         if (isHover)
-         {
-            bmpW -= 2;
-            bmpH -= 2;
-         }
+         // Apply hover effect
+         int drawW = bmpW - (isHover ? 2 : 0);
+         int drawH = bmpH - (isHover ? 2 : 0);
 
-         // Center the bitmap in the button
+         // Center the bitmap
          int btnW = lpdis->rcItem.right - lpdis->rcItem.left;
          int btnH = lpdis->rcItem.bottom - lpdis->rcItem.top;
-         int x = (btnW - bmpW) / 2;
-         int y = (btnH - bmpH) / 2;
+         int x = (btnW - drawW) / 2;
+         int y = (btnH - drawH) / 2;
 
-         // Create a new compatible memory DC for scaling
+         // Create scaled bitmap
          HDC hdcScaled = CreateCompatibleDC(lpdis->hDC);
-         HBITMAP hScaledBmp = CreateCompatibleBitmap(lpdis->hDC, bmpW, bmpH);
+         HBITMAP hScaledBmp = CreateCompatibleBitmap(lpdis->hDC, drawW, drawH);
          HGDIOBJ oldScaledBmp = SelectObject(hdcScaled, hScaledBmp);
 
-         // Scale while respecting original size
-         StretchBlt(hdcScaled, 0, 0, bmpW, bmpH, hdcMem, 0, 0, (lpdis->CtlID == ID_START_BUTTON || lpdis->CtlID == ID_STOP_BUTTON ? 70 : 32),
-                    (lpdis->CtlID == ID_START_BUTTON || lpdis->CtlID == ID_STOP_BUTTON ? 30 : 32), SRCCOPY);
+         StretchBlt(hdcScaled, 0, 0, drawW, drawH, hdcMem, 0, 0, bmpW, bmpH, SRCCOPY);
 
-         // Transparent rendering
-         TransparentBlt(lpdis->hDC, x, y, bmpW, bmpH, hdcScaled, 0, 0, bmpW, bmpH, RGB(255, 255, 255));
+         // Transparent blit
+         TransparentBlt(lpdis->hDC, x, y, drawW, drawH, hdcScaled, 0, 0, drawW, drawH, RGB(255, 255, 255));
 
          // Cleanup
          SelectObject(hdcScaled, oldScaledBmp);
@@ -1186,6 +1098,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
 
    ShowWindow(hwnd, nCmdShow);
    UpdateWindow(hwnd);
+
+   // This should have .ini settings
+   CheckForUpdate(hwnd, TRUE);
 
    if (!IsThemeActive())
    {

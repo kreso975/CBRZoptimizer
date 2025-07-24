@@ -22,7 +22,7 @@ BLOCK "StringFileInfo"
     VALUE "InternalName",     "CBRZoptimizer"
     VALUE "OriginalFilename", "CBRZoptimizer.exe"
     VALUE "ProductName",      "CBRZ Optimizer"
-    VALUE "ProductVersion",   "v1.0.0"
+    VALUE "ProductVersion",   "v1.1.1"
     VALUE "LegalCopyright",   "© 2025 Kresimir Kokanovic. All rights reserved."
   }
 }
@@ -43,3 +43,5 @@ IDB_BUTTON_ADD_FOLDER BITMAP "icons/add-folder-32c.bmp"
 IDB_BUTTON_ADD BITMAP "icons/new_add_insert_file_32.bmp"
 IDB_BUTTON_START BITMAP "icons/start_icon_30.bmp"
 IDB_BUTTON_STOP BITMAP "icons/stop_icon_30e.bmp"
+IDB_OPEN_IN_FOLDER BITMAP "icons/link-simple-small-16.bmp"
+

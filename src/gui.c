@@ -15,13 +15,12 @@
 #include "debug.h"
 
 EditBrowseControl inputs[] = {
-    {L"Temp Folder:", L"TMP_FOLDER", L"Paths", g_config.TMP_FOLDER, 30, 100, 200, ID_TMP_FOLDER_BROWSE, &hTmpFolderLabel, &hTmpFolder, &hTmpBrowse, &hButtonBrowse, NULL, L"Select temporary folder for processing"},
-    {L"Output Folder:", L"OUTPUT_FOLDER", L"Paths", g_config.OUTPUT_FOLDER, 60, 100, 200, ID_OUTPUT_FOLDER_BROWSE, &hOutputFolderLabel, &hOutputFolder, &hOutputBrowse, &hButtonBrowse, NULL, L"Select Output folder for copying"},
-    {L"WinRAR Path:", L"WINRAR_PATH", L"Paths", g_config.WINRAR_PATH, 90, 100, 200, ID_WINRAR_PATH_BROWSE, &hWinrarLabel, &hWinrarPath, &hWinrarBrowse, &hButtonBrowse, NULL, L"Select WinRar.exe"},
-    {L"7-Zip Path:", L"SEVEN_ZIP_PATH", L"Paths", g_config.SEVEN_ZIP_PATH, 120, 100, 200, ID_SEVEN_ZIP_PATH_BROWSE, &hSevenZipLabel, &hSevenZipPath, &hSevenZipBrowse, &hButtonBrowse, NULL, L"Select 7z.exe"},
-    {L"ImageMagick:", L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH, 150, 100, 200, ID_IMAGEMAGICK_PATH_BROWSE, &hImageMagickLabel, &hImageMagickPath, &hImageMagickBrowse, &hButtonBrowse, NULL, L"Select ImageMagick.exe"},
-    {L"MuPDF Tool:", L"MUTOOL_PATH", L"Paths", g_config.MUTOOL_PATH, 180, 100, 200, ID_MUTOOL_PATH_BROWSE, &hMuToolLabel, &hMuToolPath, &hMuToolBrowse, &hButtonBrowse, NULL, L"Select mutool.exe"}};
-
+    {L"Temp Folder:", L"TMP_FOLDER", L"Paths", g_config.TMP_FOLDER, 30, 100, 200, &hTmpFolderLabel, &hTmpFolder, L"Select temporary folder for processing"},
+    {L"Output Folder:", L"OUTPUT_FOLDER", L"Paths", g_config.OUTPUT_FOLDER, 60, 100, 200, &hOutputFolderLabel, &hOutputFolder, L"Select Output folder for copying"},
+    {L"WinRAR Path:", L"WINRAR_PATH", L"Paths", g_config.WINRAR_PATH, 90, 100, 200, &hWinrarLabel, &hWinrarPath, L"Select WinRar.exe"},
+    {L"7-Zip Path:", L"SEVEN_ZIP_PATH", L"Paths", g_config.SEVEN_ZIP_PATH, 120, 100, 200, &hSevenZipLabel, &hSevenZipPath, L"Select 7z.exe"},
+    {L"ImageMagick:", L"IMAGEMAGICK_PATH", L"Paths", g_config.IMAGEMAGICK_PATH, 150, 100, 200, &hImageMagickLabel, &hImageMagickPath, L"Select ImageMagick.exe"},
+    {L"MuPDF Tool:", L"MUTOOL_PATH", L"Paths", g_config.MUTOOL_PATH, 180, 100, 200, &hMuToolLabel, &hMuToolPath, L"Select mutool.exe"}};
 const size_t inputsCount = sizeof(inputs) / sizeof(inputs[0]);
 
 LabelCheckboxPair controls[] = {
@@ -31,8 +30,7 @@ LabelCheckboxPair controls[] = {
     {L"Extract cover image", L"OUTPUT_EXTRACT_COVER", L"Output", 510, &hOutputExtractCover, &hOutputExtractCoverLabel, &g_config.extractCover, TRUE},
     {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 490, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo, TRUE},
     {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio, TRUE},
-    {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling, FALSE}
-};
+    {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling, FALSE}};
 
 const size_t controlCount = sizeof(controls) / sizeof(controls[0]);
 
@@ -43,6 +41,27 @@ ImageFieldBinding imageFields[] = {
     {L"IMAGE_TYPE", g_config.IMAGE_TYPE, IMAGE_TYPE_LEN, &hImageType, FALSE, TRUE}};
 
 const size_t imageFieldsCount = sizeof(imageFields) / sizeof(imageFields[0]);
+
+ButtonSpec buttons[] = {
+    // Existing buttons...
+    {&hRemoveButton, 20, 30, ID_REMOVE_BUTTON, IDB_BUTTON_MINUS, L"Remove selected item", &hButtonMinus, 32, 32, FALSE, TRUE},
+    {&hAddButton, 70, 30, ID_ADD_BUTTON, IDB_BUTTON_PLUS, L"Add file to list", &hButtonPlus, 32, 32, FALSE, TRUE},
+    {&hAddFolderButton, 120, 30, ID_ADD_FOLDER_BUTTON, IDB_BUTTON_ADD_FOLDER, L"Add folder to list", &hButtonAddFolder, 32, 32, FALSE, TRUE},
+    {&hOpenInTmpFolderButton, 170, 30, ID_OPEN_IN_TMP_FOLDER_BUTTON, IDB_OPEN_IN_FOLDER, L"Open TMP Folder", &hButtonOpenInFolder, 16, 16, FALSE, TRUE},
+    {&hOpenInOutputFolderButton, 170, 30, ID_OPEN_IN_OUTPUT_FOLDER_BUTTON, IDB_OPEN_IN_FOLDER, L"Open Output Folder", &hButtonOpenInFolder, 16, 16, FALSE, TRUE},
+    {&hStartButton, 20, 230, ID_START_BUTTON, IDB_BUTTON_START, L"Start process", &hButtonStart, 70, 30, FALSE, TRUE},
+    {&hStopButton, 100, 230, ID_STOP_BUTTON, IDB_BUTTON_STOP, L"Stop process", &hButtonStop, 70, 30, FALSE, FALSE},
+
+    // Browse buttons
+    {&hTmpBrowse, 310, 30, ID_TMP_FOLDER_BROWSE, IDB_BUTTON_ADD, L"Select temporary folder for processing", &hButtonBrowse, 26, 26, FALSE, TRUE},
+    {&hOutputBrowse, 310, 60, ID_OUTPUT_FOLDER_BROWSE, IDB_BUTTON_ADD, L"Select Output folder for copying", &hButtonBrowse, 26, 26, FALSE, TRUE},
+    {&hWinrarBrowse, 310, 90, ID_WINRAR_PATH_BROWSE, IDB_BUTTON_ADD, L"Select WinRar.exe", &hButtonBrowse, 26, 26, FALSE, TRUE},
+    {&hSevenZipBrowse, 310, 120, ID_SEVEN_ZIP_PATH_BROWSE, IDB_BUTTON_ADD, L"Select 7z.exe", &hButtonBrowse, 26, 26, FALSE, TRUE},
+    {&hImageMagickBrowse, 310, 150, ID_IMAGEMAGICK_PATH_BROWSE, IDB_BUTTON_ADD, L"Select ImageMagick.exe", &hButtonBrowse, 26, 26, FALSE, TRUE},
+    {&hMuToolBrowse, 310, 180, ID_MUTOOL_PATH_BROWSE, IDB_BUTTON_ADD, L"Select mutool.exe", &hButtonBrowse, 26, 26, FALSE, TRUE}
+};
+
+const size_t buttonsCount = sizeof(buttons) / sizeof(buttons[0]);
 
 void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info)
 {
@@ -73,109 +92,109 @@ void SetControlsEnabled(BOOL enable, int count, ...)
 // EnableResizeGroupWithLogic(L"FilesGroup", TRUE);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable)
 {
-    DEBUG_PRINTF(L"[DEBUG] EnableResizeGroupWithLogic entered: group = \"%s\", enable = %s\n",
-                 groupName, enable ? L"TRUE" : L"FALSE");
+   DEBUG_PRINTF(L"[DEBUG] EnableResizeGroupWithLogic entered: group = \"%s\", enable = %s\n",
+                groupName, enable ? L"TRUE" : L"FALSE");
 
-    // 1. Handle "Resize To" checkbox and label independently
-    BOOL forceEnableResizeToggle = enable && g_config.runImageOptimizer;
-    SetControlsEnabled(forceEnableResizeToggle, 2, hImageResizeToLabel, hImageResizeTo);
-    DEBUG_PRINTF(L"[DEBUG] Resize toggle = %s\n", forceEnableResizeToggle ? L"TRUE" : L"FALSE");
+   // 1. Handle "Resize To" checkbox and label independently
+   BOOL forceEnableResizeToggle = enable && g_config.runImageOptimizer;
+   SetControlsEnabled(forceEnableResizeToggle, 2, hImageResizeToLabel, hImageResizeTo);
+   DEBUG_PRINTF(L"[DEBUG] Resize toggle = %s\n", forceEnableResizeToggle ? L"TRUE" : L"FALSE");
 
-    // 2–3. Toggle group controls based on 'enable' flag (excluding "Resize To")
-    for (int i = 0; i < groupElementsCount; ++i)
-    {
-        if (wcscmp(groupElements[i].group, groupName) != 0 || !*groupElements[i].hwndPtr)
-            continue;
+   // 2–3. Toggle group controls based on 'enable' flag (excluding "Resize To")
+   for (int i = 0; i < groupElementsCount; ++i)
+   {
+      if (wcscmp(groupElements[i].group, groupName) != 0 || !*groupElements[i].hwndPtr)
+         continue;
 
-        HWND h = *groupElements[i].hwndPtr;
+      HWND h = *groupElements[i].hwndPtr;
 
-        // Skip ResizeTo controls
-        if (h == hImageResizeTo || h == hImageResizeToLabel)
-            continue;
+      // Skip ResizeTo controls
+      if (h == hImageResizeTo || h == hImageResizeToLabel)
+         continue;
 
-        EnableWindow(h, enable);
-    }
+      EnableWindow(h, enable);
+   }
 
-    // ⚠️ Do not exit early — continue to refresh all dependent UI
+   // ⚠️ Do not exit early — continue to refresh all dependent UI
 
-    // 4. Toggle advanced controls based on resize settings
-    if (g_config.runImageOptimizer)
-    {
-        DEBUG_PRINT(L"[DEBUG] runImageOptimizer = TRUE → processing image UI");
-        SetControlsEnabled(g_config.resizeTo, 4,
-            hImageKeepAspectRatioLabel, hImageKeepAspectRatio,
-            hImageAllowUpscalingLabel, hImageAllowUpscaling);
+   // 4. Toggle advanced controls based on resize settings
+   if (g_config.runImageOptimizer)
+   {
+      DEBUG_PRINT(L"[DEBUG] runImageOptimizer = TRUE → processing image UI");
+      SetControlsEnabled(g_config.resizeTo, 4,
+                         hImageKeepAspectRatioLabel, hImageKeepAspectRatio,
+                         hImageAllowUpscalingLabel, hImageAllowUpscaling);
 
-        DEBUG_PRINT(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE" : L"[DEBUG] ResizeTo = FALSE");
+      DEBUG_PRINT(g_config.resizeTo ? L"[DEBUG] ResizeTo = TRUE" : L"[DEBUG] ResizeTo = FALSE");
 
-        if (!g_config.resizeTo)
-        {
-            DEBUG_PRINT(L"[DEBUG] ResizeTo is OFF → disabling dimensions");
-            SetControlsEnabled(FALSE, 4,
-                hImageSizeWidthLabel, hImageSizeWidth,
-                hImageSizeHeightLabel, hImageSizeHeight);
-        }
-        else if (!g_config.keepAspectRatio)
-        {
-            DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = FALSE → enabling both dimensions");
-            SetControlsEnabled(TRUE, 4,
-                hImageSizeWidthLabel, hImageSizeWidth,
-                hImageSizeHeightLabel, hImageSizeHeight);
-        }
-        else
-        {
-            if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
-            {
-                DEBUG_PRINT(L"[DEBUG] Portrait mode");
-                SetControlsEnabled(FALSE, 2, hImageSizeWidthLabel, hImageSizeWidth);
-                SetControlsEnabled(TRUE, 2, hImageSizeHeightLabel, hImageSizeHeight);
-            }
-            else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
-            {
-                DEBUG_PRINT(L"[DEBUG] Landscape mode");
-                SetControlsEnabled(TRUE, 2, hImageSizeWidthLabel, hImageSizeWidth);
-                SetControlsEnabled(FALSE, 2, hImageSizeHeightLabel, hImageSizeHeight);
-            }
+      if (!g_config.resizeTo)
+      {
+         DEBUG_PRINT(L"[DEBUG] ResizeTo is OFF → disabling dimensions");
+         SetControlsEnabled(FALSE, 4,
+                            hImageSizeWidthLabel, hImageSizeWidth,
+                            hImageSizeHeightLabel, hImageSizeHeight);
+      }
+      else if (!g_config.keepAspectRatio)
+      {
+         DEBUG_PRINT(L"[DEBUG] KeepAspectRatio = FALSE → enabling both dimensions");
+         SetControlsEnabled(TRUE, 4,
+                            hImageSizeWidthLabel, hImageSizeWidth,
+                            hImageSizeHeightLabel, hImageSizeHeight);
+      }
+      else
+      {
+         if (wcscmp(g_config.IMAGE_TYPE, L"Portrait") == 0)
+         {
+            DEBUG_PRINT(L"[DEBUG] Portrait mode");
+            SetControlsEnabled(FALSE, 2, hImageSizeWidthLabel, hImageSizeWidth);
+            SetControlsEnabled(TRUE, 2, hImageSizeHeightLabel, hImageSizeHeight);
+         }
+         else if (wcscmp(g_config.IMAGE_TYPE, L"Landscape") == 0)
+         {
+            DEBUG_PRINT(L"[DEBUG] Landscape mode");
+            SetControlsEnabled(TRUE, 2, hImageSizeWidthLabel, hImageSizeWidth);
+            SetControlsEnabled(FALSE, 2, hImageSizeHeightLabel, hImageSizeHeight);
+         }
 #ifdef _DEBUG
-            else
-            {
-                DEBUG_PRINTF(L"[DEBUG] Unexpected IMAGE_TYPE: %s\n", g_config.IMAGE_TYPE);
-                SetControlsEnabled(FALSE, 4,
-                    hImageSizeWidthLabel, hImageSizeWidth,
-                    hImageSizeHeightLabel, hImageSizeHeight);
-            }
+         else
+         {
+            DEBUG_PRINTF(L"[DEBUG] Unexpected IMAGE_TYPE: %s\n", g_config.IMAGE_TYPE);
+            SetControlsEnabled(FALSE, 4,
+                               hImageSizeWidthLabel, hImageSizeWidth,
+                               hImageSizeHeightLabel, hImageSizeHeight);
+         }
 #endif
-        }
-    }
-    else
-    {
-        DEBUG_PRINT(L"[DEBUG] runImageOptimizer = FALSE → disabling all image resize controls");
-        SetControlsEnabled(FALSE, 10,
-            hImageResizeToLabel, hImageResizeTo,
-            hImageKeepAspectRatioLabel, hImageKeepAspectRatio,
-            hImageAllowUpscalingLabel, hImageAllowUpscaling,
-            hImageSizeWidthLabel, hImageSizeWidth,
-            hImageSizeHeightLabel, hImageSizeHeight);
-    }
+      }
+   }
+   else
+   {
+      DEBUG_PRINT(L"[DEBUG] runImageOptimizer = FALSE → disabling all image resize controls");
+      SetControlsEnabled(FALSE, 10,
+                         hImageResizeToLabel, hImageResizeTo,
+                         hImageKeepAspectRatioLabel, hImageKeepAspectRatio,
+                         hImageAllowUpscalingLabel, hImageAllowUpscaling,
+                         hImageSizeWidthLabel, hImageSizeWidth,
+                         hImageSizeHeightLabel, hImageSizeHeight);
+   }
 
-    // Compressor logic is always refreshed
-    DEBUG_PRINT(g_config.extractCover
-        ? L"[DEBUG] ExtractCover = TRUE → disabling compression controls"
-        : L"[DEBUG] ExtractCover = FALSE → compression controls depend on RunCompressor");
+   // Compressor logic is always refreshed
+   DEBUG_PRINT(g_config.extractCover
+                   ? L"[DEBUG] ExtractCover = TRUE → disabling compression controls"
+                   : L"[DEBUG] ExtractCover = FALSE → compression controls depend on RunCompressor");
 
-    SetControlsEnabled(!g_config.extractCover, 2,
-        hOutputRunCompressor, hOutputRunCompressorLabel);
+   SetControlsEnabled(!g_config.extractCover, 2,
+                      hOutputRunCompressor, hOutputRunCompressorLabel);
 
-    if (!g_config.extractCover && g_config.runCompressor)
-    {
-        DEBUG_PRINT(L"[DEBUG] Format selection ENABLED");
-        SetControlsEnabled(TRUE, 2, hOutputType, hOutputTypeLabel);
-    }
-    else
-    {
-        DEBUG_PRINT(L"[DEBUG] Format selection DISABLED");
-        SetControlsEnabled(FALSE, 2, hOutputType, hOutputTypeLabel);
-    }
+   if (!g_config.extractCover && g_config.runCompressor)
+   {
+      DEBUG_PRINT(L"[DEBUG] Format selection ENABLED");
+      SetControlsEnabled(TRUE, 2, hOutputType, hOutputTypeLabel);
+   }
+   else
+   {
+      DEBUG_PRINT(L"[DEBUG] Format selection DISABLED");
+      SetControlsEnabled(FALSE, 2, hOutputType, hOutputTypeLabel);
+   }
 }
 
 void ValidateAndSaveInput(HWND hwnd, HWND changedControl, const wchar_t *iniPath)
@@ -321,75 +340,105 @@ void update_output_type_dropdown()
 
 void load_config_values(void)
 {
-   wchar_t buffer[MAX_PATH];
+    wchar_t buffer[MAX_PATH];
 
-   // Build config.ini path
-   wchar_t iniPath[MAX_PATH];
-   GetModuleFileNameW(NULL, iniPath, MAX_PATH);
-   wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
-   if (lastSlash)
-      *(lastSlash + 1) = L'\0';
-   wcscat(iniPath, L"config.ini");
+    // Build config.ini path
+    wchar_t iniPath[MAX_PATH];
+    GetModuleFileNameW(NULL, iniPath, MAX_PATH);
+    wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
+    if (lastSlash)
+        *(lastSlash + 1) = L'\0';
+    wcscat(iniPath, L"config.ini");
 
-   // 1. Load "Paths" section using inputs[]
-   for (size_t i = 0; i < ARRAYSIZE(inputs); ++i)
-   {
-      GetPrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, L"", buffer, MAX_PATH, iniPath);
+    // 1. Load "Paths" section using inputs[]
+    for (size_t i = 0; i < ARRAYSIZE(inputs); ++i)
+    {
+        GetPrivateProfileStringW(inputs[i].configSection, inputs[i].configKey, L"", buffer, MAX_PATH, iniPath);
 
-      // Copy to config
-      wcsncpy(inputs[i].defaultText, buffer, MAX_PATH - 1);
-      inputs[i].defaultText[MAX_PATH - 1] = L'\0';
+        // Copy to config
+        wcsncpy(inputs[i].defaultText, buffer, MAX_PATH - 1);
+        inputs[i].defaultText[MAX_PATH - 1] = L'\0';
 
-      // Update UI
-      if (inputs[i].hEdit && *inputs[i].hEdit)
-         SetWindowTextW(*inputs[i].hEdit, buffer);
-   }
+        // Update UI
+        if (inputs[i].hEdit)
+            SetWindowTextW(*inputs[i].hEdit, buffer);
+    }
 
-   // 2. Load "Image" section values from config.ini and update corresponding UI controls.
-   //    Handles text fields, slider (IMAGE_QUALITY), and dropdown (IMAGE_TYPE) in one unified loop.
-   for (size_t i = 0; i < ARRAYSIZE(imageFields); ++i)
-   {
-      GetPrivateProfileStringW(L"Image", imageFields[i].key, L"", buffer, imageFields[i].size, iniPath);
+    // 2. Fallback: TMP_FOLDER → System temp with subfolder if empty
+    if (wcslen(g_config.TMP_FOLDER) == 0)
+    {
+        wchar_t defaultTmp[MAX_PATH];
+        DWORD len = GetTempPathW(MAX_PATH, defaultTmp);
 
-      // Safe copy with bounds checking
-      wcsncpy_s(imageFields[i].target, imageFields[i].size, buffer, _TRUNCATE);
+        if (len > 0 && len < MAX_PATH)
+        {
+            PathAppendW(defaultTmp, L"CBRZoptimizer");
+            CreateDirectoryW(defaultTmp, NULL); // Safe if exists
+            wcsncpy_s(g_config.TMP_FOLDER, MAX_PATH, defaultTmp, _TRUNCATE);
+        }
+        else
+        {
+            wcsncpy_s(g_config.TMP_FOLDER, MAX_PATH, L"C:\\Temp", _TRUNCATE);
+            CreateDirectoryW(g_config.TMP_FOLDER, NULL);
+        }
 
-      if (imageFields[i].hwnd && *imageFields[i].hwnd)
-      {
-         if (imageFields[i].isDropdown)
-         {
-            for (int j = 0; j < IMAGE_TYPE_COUNT; ++j)
+        // Update TMP_FOLDER UI field
+        if (hTmpFolder)
+            SetWindowTextW(hTmpFolder, g_config.TMP_FOLDER);
+    }
+
+    // 3. Fallback: OUTPUT_FOLDER → same as TMP_FOLDER if empty
+    if (wcslen(g_config.OUTPUT_FOLDER) == 0 && wcslen(g_config.TMP_FOLDER) > 0)
+    {
+        wcsncpy_s(g_config.OUTPUT_FOLDER, MAX_PATH, g_config.TMP_FOLDER, _TRUNCATE);
+
+        // Update OUTPUT_FOLDER UI field
+        if (hOutputFolder)
+            SetWindowTextW(hOutputFolder, g_config.OUTPUT_FOLDER);
+    }
+
+    // 4. Load "Image" section and update controls
+    for (size_t i = 0; i < ARRAYSIZE(imageFields); ++i)
+    {
+        GetPrivateProfileStringW(L"Image", imageFields[i].key, L"", buffer, imageFields[i].size, iniPath);
+        wcsncpy_s(imageFields[i].target, imageFields[i].size, buffer, _TRUNCATE);
+
+        if (imageFields[i].hwnd)
+        {
+            if (imageFields[i].isDropdown)
             {
-               if (wcscmp(buffer, g_ImageTypeOptions[j].label) == 0)
-               {
-                  SendMessageW(*imageFields[i].hwnd, CB_SETCURSEL, (WPARAM)j, 0);
-                  break;
-               }
+                for (int j = 0; j < IMAGE_TYPE_COUNT; ++j)
+                {
+                    if (wcscmp(buffer, g_ImageTypeOptions[j].label) == 0)
+                    {
+                        SendMessageW(*imageFields[i].hwnd, CB_SETCURSEL, (WPARAM)j, 0);
+                        break;
+                    }
+                }
             }
-         }
-         else
-         {
-            SetWindowTextW(*imageFields[i].hwnd, buffer);
+            else
+            {
+                SetWindowTextW(*imageFields[i].hwnd, buffer);
 
-            if (imageFields[i].isSlider)
-               SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
-         }
-      }
-   }
+                if (imageFields[i].isSlider)
+                    SendMessageW(hImageQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
+            }
+        }
+    }
 
-   // 3. Load checkbox states from controls[]
-   for (size_t i = 0; i < controlCount; ++i)
-   {
-      GetPrivateProfileStringW(controls[i].configSegment, controls[i].configKey, L"false", buffer, MAX_PATH, iniPath);
+    // 5. Load checkbox states from controls[]
+    for (size_t i = 0; i < controlCount; ++i)
+    {
+        GetPrivateProfileStringW(controls[i].configSegment, controls[i].configKey, L"false", buffer, MAX_PATH, iniPath);
 
-      BOOL isChecked = (wcscmp(buffer, L"true") == 0);
-      SendMessageW(*controls[i].hCheckbox, BM_SETCHECK, isChecked ? BST_CHECKED : BST_UNCHECKED, 0);
+        BOOL isChecked = (wcscmp(buffer, L"true") == 0);
+        SendMessageW(*controls[i].hCheckbox, BM_SETCHECK, isChecked ? BST_CHECKED : BST_UNCHECKED, 0);
 
-      if (controls[i].configField)
-         *controls[i].configField = isChecked;
-   }
+        if (controls[i].configField)
+            *controls[i].configField = isChecked;
+    }
 
-   update_output_type_dropdown();
+    update_output_type_dropdown();
 }
 
 static HHOOK hHook;

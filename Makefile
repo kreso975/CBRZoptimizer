@@ -10,7 +10,9 @@ MANIFEST = CBRZoptimizer.exe.manifest
 
 # Source files
 MINIZ = src/miniz/miniz.c
-SRC = window.c src/functions.c src/aboutDialog.c src/instructionsDialog.c src/rar_handle.c src/zip_handle.c src/pdf_handle.c src/folder_handle.c src/image_handle.c src/gui.c $(MINIZ)
+WEBP_SRC = src/webp_handle.c
+SRC = window.c src/functions.c src/aboutDialog.c src/instructionsDialog.c src/rar_handle.c src/zip_handle.c src/pdf_handle.c src/folder_handle.c src/image_handle.c src/gui.c
+SRC +=  $(MINIZ) $(WEBP_SRC)
 
 # Object files
 OBJ = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRC))
@@ -18,9 +20,11 @@ RES = $(OBJ_DIR)/resources.res
 
 # Include paths
 INCLUDES = -Iexternal -Isrc -Isrc/miniz -Isrc/stb -I.
+INCLUDES += -Isrc/webP
 
 # Libraries
 LIBS = -lmsimg32 -lcomctl32 -luxtheme -lversion -lshlwapi -lole32 -luuid -lwininet
+LIBS += external/libwebp.a external/libsharpyuv.a
 
 # Build mode
 BUILD ?= debug
@@ -52,6 +56,7 @@ ifeq ($(BUILD),release)
 	copy /Y "external\\license.txt"           "$(BIN_DIR)\\thirdparty\\LICENSE-UnRAR.txt" > nul
 	copy /Y "src\\miniz\\LICENSE"             "$(BIN_DIR)\\thirdparty\\LICENSE-miniz.txt" > nul
 	copy /Y "src\\stb\\LICENSE"               "$(BIN_DIR)\\thirdparty\\LICENSE-stb.txt" > nul
+	copy /Y "src\\webP\\LICENSE"               "$(BIN_DIR)\\thirdparty\\LICENSE-webP.txt" > nul
 	copy /Y "external\\UnRAR64.dll"   			"$(BIN_DIR)\\" > nul
 else
 	copy /Y "$(MANIFEST)" "$(BIN_DIR)\\" > nul

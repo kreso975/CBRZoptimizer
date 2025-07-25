@@ -22,6 +22,7 @@
 #include "image_handle.h"
 #include "pdf_handle.h"
 #include "folder_handle.h"
+#include "webp_handle.h"
 #include "debug.h"
 
 // List of files/extensions to ignore during extraction:

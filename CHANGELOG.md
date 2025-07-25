@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] – v1.1.2
+## [2025-07-26] – v1.1.2
 
 ### Added
 - Online update check on startup.

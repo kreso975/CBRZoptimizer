@@ -18,7 +18,8 @@ extern HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
 extern HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hMuToolLabel;
 extern HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hImageMagickLabel;
 extern HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
-
+extern HWND hWebPQualityLabel, hWebPMethodLabel, hWebPQualityValue, hWebPLosslessLabel, hWebPConvertLabel;
+extern HWND hWebPMethod, hWebPQualitySlider, hWebPLossless, hWebPConvert;
 extern HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
 extern HWND hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
 // Output options
@@ -31,6 +32,7 @@ extern HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunC
 #define IMAGE_TYPE_LEN 10
 #define IMG_DIM_LEN    16
 #define QUALITY_LEN    8
+#define WEBP_METHOD_LEN 2
 
 typedef struct {
     // Paths
@@ -50,11 +52,17 @@ typedef struct {
     wchar_t IMAGE_SIZE_HEIGHT[IMG_DIM_LEN];
     wchar_t IMAGE_QUALITY[QUALITY_LEN];
 
+    // WebP settings
+    wchar_t WebPMethod[WEBP_METHOD_LEN];        // 0–6 (compression method)
+    wchar_t WebPQuality[QUALITY_LEN];           // e.g., "75"
+    BOOL WebPLossless;                          // TRUE for lossless, FALSE for lossy
+
     // Output flags
     BOOL runImageOptimizer;
     BOOL runCompressor;
     BOOL keepExtracted;
     BOOL extractCover;
+    BOOL convertToWebP;
 } AppConfig;
 
 extern AppConfig g_config;
@@ -98,7 +106,7 @@ typedef struct {
 } GUIHandleEntry;
 
 extern GUIHandleEntry groupElements[];
-extern int groupElementsCount;
+extern const size_t groupElementsCount;
 
 // ─────────────── Image Field Binding Struct ───────────────
 // Represents a binding between an INI key and its associated UI control and config field.
@@ -114,6 +122,19 @@ typedef struct {
 // External declaration of image field bindings
 extern ImageFieldBinding imageFields[];
 extern const size_t imageFieldsCount;
+
+// ─────────────── WebP Field Binding Struct ───────────────
+typedef struct {
+    const wchar_t *key;        // INI key name
+    wchar_t *target;           // Pointer to config field
+    DWORD size;                // Max buffer size
+    HWND *hwnd;                // Associated UI control
+    BOOL isSlider;             // TRUE if value should update a slider
+    BOOL isDropdown;           // TRUE if value should update a dropdown
+} WebPFieldBinding;
+
+extern WebPFieldBinding webpFields[];
+extern const size_t webpFieldsCount;
 
 // ─────────────── Button Image Struct ───────────────
 typedef struct
@@ -133,8 +154,19 @@ typedef struct
 extern ButtonSpec buttons[];
 extern const size_t buttonsCount;
 
+// ─────────────── WebP Methods Struct ───────────────
+
+typedef struct {
+    int value;
+    const wchar_t* label;
+} WebPMethodItem;
+
+extern WebPMethodItem webpMethods[];
+extern const size_t webpMethodsCount;
+
 // ─────────────── Utility Prototypes ───────────────
 void SetControlsEnabled(BOOL enable, int count, ...);
+void HandleCheckboxToggle(HWND hwnd, HWND hCheckbox, BOOL toggleState);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable, BOOL earlyExit);
 int  MessageBoxCentered(HWND hwnd, LPCWSTR text, LPCWSTR caption, UINT type);
 void AdjustLayout(HWND hwnd);
@@ -144,6 +176,7 @@ void AddUniqueToListBox(HWND hwndOwner, HWND hListBox, LPCWSTR itemText);
 void ProcessDroppedFiles(HWND hwnd, HWND hListBox, HDROP hDrop);
 void RemoveSelectedItems(HWND hListBox);
 void update_output_type_dropdown();
+void UpdateSliderSetting(HWND hSlider, HWND hValueDisplay, wchar_t* configBuffer, size_t bufferSize, const wchar_t* section, const wchar_t* key);
 void load_config_values(void);
 
 LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam);

@@ -28,9 +28,12 @@ LabelCheckboxPair controls[] = {
     {L"Compress folder", L"OUTPUT_RUN_COMPRESSOR", L"Output", 470, &hOutputRunCompressor, &hOutputRunCompressorLabel, &g_config.runCompressor, TRUE},
     {L"Keep extracted folders", L"OUTPUT_KEEP_EXTRACTED", L"Output", 490, &hOutputKeepExtracted, &hOutputKeepExtractedLabel, &g_config.keepExtracted, FALSE},
     {L"Extract cover image", L"OUTPUT_EXTRACT_COVER", L"Output", 510, &hOutputExtractCover, &hOutputExtractCoverLabel, &g_config.extractCover, TRUE},
-    {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 490, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo, TRUE},
-    {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 490, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio, TRUE},
-    {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 490, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling, FALSE}};
+    {L"Resize image:", L"IMAGE_RESIZE_TO", L"Image", 520, &hImageResizeTo, &hImageResizeToLabel, &g_config.resizeTo, TRUE},
+    {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 530, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio, TRUE},
+    {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 540, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling, FALSE},
+    {L"WebP Lossless", L"WEBP_LOSSLESS", L"WebP", 550, &hWebPLossless, &hWebPLosslessLabel, &g_config.WebPLossless, FALSE},
+    {L"WebP convert", L"OUTPUT_WEBP", L"Output", 560, &hWebPConvert, &hWebPConvertLabel, &g_config.convertToWebP, TRUE}
+   };
 
 const size_t controlCount = sizeof(controls) / sizeof(controls[0]);
 
@@ -41,6 +44,13 @@ ImageFieldBinding imageFields[] = {
     {L"IMAGE_TYPE", g_config.IMAGE_TYPE, IMAGE_TYPE_LEN, &hImageType, FALSE, TRUE}};
 
 const size_t imageFieldsCount = sizeof(imageFields) / sizeof(imageFields[0]);
+
+WebPFieldBinding webpFields[] = {
+    {L"WEBP_QUALITY", g_config.WebPQuality, QUALITY_LEN, &hWebPQualityValue, TRUE, FALSE},
+    {L"WEBP_METHOD", g_config.WebPMethod, WEBP_METHOD_LEN, &hWebPMethod, FALSE, TRUE}
+};
+
+const size_t webpFieldsCount = sizeof(webpFields) / sizeof(webpFields[0]);
 
 ButtonSpec buttons[] = {
     // Existing buttons...
@@ -62,6 +72,18 @@ ButtonSpec buttons[] = {
 };
 
 const size_t buttonsCount = sizeof(buttons) / sizeof(buttons[0]);
+
+WebPMethodItem webpMethods[] = {
+    { 0, L" 0 - Fastest (Lowest Compression)" },
+    { 1, L" 1 - Fast (Low Compression)" },
+    { 2, L" 2 - Balanced (Medium Compression)" },
+    { 3, L" 3 - Normal (Good Compression)" },
+    { 4, L" 4 - Thorough (Better Compression)" },
+    { 5, L" 5 - Slow (High Compression)" },
+    { 6, L" 6 - Maximum (Best Compression)" }
+};
+
+const size_t webpMethodsCount = sizeof(webpMethods) / sizeof(webpMethods[0]);
 
 void SendStatus(HWND hwnd, UINT messageId, const wchar_t *prefix, const wchar_t *info)
 {
@@ -88,6 +110,52 @@ void SetControlsEnabled(BOOL enable, int count, ...)
    va_end(args);
 }
 
+void HandleCheckboxToggle(HWND hwnd, HWND hCheckbox, BOOL toggleState)
+{
+    if (!hCheckbox)
+        return;
+
+    if (toggleState)
+    {
+        LRESULT state = SendMessageW(hCheckbox, BM_GETCHECK, 0, 0);
+        LRESULT newState = (state == BST_CHECKED) ? BST_UNCHECKED : BST_CHECKED;
+        SendMessageW(hCheckbox, BM_SETCHECK, (WPARAM)newState, 0);
+    }
+
+    LRESULT checked = SendMessageW(hCheckbox, BM_GETCHECK, 0, 0);
+    BOOL isChecked = (checked == BST_CHECKED);
+
+    wchar_t iniPath[MAX_PATH];
+    GetModuleFileNameW(NULL, iniPath, MAX_PATH);
+    wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
+    if (lastSlash)
+        *(lastSlash + 1) = L'\0';
+    wcscat(iniPath, L"config.ini");
+
+    for (size_t i = 0; i < controlCount; ++i)
+    {
+        if (hCheckbox == *controls[i].hCheckbox)
+        {
+            WritePrivateProfileStringW( controls[i].configSegment, controls[i].configKey, isChecked ? L"true" : L"false", iniPath );
+
+            if (controls[i].configField)
+                *controls[i].configField = isChecked;
+
+            if (controls[i].triggersGroupLogic)
+            {
+                BOOL shouldEnable = controls[i].configField ? *controls[i].configField : FALSE;
+
+                EnableResizeGroupWithLogic(L"ImageGroup", g_config.runImageOptimizer, FALSE);
+
+                if (shouldEnable)
+                    AdjustLayout(hwnd);
+            }
+
+            break;
+        }
+    }
+}
+
 // EnableResizeGroupWithLogic(L"FilesGroup", FALSE);
 // EnableResizeGroupWithLogic(L"FilesGroup", TRUE);
 void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable, BOOL earlyExit)
@@ -104,7 +172,7 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable, BOOL earlyExit)
    if (earlyExit)
    {
       // 2–3. Toggle group controls based on 'enable' flag (excluding "Resize To")
-      for (int i = 0; i < groupElementsCount; ++i)
+      for (size_t i = 0; i < groupElementsCount; ++i)
       {
          if (wcscmp(groupElements[i].group, groupName) != 0 || !*groupElements[i].hwndPtr)
             continue;
@@ -120,8 +188,9 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable, BOOL earlyExit)
       return;
    }
       
-
    // ⚠️ Do not exit early — continue to refresh all dependent UI
+
+   EnableResizeGroupWithLogic(L"WebPGroup", g_config.convertToWebP, TRUE);
 
    // 4. Toggle advanced controls based on resize settings
    if (g_config.runImageOptimizer)
@@ -191,6 +260,7 @@ void EnableResizeGroupWithLogic(LPCWSTR groupName, BOOL enable, BOOL earlyExit)
       DEBUG_PRINT(L"[DEBUG] Format selection DISABLED");
       SetControlsEnabled(FALSE, 2, hOutputType, hOutputTypeLabel);
    }
+
 }
 
 void ValidateAndSaveInput(HWND hwnd, HWND changedControl, const wchar_t *iniPath)
@@ -334,6 +404,26 @@ void update_output_type_dropdown()
    SendMessageW(hOutputType, CB_SETCURSEL, (WPARAM)(index != CB_ERR ? index : 0), 0);
 }
 
+void UpdateSliderSetting(HWND hSlider, HWND hValueDisplay, wchar_t *configBuffer, size_t bufferSize, const wchar_t *section, const wchar_t *key)
+{
+   int sliderPos = (int)SendMessageW(hSlider, TBM_GETPOS, 0, 0);
+   swprintf(configBuffer, bufferSize, L"%d", sliderPos);
+   SetWindowTextW(hValueDisplay, configBuffer);
+
+   wchar_t configPath[MAX_PATH];
+   GetModuleFileNameW(NULL, configPath, MAX_PATH);
+
+   wchar_t *slashPos = wcsrchr(configPath, L'\\');
+   if (slashPos)
+      *(slashPos + 1) = L'\0';
+
+   wcscat(configPath, L"config.ini");
+
+   WritePrivateProfileStringW(section, key, configBuffer, configPath);
+
+   DEBUG_PRINTF(L"[Slider] %s.%s = %s\n", section, key, configBuffer);
+}
+
 void load_config_values(void)
 {
     wchar_t buffer[MAX_PATH];
@@ -422,7 +512,34 @@ void load_config_values(void)
         }
     }
 
-    // 5. Load checkbox states from controls[]
+    // 5. Load "WebP" section and update controls
+    for (size_t i = 0; i < webpFieldsCount; ++i)
+    {
+       GetPrivateProfileStringW(L"WebP", webpFields[i].key, L"", buffer, webpFields[i].size, iniPath);
+       wcsncpy_s(webpFields[i].target, webpFields[i].size, buffer, _TRUNCATE);
+
+       if (webpFields[i].hwnd)
+       {
+          if (webpFields[i].isDropdown)
+          {
+             // Assuming WebPMethod is a numeric dropdown (0–6)
+             int method = _wtoi(buffer);
+             SendMessageW(*webpFields[i].hwnd, CB_SETCURSEL, (WPARAM)method, 0);
+          }
+          else
+          {
+             SetWindowTextW(*webpFields[i].hwnd, buffer);
+
+             if (webpFields[i].isSlider)
+             {
+                // Assuming hWebPQualitySlider is your slider control
+                SendMessageW(hWebPQualitySlider, TBM_SETPOS, TRUE, _wtoi(buffer));
+             }
+          }
+       }
+    }
+
+    // 6. Load checkbox states from controls[]
     for (size_t i = 0; i < controlCount; ++i)
     {
         GetPrivateProfileStringW(controls[i].configSegment, controls[i].configKey, L"false", buffer, MAX_PATH, iniPath);

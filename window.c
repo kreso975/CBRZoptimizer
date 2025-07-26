@@ -33,15 +33,18 @@ HWND hOpenInTmpFolderButton, hOpenInOutputFolderButton;
 HWND hTmpFolder, hOutputFolder, hWinrarPath, hSevenZipPath, hImageMagickPath, hMuToolPath, hImageResize;
 HWND hTmpBrowse, hOutputBrowse, hWinrarBrowse, hSevenZipBrowse, hImageMagickBrowse, hMuToolBrowse;
 // Groups
-HWND hFilesGroup, hTerminalGroup, hSettingsGroup, hImageSettingsGroup, hOutputGroup;
+HWND hFilesGroup, hTerminalGroup, hSettingsGroup, hImageSettingsGroup, hWebPSettingsGroup, hOutputGroup;
 // Terminal
 HWND hTerminalProcessingLabel, hTerminalProcessingText, hTerminalText;
 // Labels
 HWND hTmpFolderLabel, hOutputFolderLabel, hWinrarLabel, hSevenZipLabel, hMuToolLabel;
 HWND hImageTypeLabel, hImageAllowUpscalingLabel, hImageResizeToLabel, hImageMagickLabel;
 HWND hImageQualityLabel, hImageQualityValue, hImageSizeWidthLabel, hImageSizeHeightLabel, hImageKeepAspectRatioLabel;
+HWND hWebPQualityLabel, hWebPMethodLabel, hWebPQualityValue, hWebPLosslessLabel, hWebPConvertLabel;
 // Image settings
 HWND hImageType, hImageAllowUpscaling, hImageResizeTo, hImageQualitySlider, hImageSizeWidth, hImageSizeHeight, hImageKeepAspectRatio;
+// WebP settings
+HWND hWebPMethod, hWebPQualitySlider, hWebPLossless, hWebPConvert;
 // Output options
 HWND hOutputKeepExtractedLabel, hOutputKeepExtracted, hOutputExtractCover, hOutputExtractCoverLabel, hOutputRunExtractLabel, hOutputRunExtract;
 HWND hOutputType, hOutputTypeLabel, hOutputRunImageOptimizer, hOutputRunCompressor, hOutputRunImageOptimizerLabel, hOutputRunCompressorLabel;
@@ -68,11 +71,17 @@ AppConfig g_config = {
     .IMAGE_SIZE_HEIGHT = L"",
     .IMAGE_QUALITY = L"",
 
+    // WebP settings
+    .WebPMethod = L"4",             // 0–6 (compression method)
+    .WebPQuality = L"75",           // e.g., "75"
+    .WebPLossless = FALSE,          // TRUE for lossless, FALSE for lossy
+
     // Output defaults
     .runImageOptimizer = TRUE,
     .runCompressor = TRUE,
     .keepExtracted = TRUE,
-    .extractCover = TRUE};
+    .extractCover = TRUE,
+    .convertToWebP = FALSE};
 
 extern LabelCheckboxPair controls[];
 extern const size_t controlCount;
@@ -106,6 +115,7 @@ GUIHandleEntry groupElements[] = {
     {L"Open Output Folder", L"AlwaysLiveGroup", &hOpenInOutputFolderButton},
 
     {L"Image Resize", L"ImageGroup", &hImageResize},
+    {L"hImageType", L"ImageGroup", &hImageType},
     {L"ImageTypeLabel", L"ImageGroup", &hImageTypeLabel},
     {L"hImageAllowUpscalingLabel", L"ImageGroup", &hImageAllowUpscalingLabel},
     {L"hImageResizeToLabel", L"ImageGroup", &hImageResizeToLabel},
@@ -115,12 +125,19 @@ GUIHandleEntry groupElements[] = {
     {L"hImageSizeHeightLabel", L"ImageGroup", &hImageSizeHeightLabel},
     {L"hImageKeepAspectRatioLabel", L"ImageGroup", &hImageKeepAspectRatioLabel},
     {L"hImageKeepAspectRatio", L"ImageGroup", &hImageKeepAspectRatio},
-    {L"hImageType", L"ImageGroup", &hImageType},
     {L"hImageAllowUpscaling", L"ImageGroup", &hImageAllowUpscaling},
     {L"hImageResizeTo", L"ImageGroup", &hImageResizeTo},
     {L"hImageQualitySlider", L"ImageGroup", &hImageQualitySlider},
     {L"hImageSizeWidth", L"ImageGroup", &hImageSizeWidth},
     {L"hImageSizeHeight", L"ImageGroup", &hImageSizeHeight},
+
+    {L"hWebPMethod", L"WebPGroup", &hWebPMethod},
+    {L"hWebPMethodLabel", L"WebPGroup", &hWebPMethodLabel},
+    {L"hWebPQualityLabel", L"WebPGroup", &hWebPQualityLabel},
+    {L"hWebPQualityValue", L"WebPGroup", &hWebPQualityValue},
+    {L"hWebPQualitySlider", L"WebPGroup", &hWebPQualitySlider},
+    {L"hWebPLosslessLabel", L"WebPGroup", &hWebPLosslessLabel},
+    {L"hWebPLossless", L"WebPGroup", &hWebPLossless},
 
     {L"hOutputKeepExtractedLabel", L"OutputGroup", &hOutputKeepExtractedLabel},
     {L"hOutputKeepExtracted", L"OutputGroup", &hOutputKeepExtracted},
@@ -135,11 +152,12 @@ GUIHandleEntry groupElements[] = {
     {L"hOutputExtractCover", L"OutputGroup", &hOutputExtractCover},
     {L"hOutputExtractCoverLabel", L"OutputGroup", &hOutputExtractCoverLabel}};
 
-int groupElementsCount = sizeof(groupElements) / sizeof(groupElements[0]);
+const size_t groupElementsCount = sizeof(groupElements) / sizeof(groupElements[0]);
 
 const ImageTypeEntry g_ImageTypeOptions[] = {
     {L"Portrait", IMAGE_TYPE_PORTRAIT},
     {L"Landscape", IMAGE_TYPE_LANDSCAPE}};
+
 
 // Refresh Window after disabling
 void AdjustLayout(HWND hwnd)
@@ -169,74 +187,36 @@ LRESULT CALLBACK ListBoxProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 LRESULT CALLBACK LabelProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-   if (msg == WM_LBUTTONDOWN)
-   {
-      HWND hCheckbox = (HWND)GetProp(hwnd, L"CheckboxHandle");
-      if (hCheckbox)
-      {
-         LRESULT state = SendMessageW(hCheckbox, BM_GETCHECK, 0, 0);
-         LRESULT newState = (state == BST_CHECKED) ? BST_UNCHECKED : BST_CHECKED;
-         SendMessageW(hCheckbox, BM_SETCHECK, (WPARAM)newState, 0);
+    if (msg == WM_LBUTTONDOWN)
+    {
+        HWND hCheckbox = (HWND)GetProp(hwnd, L"CheckboxHandle");
+        if (hCheckbox)
+        {
+            // Use parent window for layout adjustment
+            HWND hParent = GetParent(hwnd);
 
-         // Build config path
-         wchar_t iniPath[MAX_PATH];
-         GetModuleFileNameW(NULL, iniPath, MAX_PATH);
-         wchar_t *lastSlash = wcsrchr(iniPath, L'\\');
-         if (lastSlash)
-            *(lastSlash + 1) = L'\0';
-         wcscat(iniPath, L"config.ini");
-
-         for (size_t i = 0; i < controlCount; ++i)
-         {
-            if (hCheckbox == *controls[i].hCheckbox)
-            {
-               const wchar_t *section = controls[i].configSegment;
-               const wchar_t *key = controls[i].configKey;
-               const wchar_t *value = (newState == BST_CHECKED) ? L"true" : L"false";
-
-               WritePrivateProfileStringW(section, key, value, iniPath);
-
-               // Update g_config if needed
-               if (wcscmp(key, L"OUTPUT_RUN_IMAGE_OPTIMIZER") == 0)
-                  g_config.runImageOptimizer = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"OUTPUT_RUN_COMPRESSOR") == 0)
-                  g_config.runCompressor = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"OUTPUT_KEEP_EXTRACTED") == 0)
-                  g_config.keepExtracted = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"OUTPUT_EXTRACT_COVER") == 0)
-                  g_config.extractCover = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"IMAGE_RESIZE_TO") == 0)
-                  g_config.resizeTo = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"IMAGE_KEEP_ASPECT_RATIO") == 0)
-                  g_config.keepAspectRatio = (newState == BST_CHECKED);
-               else if (wcscmp(key, L"IMAGE_ALLOW_UPSCALING") == 0)
-                  g_config.allowUpscaling = (newState == BST_CHECKED);
-               break;
-            }
-         }
-
-         for (size_t i = 0; i < controlCount; ++i)
-         {
-            if (hwnd == *controls[i].hLabel && controls[i].triggersGroupLogic)
-            {
-               BOOL shouldEnable = g_config.runImageOptimizer;
-
-               EnableResizeGroupWithLogic(L"ImageGroup", shouldEnable, FALSE);
-
-               if (shouldEnable)
-                  AdjustLayout(GetParent(hwnd)); // ✅ Only GetParent(hwnd) works for label
-
-               break;
-            }
-         }
-      }
-   }
+            // Unified logic: toggle checkbox, update config, handle layout
+            HandleCheckboxToggle(hParent, hCheckbox, TRUE);
+        }
+    }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-   WNDPROC orig = (WNDPROC)GetProp(hwnd, L"OrigProc");
+    WNDPROC orig = (WNDPROC)GetProp(hwnd, L"OrigProc");
 #pragma GCC diagnostic pop
-   return CallWindowProc(orig ? orig : DefWindowProc, hwnd, msg, wParam, lParam);
+    return CallWindowProc(orig ? orig : DefWindowProc, hwnd, msg, wParam, lParam);
+}
+
+LRESULT CALLBACK OutputGroupProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    if (msg == WM_COMMAND)
+    {
+        SendMessageW(GetParent(hwnd), WM_COMMAND, wParam, lParam);
+        return 0;
+    }
+
+    WNDPROC orig = (WNDPROC)(LONG_PTR)GetProp(hwnd, L"OrigProc"); // ✅ safe cast
+    return orig ? CallWindowProc(orig, hwnd, msg, wParam, lParam) : DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
 LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -313,7 +293,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       hGrayBrush = CreateSolidBrush(RGB(192, 192, 192));
 
       int defaultWidth = 960;  // 800 * 1.2 (20% increase)
-      int defaultHeight = 625; // Keep height unchanged unless needed
+      int defaultHeight = 780; // Keep height unchanged unless needed
       MoveWindow(hwnd, 100, 100, defaultWidth, defaultHeight, TRUE);
 
       HMENU hMenu = CreateMenu();
@@ -521,22 +501,73 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       if (hImageSizeHeight)
          SendMessageW(hImageSizeHeight, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
+      // **WebP Settings Group (Right)**
+      hWebPSettingsGroup = CreateWindowW(L"BUTTON", L"WebP Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                          320, 190, 480, 120, hwnd, NULL, NULL, NULL);
+
+      hWebPQualityLabel = CreateWindowW(L"STATIC", L"WebP Quality:", WS_CHILD | WS_VISIBLE, 330, 210, 120, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hWebPQualityLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+
+      hWebPQualityValue = CreateWindowW(L"STATIC", L"25", WS_CHILD | WS_VISIBLE, 430, 210, 50, 20, hwnd, NULL, NULL, NULL);
+      hWebPQualitySlider = CreateWindowW(L"msctls_trackbar32", NULL, WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS | WS_TABSTOP,
+                                          460, 210, 220, 30, hwnd, (HMENU)ID_WEBP_QUALITY_SLIDER, NULL, NULL);
+
+      SendMessageW(hWebPQualitySlider, TBM_SETRANGE, TRUE, MAKELPARAM(0, 100));
+      SendMessageW(hWebPQualitySlider, TBM_SETTICFREQ, 5, 0);
+      SendMessageW(hWebPQualitySlider, TBM_SETPOS, TRUE, 28);
+
+      hWebPMethodLabel = CreateWindowW(L"STATIC", L"Method:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hwnd, NULL, NULL, NULL);
+      SendMessageW(hWebPMethodLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+      hWebPMethod = CreateWindowExW(0L, L"COMBOBOX", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST, 460, 280, 120, 100, hwnd,
+                                   (HMENU)ID_WEBP_METHOD, g_hInstance, NULL);
+
+      SendMessageW(hWebPMethod, WM_SETFONT, (WPARAM)hFontInput, TRUE);
+
+      for (size_t i = 0; i < webpMethodsCount; ++i)
+      {
+         int index = (int)SendMessage(hWebPMethod, CB_ADDSTRING, 0, (LPARAM)webpMethods[i].label);
+         SendMessage(hWebPMethod, CB_SETITEMDATA, (WPARAM)index, (LPARAM)webpMethods[i].value);
+      }
+
+      // Optional: set default to first entry
+      SendMessageW(hWebPMethod, CB_SETCURSEL, 0, 0);
+      // Update WebPMethod global from struct
+      wcsncpy(g_config.WebPMethod, webpMethods[0].label, sizeof(g_config.WebPMethod) / sizeof(wchar_t) - 1);
+      g_config.WebPMethod[sizeof(g_config.WebPMethod) / sizeof(wchar_t) - 1] = L'\0'; // Null-terminate
+      
+
       // **Output Group (Right)**
       hOutputGroup = CreateWindowW(L"BUTTON", L"Output", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                    320, 400, 480, 100, hwnd, NULL, NULL, NULL);
 
-      hOutputTypeLabel = CreateWindowW(L"STATIC", L"Format:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hwnd, NULL, NULL, NULL);
+      // 🔹 Subclass hOutputGroup to forward WM_COMMAND
+      WNDPROC origOutputGroupProc = (WNDPROC)SetWindowLongPtr(hOutputGroup, GWLP_WNDPROC, (LONG_PTR)OutputGroupProc);
+      SetProp(hOutputGroup, L"OrigProc", (HANDLE)(LONG_PTR)origOutputGroupProc); // ✅ safe cast
+
+      hOutputTypeLabel = CreateWindowW(L"STATIC", L"Format:", WS_CHILD | WS_VISIBLE, 330, 250, 80, 20, hOutputGroup, NULL, NULL, NULL);
       SendMessageW(hOutputTypeLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
+
       hOutputType = CreateWindowExW(0L, L"COMBOBOX", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
-                                    460, 280, 120, 100, hwnd, (HMENU)ID_OUTPUT_TYPE, // 👈 Add the control ID here
+                                    460, 280, 120, 100, hOutputGroup, (HMENU)ID_OUTPUT_TYPE,
                                     g_hInstance, NULL);
 
       SendMessageW(hOutputType, WM_SETFONT, (WPARAM)hFontInput, TRUE);
 
       for (size_t i = 0; i < controlCount; ++i)
       {
-         *controls[i].hCheckbox = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 350, controls[i].y, 20, 20, hwnd, NULL, NULL, NULL);
-         *controls[i].hLabel = CreateWindowW(L"STATIC", controls[i].labelText, WS_CHILD | WS_VISIBLE | SS_NOTIFY, 330, controls[i].y, 180, 20, hwnd, NULL, NULL, NULL);
+         HWND parent = hwnd; // default parent
+
+         // If the control belongs to the "Output" segment, use hOutputGroup
+         if (wcscmp(controls[i].configSegment, L"Output") == 0)
+            parent = hOutputGroup;
+
+         *controls[i].hCheckbox = CreateWindowW(
+             L"BUTTON", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+             350, controls[i].y, 20, 20, parent, NULL, NULL, NULL);
+
+         *controls[i].hLabel = CreateWindowW(
+             L"STATIC", controls[i].labelText, WS_CHILD | WS_VISIBLE | SS_NOTIFY,
+             330, controls[i].y, 180, 20, parent, NULL, NULL, NULL);
 
          SetProp(*controls[i].hLabel, L"CheckboxHandle", (HANDLE)(*controls[i].hCheckbox));
          SendMessageW(*controls[i].hLabel, WM_SETFONT, (WPARAM)hFontLabel, TRUE);
@@ -577,7 +608,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // **Keep Right Section Fixed, Move Elements Together**
       MoveWindow(hSettingsGroup, rect.right - 360, 10, 350, 223, TRUE);
       MoveWindow(hImageSettingsGroup, rect.right - 360, 243, 350, 180, TRUE);
-      MoveWindow(hOutputGroup, rect.right - 360, 433, 350, 120, TRUE);
+      
 
       // **Settings Fields and Labels**
       MoveWindow(hTmpFolderLabel, rect.right - 350, 40, 100, 20, TRUE);
@@ -626,17 +657,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
       MoveWindow(hImageAllowUpscaling, rect.right - 150, 398, 20, 20, TRUE);
       MoveWindow(hImageAllowUpscalingLabel, rect.right - 130, 400, 100, 20, TRUE);
+      
+      // -- WebP settings -- 
+      MoveWindow(hWebPSettingsGroup, rect.right - 360, 440, 350, 127, TRUE);
+      MoveWindow(hWebPQualityLabel, rect.right - 350, 468, 100, 20, TRUE);
+      MoveWindow(hWebPQualityValue, rect.right - 250, 468, 20, 20, TRUE);
 
-      MoveWindow(hOutputTypeLabel, rect.right - 350, 463, 80, 20, TRUE);
-      MoveWindow(hOutputType, rect.right - 280, 458, 120, 20, TRUE);
-      MoveWindow(hOutputRunImageOptimizer, rect.right - 350, 493, 20, 20, TRUE);
-      MoveWindow(hOutputRunImageOptimizerLabel, rect.right - 330, 495, 140, 20, TRUE);
-      MoveWindow(hOutputRunCompressor, rect.right - 150, 493, 20, 20, TRUE);
-      MoveWindow(hOutputRunCompressorLabel, rect.right - 130, 495, 110, 20, TRUE);
-      MoveWindow(hOutputKeepExtracted, rect.right - 350, 513, 20, 20, TRUE);
-      MoveWindow(hOutputKeepExtractedLabel, rect.right - 330, 515, 150, 20, TRUE);
-      MoveWindow(hOutputExtractCover, rect.right - 150, 513, 20, 20, TRUE);
-      MoveWindow(hOutputExtractCoverLabel, rect.right - 130, 515, 110, 20, TRUE);
+      MoveWindow(hWebPLossless, rect.right - 150, 466, 20, 20, TRUE);
+      MoveWindow(hWebPLosslessLabel, rect.right - 130, 468, 100, 20, TRUE);
+
+      MoveWindow(hWebPQualitySlider, rect.right - 350, 493, 330, 30, TRUE);
+      MoveWindow(hWebPMethodLabel, rect.right - 350, 537, 90, 20, TRUE);
+      MoveWindow(hWebPMethod, rect.right - 270, 533, 240, 20, TRUE);
+
+      // -- Output Settings --
+      MoveWindow(hOutputGroup, rect.right - 360, 580, 347, 125, TRUE);
+
+      // Inside group box (relative positions)
+      MoveWindow(hOutputTypeLabel, 10, 30, 60, 20, TRUE);
+      MoveWindow(hOutputType, 80, 25, 120, 20, TRUE);
+      MoveWindow(hOutputRunImageOptimizer, 10, 60, 20, 20, TRUE);
+      MoveWindow(hOutputRunImageOptimizerLabel, 30, 62, 140, 20, TRUE);
+      MoveWindow(hOutputRunCompressor, 210, 60, 20, 20, TRUE);
+      MoveWindow(hOutputRunCompressorLabel, 230, 62, 110, 20, TRUE);
+      MoveWindow(hOutputKeepExtracted, 10, 80, 20, 20, TRUE);
+      MoveWindow(hOutputKeepExtractedLabel, 30, 82, 150, 20, TRUE);
+      MoveWindow(hOutputExtractCover, 210, 80, 20, 20, TRUE);
+      MoveWindow(hOutputExtractCoverLabel, 230, 82, 110, 20, TRUE);
+      MoveWindow(hWebPConvert, 10, 100, 20, 20, TRUE);
+      MoveWindow(hWebPConvertLabel, 30, 102, 150, 20, TRUE);
+
 
       InvalidateRect(hwnd, NULL, TRUE);
       break;
@@ -745,6 +795,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
          EnableResizeGroupWithLogic(L"FilesGroup", FALSE, TRUE);
          EnableResizeGroupWithLogic(L"OutputGroup", FALSE, TRUE);
          EnableResizeGroupWithLogic(L"PathsGroup", FALSE, TRUE);
+         EnableResizeGroupWithLogic(L"WebPGroup", FALSE, TRUE);
          EnableResizeGroupWithLogic(L"ImageGroup", FALSE, TRUE);
          CreateThread(NULL, 0, ProcessingThread, hwnd, 0, NULL);
       }
@@ -797,77 +848,46 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             WritePrivateProfileStringW(L"Image", L"IMAGE_TYPE", g_config.IMAGE_TYPE, iniPath);
          }
       }
+      else if (LOWORD(wParam) == ID_WEBP_METHOD && HIWORD(wParam) == CBN_SELCHANGE)
+      {
+         int selectedIndex = (int)SendMessageW(hWebPMethod, CB_GETCURSEL, 0, 0);
+         if (selectedIndex != CB_ERR && selectedIndex < (int)webpMethodsCount)
+         {
+            // Copy the label or value into config (depending on what you store)
+            swprintf(g_config.WebPMethod, 16, L"%d", webpMethods[selectedIndex].value);
 
+            // Save to INI
+            WritePrivateProfileStringW(L"WebP", L"WEBP_METHOD", g_config.WebPMethod, iniPath);
+
+            DEBUG_PRINTF(L"[Dropdown] WebPMethod selected: %s\n", g_config.WebPMethod);
+         }
+      }
+
+      // Fetch Click on CheckBoxes
       for (size_t i = 0; i < controlCount; ++i)
       {
          if ((HWND)lParam == *controls[i].hCheckbox && HIWORD(wParam) == BN_CLICKED)
          {
-            LRESULT checked = SendMessageW(*controls[i].hCheckbox, BM_GETCHECK, 0, 0);
-            const wchar_t *value = (checked == BST_CHECKED) ? L"true" : L"false";
-
-            WritePrivateProfileStringW(controls[i].configSegment, controls[i].configKey, value, iniPath);
-
-            if (controls[i].configField)
-               *(controls[i].configField) = (checked == BST_CHECKED);
-
-            // ✅ Simplified layout logic using triggersGroupLogic flag
-            if (controls[i].triggersGroupLogic)
-            {
-               EnableResizeGroupWithLogic(L"ImageGroup", TRUE, FALSE);
-
-               if (g_config.runImageOptimizer || g_config.extractCover || g_config.runCompressor)
-                  AdjustLayout(hwnd);
-            }
-
-            break; // processed the toggle
+            HandleCheckboxToggle(hwnd, *controls[i].hCheckbox, FALSE);
+            break;
          }
       }
+    break;
 
-      break;
 
    case WM_LBUTTONDOWN:
       SetFocus(hListBox);
       break;
 
-   case ID_IMAGE_QUALITY_SLIDER:
-   {
-      int sliderPos = (int)SendMessageW(hImageQualitySlider, TBM_GETPOS, 0, 0);
-
-      swprintf(g_config.IMAGE_QUALITY, 16, L"%d", sliderPos);
-      SetWindowTextW(hImageQualityValue, g_config.IMAGE_QUALITY);
-
-      wchar_t configPath[MAX_PATH];
-      GetModuleFileNameW(NULL, configPath, MAX_PATH);
-
-      wchar_t *slashPos = wcsrchr(configPath, L'\\');
-      if (slashPos)
-         *(slashPos + 1) = L'\0';
-
-      wcscat(configPath, L"config.ini");
-
-      WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, configPath);
-   }
-   break;
-
+   // CONTROLS FOR SLIDERS
    case WM_HSCROLL:
    {
-      if ((HWND)lParam == hImageQualitySlider)
-      {
-         int sliderPos = (int)SendMessageW(hImageQualitySlider, TBM_GETPOS, 0, 0);
-         swprintf(g_config.IMAGE_QUALITY, 16, L"%d", sliderPos);
-         SetWindowTextW(hImageQualityValue, g_config.IMAGE_QUALITY);
+      HWND hwndScroll = (HWND)lParam;
 
-         wchar_t configPath[MAX_PATH];
-         GetModuleFileNameW(NULL, configPath, MAX_PATH);
-
-         wchar_t *slashPos = wcsrchr(configPath, L'\\');
-         if (slashPos)
-            *(slashPos + 1) = L'\0';
-
-         wcscat(configPath, L"config.ini");
-
-         WritePrivateProfileStringW(L"Image", L"IMAGE_QUALITY", g_config.IMAGE_QUALITY, configPath);
-      }
+      if (hwndScroll == hImageQualitySlider)
+         UpdateSliderSetting(hImageQualitySlider, hImageQualityValue, g_config.IMAGE_QUALITY, 16, L"Image", L"IMAGE_QUALITY");
+      else if (hwndScroll == hWebPQualitySlider)
+         UpdateSliderSetting(hWebPQualitySlider, hWebPQualityValue, g_config.WebPQuality, 16, L"WebP", L"WEBP_QUALITY");
    }
    break;
 
@@ -1023,6 +1043,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       ShowWindow(hTerminalProcessingText, SW_HIDE);
       EnableResizeGroupWithLogic(L"FilesGroup", TRUE, TRUE);
       EnableResizeGroupWithLogic(L"OutputGroup", TRUE, TRUE);
+      EnableResizeGroupWithLogic(L"WebPGroup", TRUE, TRUE);
       EnableResizeGroupWithLogic(L"PathsGroup", TRUE, TRUE);
       EnableResizeGroupWithLogic(L"ImageGroup", TRUE, FALSE); // When Enabling after Proccess end it needs propper setup
       AdjustLayout(hwnd);

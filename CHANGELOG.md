@@ -3,6 +3,12 @@
 
 ### Added
 - Support for webP image format. Using libwebp library
+- GUI is done
+- Config and ini are done
+
+### Changed
+- Full rewrite of CheckBoxes and LabelProc handle.
+- Created elements Grouping
 
 ## [2025-07-26] – v1.1.2
 

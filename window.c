@@ -884,9 +884,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
    {
       HWND hwndScroll = (HWND)lParam;
 
-      if (hwndScroll == hImageQualitySlider)
+      if ( hwndScroll == hImageQualitySlider )
          UpdateSliderSetting(hImageQualitySlider, hImageQualityValue, g_config.IMAGE_QUALITY, 16, L"Image", L"IMAGE_QUALITY");
-      else if (hwndScroll == hWebPQualitySlider)
+      else if ( hwndScroll == hWebPQualitySlider )
          UpdateSliderSetting(hWebPQualitySlider, hWebPQualityValue, g_config.WebPQuality, 16, L"WebP", L"WEBP_QUALITY");
    }
    break;

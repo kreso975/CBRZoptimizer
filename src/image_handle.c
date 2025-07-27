@@ -10,6 +10,7 @@
 #include <wchar.h>
 
 #include "image_handle.h"
+#include "webp_handle.h"
 #include "gui.h"
 #include "resource.h"
 #include "functions.h" // For SendStatus, IMAGE_QUALITY, etc.
@@ -319,10 +320,20 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     if (fp)
     {
         DEBUG_PRINTF(L"[STB] 💾 Saving to %ls\n", outPath);
-        if (outExt && _wcsicmp(outExt, L".jpg") == 0)
+
+        if (g_config.convertToWebP)
+        {
+            result = webp_encode_and_write(pathW, final_buf, newW, newH);
+        }
+        else if (outExt && _wcsicmp(outExt, L".jpg") == 0)
+        {
             result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, final_buf, _wtoi(g_config.IMAGE_QUALITY));
+        }
         else if (outExt && _wcsicmp(outExt, L".png") == 0)
+        {
             result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, final_buf, newW * 3);
+        }
+
         fclose(fp);
     }
 
@@ -335,7 +346,16 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
             DEBUG_PRINTF(L"[STB] ⚠ Failed to delete %s: %ls (Error: %lu)\n", isBMP ? "BMP" : "PNG", pathW, GetLastError());
     }
 
-    // 8) Cleanup
+    // 8) Delete .jpg if converted to .webp
+    if (result && g_config.convertToWebP)
+    {
+        if (DeleteFileW(pathW))
+            DEBUG_PRINTF(L"[STB] 🧹 Deleted intermediate JPG: %ls\n", pathW);
+        else
+            DEBUG_PRINTF(L"[STB] ⚠ Failed to delete intermediate JPG: %ls (Error: %lu)\n", pathW, GetLastError());
+    }
+
+    // 9) Cleanup
     if (resized)
         free(resized);
     else

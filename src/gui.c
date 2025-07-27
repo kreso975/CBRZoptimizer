@@ -450,37 +450,43 @@ void load_config_values(void)
             SetWindowTextW(*inputs[i].hEdit, buffer);
     }
 
-    // 2. Fallback: TMP_FOLDER → System temp with subfolder if empty
-    if (wcslen(g_config.TMP_FOLDER) == 0)
+    // 2. Fallback: TMP_FOLDER → System temp with subfolder if empty or invalid
+    DWORD attributes = GetFileAttributesW(g_config.TMP_FOLDER);
+    BOOL folderExists = (attributes != INVALID_FILE_ATTRIBUTES) && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+
+    if (wcslen(g_config.TMP_FOLDER) == 0 || !folderExists)
     {
-        wchar_t defaultTmp[MAX_PATH];
-        DWORD len = GetTempPathW(MAX_PATH, defaultTmp);
+       wchar_t defaultTmp[MAX_PATH];
+       DWORD len = GetTempPathW(MAX_PATH, defaultTmp);
 
-        if (len > 0 && len < MAX_PATH)
-        {
-            PathAppendW(defaultTmp, L"CBRZoptimizer");
-            CreateDirectoryW(defaultTmp, NULL); // Safe if exists
-            wcsncpy_s(g_config.TMP_FOLDER, MAX_PATH, defaultTmp, _TRUNCATE);
-        }
-        else
-        {
-            wcsncpy_s(g_config.TMP_FOLDER, MAX_PATH, L"C:\\Temp", _TRUNCATE);
-            CreateDirectoryW(g_config.TMP_FOLDER, NULL);
-        }
+       if (len > 0 && len < MAX_PATH)
+       {
+          PathAppendW(defaultTmp, L"CBRZoptimizer");
+          CreateDirectoryW(defaultTmp, NULL); // Safe if exists
+          wcsncpy_s(g_config.TMP_FOLDER, MAX_PATH, defaultTmp, _TRUNCATE);
+       }
+       else
+       {
+          wcsncpy_s(g_config.TMP_FOLDER, MAX_PATH, L"C:\\Temp", _TRUNCATE);
+          CreateDirectoryW(g_config.TMP_FOLDER, NULL);
+       }
 
-        // Update TMP_FOLDER UI field
-        if (hTmpFolder)
-            SetWindowTextW(hTmpFolder, g_config.TMP_FOLDER);
+       // Update TMP_FOLDER UI field
+       if (hTmpFolder)
+          SetWindowTextW(hTmpFolder, g_config.TMP_FOLDER);
     }
 
-    // 3. Fallback: OUTPUT_FOLDER → same as TMP_FOLDER if empty
-    if (wcslen(g_config.OUTPUT_FOLDER) == 0 && wcslen(g_config.TMP_FOLDER) > 0)
-    {
-        wcsncpy_s(g_config.OUTPUT_FOLDER, MAX_PATH, g_config.TMP_FOLDER, _TRUNCATE);
+    // 3. Fallback: OUTPUT_FOLDER → same as TMP_FOLDER if empty or invalid
+    DWORD outAttr = GetFileAttributesW(g_config.OUTPUT_FOLDER);
+    BOOL outFolderExists = (outAttr != INVALID_FILE_ATTRIBUTES) && (outAttr & FILE_ATTRIBUTE_DIRECTORY);
 
-        // Update OUTPUT_FOLDER UI field
-        if (hOutputFolder)
-            SetWindowTextW(hOutputFolder, g_config.OUTPUT_FOLDER);
+    if ((wcslen(g_config.OUTPUT_FOLDER) == 0 || !outFolderExists) && wcslen(g_config.TMP_FOLDER) > 0)
+    {
+       wcsncpy_s(g_config.OUTPUT_FOLDER, MAX_PATH, g_config.TMP_FOLDER, _TRUNCATE);
+
+       // Update OUTPUT_FOLDER UI field
+       if (hOutputFolder)
+          SetWindowTextW(hOutputFolder, g_config.OUTPUT_FOLDER);
     }
 
     // 4. Load "Image" section and update controls

@@ -3,6 +3,7 @@
 
 ### Added
 - Support for webP image format. Using libwebp library
+  - Added in STB image Optimization workflow
 - GUI is done
 - Config and ini are done
 

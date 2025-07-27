@@ -323,7 +323,7 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
 
         if (g_config.convertToWebP)
         {
-            result = webp_encode_and_write(pathW, final_buf, newW, newH);
+            result = webp_encode_and_write(task->hwnd, pathW, final_buf, newW, newH);
         }
         else if (outExt && _wcsicmp(outExt, L".jpg") == 0)
         {

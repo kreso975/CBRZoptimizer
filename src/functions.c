@@ -411,6 +411,23 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     if (g_StopProcessing)
         return;
 
+    if (!g_config.runImageOptimizer && g_config.convertToWebP)
+    {
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"Converting images to WebP...");
+
+        if (!convert_images_to_webp(hwnd, extracted_dir))
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"❌ Failed to convert images.");
+        }
+        else
+        {
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"✅ Images converted to WebP.");
+        }
+    }
+
+    if (g_StopProcessing)
+        return;
+
     // Preserve only the cover image if enabled
     if (g_config.extractCover)
     {

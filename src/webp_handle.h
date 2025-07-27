@@ -13,6 +13,8 @@ uint8_t* webp_encode_image(const uint8_t* rgba, int width, int height, int strid
 uint8_t* webp_decode_image(const uint8_t* webp_data, size_t webp_size, int* width, int* height);
 
 
-BOOL webp_encode_and_write(const wchar_t *inputPath, const uint8_t *rgb_buf, int width, int height);
+BOOL webp_encode_and_write(HWND hwnd, const wchar_t *inputPath, const uint8_t *rgb_buf, int width, int height);
+
+BOOL convert_images_to_webp(HWND hwnd, const wchar_t* folder_path);
 
 #endif // WEBP_HANDLE_H

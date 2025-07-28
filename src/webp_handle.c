@@ -28,6 +28,63 @@ unsigned char* webp_decode_from_memory(const BYTE* buffer, DWORD size, int* widt
     return output;
 }
 
+BOOL EncodeImageToWebPMemory(HWND hwnd, const uint8_t *data, int width, int height, BOOL useRGBA, uint8_t **out_data, size_t *out_size)
+{
+    WebPConfig config;
+    if (!WebPConfigInit(&config))
+    {
+        DEBUG_PRINT(L"[WebP] ❌ Failed to init WebPConfig\n");
+        return FALSE;
+    }
+
+    config.quality = (float)_wtoi(g_config.WebPQuality);
+    config.method = _wtoi(g_config.WebPMethod);
+    config.lossless = g_config.WebPLossless;
+    config.thread_level = 1;
+    config.exact = 1;
+
+    WebPPicture pic;
+    if (!WebPPictureInit(&pic))
+    {
+        DEBUG_PRINT(L"[WebP] ❌ Failed to init WebPPicture\n");
+        return FALSE;
+    }
+
+    pic.width = width;
+    pic.height = height;
+    pic.use_argb = 1;
+
+    BOOL imported = useRGBA ? WebPPictureImportRGBA(&pic, data, width * 4) : WebPPictureImportRGB(&pic, data, width * 3);
+
+    if (!imported)
+    {
+        DEBUG_PRINT(L"[WebP] ❌ Failed to import image data\n");
+        WebPPictureFree(&pic);
+        return FALSE;
+    }
+
+    WebPMemoryWriter writer;
+    WebPMemoryWriterInit(&writer);
+    pic.writer = WebPMemoryWrite;
+    pic.custom_ptr = &writer;
+
+    if (!WebPEncode(&config, &pic))
+    {
+        wchar_t dbg[256];
+        swprintf(dbg, _countof(dbg), L"[WebP] ❌ Encoding failed (error code: %d)\n", pic.error_code);
+        DEBUG_PRINT(dbg);
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, dbg, L"");
+        WebPPictureFree(&pic);
+        return FALSE;
+    }
+
+    *out_data = writer.mem;
+    *out_size = writer.size;
+
+    WebPPictureFree(&pic);
+    return TRUE;
+}
+
 typedef struct {
     HWND hwnd;
     wchar_t image_path[MAX_PATH];
@@ -54,77 +111,17 @@ DWORD WINAPI ConvertToWebPThread(LPVOID lpParam)
         return 1;
     }
 
-    int quality = _wtoi(g_config.WebPQuality);
-    int method = _wtoi(g_config.WebPMethod);
-    BOOL lossless = g_config.WebPLossless;
-
-    DEBUG_PRINTF(L"[WebP] Encoding: %s | Quality=%d | Method=%d | Lossless=%d\n", full_path, quality, method, lossless);
+    DEBUG_PRINTF(L"[WebP] Encoding: %s | Quality=%d | Method=%d | Lossless=%d\n", 
+                 full_path, _wtoi(g_config.WebPQuality), _wtoi(g_config.WebPMethod), g_config.WebPLossless);
 
     uint8_t *webp_data = NULL;
     size_t webp_size = 0;
 
-    if (lossless)
+    if (!EncodeImageToWebPMemory(hwnd, img_data, width, height, TRUE, &webp_data, &webp_size))
     {
-        webp_size = WebPEncodeLosslessRGBA(img_data, width, height, width * 4, &webp_data);
-    }
-    else
-    {
-        WebPConfig config;
-        if (!WebPConfigInit(&config))
-        {
-            DEBUG_PRINT(L"[WebP] ❌ Failed to init WebPConfig\n");
-            stbi_image_free(img_data);
-            free(task);
-            return 1;
-        }
-
-        config.quality = (float)quality;
-        config.method = method;
-        config.lossless = 0;
-
-        WebPPicture pic;
-        if (!WebPPictureInit(&pic))
-        {
-            DEBUG_PRINT(L"[WebP] ❌ Failed to init WebPPicture\n");
-            stbi_image_free(img_data);
-            free(task);
-            return 1;
-        }
-
-        pic.width = width;
-        pic.height = height;
-        pic.use_argb = 1;
-
-        if (!WebPPictureImportRGBA(&pic, img_data, width * 4))
-        {
-            DEBUG_PRINT(L"[WebP] ❌ Failed to import RGBA\n");
-            WebPPictureFree(&pic);
-            stbi_image_free(img_data);
-            free(task);
-            return 1;
-        }
-
-        WebPMemoryWriter writer;
-        WebPMemoryWriterInit(&writer);
-        pic.writer = WebPMemoryWrite;
-        pic.custom_ptr = &writer;
-
-        if (!WebPEncode(&config, &pic))
-        {
-            wchar_t dbg[512];
-            swprintf(dbg, _countof(dbg), L"[WebP] ❌ Failed to encode: %s\n", full_path);
-            DEBUG_PRINT(dbg);
-            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, dbg, L"");
-            WebPPictureFree(&pic);
-            stbi_image_free(img_data);
-            free(task);
-            return 1;
-        }
-
-        webp_data = writer.mem;
-        webp_size = writer.size;
-
-        WebPPictureFree(&pic);
+        stbi_image_free(img_data);
+        free(task);
+        return 1;
     }
 
     stbi_image_free(img_data);
@@ -171,6 +168,7 @@ DWORD WINAPI ConvertToWebPThread(LPVOID lpParam)
     return 0;
 }
 
+
 static int webp_write_callback(const uint8_t* data, size_t data_size, const WebPPicture* const pic) {
     FILE* fp = (FILE*)pic->custom_ptr;
     return fwrite(data, 1, data_size, fp) == data_size;
@@ -178,9 +176,6 @@ static int webp_write_callback(const uint8_t* data, size_t data_size, const WebP
 
 BOOL webp_encode_and_write(HWND hwnd, const wchar_t *inputPath, const uint8_t *rgb_buf, int width, int height)
 {
-    WebPPicture pic;
-    WebPConfig config;
-
     wchar_t outputPath[MAX_PATH];
     wcsncpy_s(outputPath, MAX_PATH, inputPath, _TRUNCATE);
 
@@ -211,69 +206,34 @@ BOOL webp_encode_and_write(HWND hwnd, const wchar_t *inputPath, const uint8_t *r
 
     SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", fileName);
 
+    uint8_t *webp_data = NULL;
+    size_t webp_size = 0;
+
+    if (!EncodeImageToWebPMemory(hwnd, rgb_buf, width, height, FALSE, &webp_data, &webp_size))
+    {
+        return FALSE;
+    }
+
     FILE *outFile = _wfopen(outputPath, L"wb");
     if (!outFile)
     {
         DEBUG_PRINTF(L"[WEBP] Failed to open file for writing: %ls\n", outputPath);
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"❌ Cannot open output file.");
+        WebPFree(webp_data);
         return FALSE;
     }
 
-    if (!WebPPictureInit(&pic) || !WebPConfigInit(&config))
-    {
-        DEBUG_PRINT(L"[WEBP] Failed to initialize WebP structures.\n");
-        fclose(outFile);
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"❌ Init failed.");
-        return FALSE;
-    }
-
-    config.quality = (float)_wtoi(g_config.WebPQuality);
-    config.method = _wtoi(g_config.WebPMethod);
-    config.lossless = g_config.WebPLossless;
-
-    DEBUG_PRINTF(L"[WEBP] Config - Quality: %.2f | Method: %d | Lossless: %d\n",
-                 (double)config.quality, config.method, config.lossless);
-
-    pic.width = width;
-    pic.height = height;
-    pic.use_argb = 1;
-
-    DEBUG_PRINTF(L"[WEBP] Picture - Width: %d | Height: %d\n", width, height);
-
-    if (!WebPPictureImportRGB(&pic, rgb_buf, width * 3))
-    {
-        DEBUG_PRINT(L"[WEBP] Failed to import RGB buffer.\n");
-        WebPPictureFree(&pic);
-        fclose(outFile);
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"❌ Import failed.");
-        return FALSE;
-    }
-
-    pic.writer = webp_write_callback;
-    pic.custom_ptr = outFile;
-
-    BOOL success = WebPEncode(&config, &pic);
-    WebPPictureFree(&pic);
+    fwrite(webp_data, 1, webp_size, outFile);
     fclose(outFile);
+    WebPFree(webp_data);
 
-    if (success)
-    {
-        DEBUG_PRINTF(L"[WEBP] Successfully wrote WebP file: %ls\n", outputPath);
+    DEBUG_PRINTF(L"[WEBP] Successfully wrote WebP file: %ls\n", outputPath);
 
-        wchar_t status_msg[MAX_PATH + 64];
-        swprintf(status_msg, _countof(status_msg), L"✅ Converted: %ls", fileName);
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", status_msg);
-    }
-    else
-    {
-        DEBUG_PRINTF(L"[WEBP] Encoding failed with error code: %d\n", pic.error_code);
+    wchar_t status_msg[MAX_PATH + 64];
+    swprintf(status_msg, _countof(status_msg), L"✅ Converted: %ls", fileName);
+    SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", status_msg);
 
-        wchar_t status_msg[MAX_PATH + 64];
-        swprintf(status_msg, _countof(status_msg), L"❌ Failed: %ls", fileName);
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", status_msg);
-    }
-
-    return success;
+    return TRUE;
 }
 
 BOOL convert_images_to_webp(HWND hwnd, const wchar_t* folder_path)
@@ -307,8 +267,7 @@ BOOL convert_images_to_webp(HWND hwnd, const wchar_t* folder_path)
         const wchar_t* ext = wcsrchr(find_data.cFileName, L'.');
         if (!ext) continue;
 
-        if (_wcsicmp(ext, L".jpg") != 0 && _wcsicmp(ext, L".jpeg") != 0 &&
-            _wcsicmp(ext, L".png") != 0 && _wcsicmp(ext, L".bmp") != 0)
+        if (_wcsicmp(ext, L".jpg") != 0 && _wcsicmp(ext, L".jpeg") != 0 && _wcsicmp(ext, L".png") != 0 && _wcsicmp(ext, L".bmp") != 0)
             continue;
 
         if (g_StopProcessing)

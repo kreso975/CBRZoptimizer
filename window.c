@@ -664,7 +664,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
       // -- WebP settings -- 
       MoveWindow(hWebPSettingsGroup, rect.right - 360, 440, 350, 127, TRUE);
       MoveWindow(hWebPQualityLabel, rect.right - 350, 468, 100, 20, TRUE);
-      MoveWindow(hWebPQualityValue, rect.right - 250, 468, 20, 20, TRUE);
+      MoveWindow(hWebPQualityValue, rect.right - 250, 468, 30, 20, TRUE);
 
       MoveWindow(hWebPLossless, rect.right - 150, 466, 20, 20, TRUE);
       MoveWindow(hWebPLosslessLabel, rect.right - 130, 468, 100, 20, TRUE);

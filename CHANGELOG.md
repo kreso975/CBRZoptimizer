@@ -1,4 +1,11 @@
 # Changelog
+## [ongoing] – v1.2.1
+### Fixed
+- **WebP fixes**  
+   When Image Optimization is not selected - Lossless now usses Settings as well
+   Rewritten functions handling WebP to be more optimized
+
+
 ## [2025-07-28] – v1.2.0
 
 ### Added

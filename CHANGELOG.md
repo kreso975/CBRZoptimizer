@@ -1,5 +1,5 @@
 # Changelog
-## [ongoing] – v1.2.0
+## [2025-07-28] – v1.2.0
 
 ### Added
 - Support for webP image format. Using libwebp library

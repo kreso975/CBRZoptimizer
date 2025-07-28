@@ -36,28 +36,102 @@ typedef struct {
 
 DWORD WINAPI ConvertToWebPThread(LPVOID lpParam)
 {
-    WebPTask* task = (WebPTask*)lpParam;
-    wchar_t* full_path = task->image_path;
+    WebPTask *task = (WebPTask *)lpParam;
+    wchar_t *full_path = task->image_path;
     HWND hwnd = task->hwnd;
 
     char utf8_path[MAX_PATH];
-    if (WideCharToMultiByte(CP_UTF8, 0, full_path, -1, utf8_path, MAX_PATH, NULL, NULL) == 0) {
+    if (WideCharToMultiByte(CP_UTF8, 0, full_path, -1, utf8_path, MAX_PATH, NULL, NULL) == 0)
+    {
         free(task);
         return 1;
     }
 
     int width = 0, height = 0, channels = 0;
-    unsigned char* img_data = stbi_load(utf8_path, &width, &height, &channels, 4);
-    if (!img_data) {
+    unsigned char *img_data = stbi_load(utf8_path, &width, &height, &channels, 4);
+    if (!img_data)
+    {
         free(task);
         return 1;
     }
 
-    uint8_t* webp_data = NULL;
-    size_t webp_size = WebPEncodeRGBA(img_data, width, height, width * 4, 75, &webp_data);
+    int quality = _wtoi(g_config.WebPQuality);
+    int method = _wtoi(g_config.WebPMethod);
+    BOOL lossless = g_config.WebPLossless;
+
+    DEBUG_PRINTF(L"[WebP] Encoding: %s | Quality=%d | Method=%d | Lossless=%d\n", full_path, quality, method, lossless);
+
+    uint8_t *webp_data = NULL;
+    size_t webp_size = 0;
+
+    if (lossless)
+    {
+        webp_size = WebPEncodeLosslessRGBA(img_data, width, height, width * 4, &webp_data);
+    }
+    else
+    {
+        WebPConfig config;
+        if (!WebPConfigInit(&config))
+        {
+            DEBUG_PRINT(L"[WebP] ❌ Failed to init WebPConfig\n");
+            stbi_image_free(img_data);
+            free(task);
+            return 1;
+        }
+
+        config.quality = (float)quality;
+        config.method = method;
+        config.lossless = 0;
+
+        WebPPicture pic;
+        if (!WebPPictureInit(&pic))
+        {
+            DEBUG_PRINT(L"[WebP] ❌ Failed to init WebPPicture\n");
+            stbi_image_free(img_data);
+            free(task);
+            return 1;
+        }
+
+        pic.width = width;
+        pic.height = height;
+        pic.use_argb = 1;
+
+        if (!WebPPictureImportRGBA(&pic, img_data, width * 4))
+        {
+            DEBUG_PRINT(L"[WebP] ❌ Failed to import RGBA\n");
+            WebPPictureFree(&pic);
+            stbi_image_free(img_data);
+            free(task);
+            return 1;
+        }
+
+        WebPMemoryWriter writer;
+        WebPMemoryWriterInit(&writer);
+        pic.writer = WebPMemoryWrite;
+        pic.custom_ptr = &writer;
+
+        if (!WebPEncode(&config, &pic))
+        {
+            wchar_t dbg[512];
+            swprintf(dbg, _countof(dbg), L"[WebP] ❌ Failed to encode: %s\n", full_path);
+            DEBUG_PRINT(dbg);
+            SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, dbg, L"");
+            WebPPictureFree(&pic);
+            stbi_image_free(img_data);
+            free(task);
+            return 1;
+        }
+
+        webp_data = writer.mem;
+        webp_size = writer.size;
+
+        WebPPictureFree(&pic);
+    }
+
     stbi_image_free(img_data);
 
-    if (webp_size == 0 || webp_data == NULL) {
+    if (webp_size == 0 || webp_data == NULL)
+    {
         wchar_t dbg[512];
         swprintf(dbg, _countof(dbg), L"[WebP] ❌ Failed to encode: %s\n", full_path);
         DEBUG_PRINT(dbg);
@@ -68,12 +142,14 @@ DWORD WINAPI ConvertToWebPThread(LPVOID lpParam)
 
     wchar_t output_path[MAX_PATH];
     wcscpy(output_path, full_path);
-    wchar_t* dot = wcsrchr(output_path, L'.');
-    if (dot) *dot = 0;
+    wchar_t *dot = wcsrchr(output_path, L'.');
+    if (dot)
+        *dot = 0;
     wcscat(output_path, L".webp");
 
-    FILE* fp = _wfopen(output_path, L"wb");
-    if (fp) {
+    FILE *fp = _wfopen(output_path, L"wb");
+    if (fp)
+    {
         fwrite(webp_data, 1, webp_size, fp);
         fclose(fp);
         DeleteFileW(full_path);
@@ -82,7 +158,9 @@ DWORD WINAPI ConvertToWebPThread(LPVOID lpParam)
         swprintf(dbg, _countof(dbg), L"[WebP] ✅ Converted: %s → .webp\n", full_path);
         DEBUG_PRINT(dbg);
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, dbg, L"");
-    } else {
+    }
+    else
+    {
         wchar_t dbg[512];
         swprintf(dbg, _countof(dbg), L"[WebP] ❌ Failed to write: %s\n", output_path);
         DEBUG_PRINT(dbg);

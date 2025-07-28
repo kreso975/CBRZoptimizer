@@ -32,7 +32,7 @@ LabelCheckboxPair controls[] = {
     {L"Keep Aspect Ratio", L"IMAGE_KEEP_ASPECT_RATIO", L"Image", 530, &hImageKeepAspectRatio, &hImageKeepAspectRatioLabel, &g_config.keepAspectRatio, TRUE},
     {L"Allow upscaling", L"IMAGE_ALLOW_UPSCALING", L"Image", 540, &hImageAllowUpscaling, &hImageAllowUpscalingLabel, &g_config.allowUpscaling, FALSE},
     {L"WebP Lossless", L"WEBP_LOSSLESS", L"WebP", 550, &hWebPLossless, &hWebPLosslessLabel, &g_config.WebPLossless, FALSE},
-    {L"WebP convert", L"OUTPUT_WEBP", L"Output", 560, &hWebPConvert, &hWebPConvertLabel, &g_config.convertToWebP, TRUE}
+    {L"WebP format", L"OUTPUT_WEBP", L"Output", 560, &hWebPConvert, &hWebPConvertLabel, &g_config.convertToWebP, TRUE}
    };
 
 const size_t controlCount = sizeof(controls) / sizeof(controls[0]);

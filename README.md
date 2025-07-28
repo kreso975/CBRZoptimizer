@@ -13,6 +13,7 @@
 ## ✨ Features
 
 - 📦 Extract `.cbz`, `.zip`, `.cbr`, `.rar` archives
+- Support for WebP image format
 - 📁 Folder support:
   - Convert entire folders of images into comic archives (`.cbz`, `.cbr`)
   - Optimize folders of images without archiving
@@ -48,7 +49,7 @@
    - [WinRAR](https://www.win-rar.com/) for `.cbr`, `.rar` support
    - [7-Zip CLI](https://www.7-zip.org/) for `.zip`, `.cbz` extraction and compression
    - [MuPDF CLI](https://mupdf.com/) for PDF creation from archives and PDF extraction
-   - [ImageMagick CLI](https://imagemagick.org/script/download.php) for advanced image optimization
+   - [ImageMagick CLI](https://imagemagick.org/script/download.php) for alternative image optimization
 
 ---
 
@@ -57,8 +58,8 @@
 - Windows 10 or newer
 - Optional: [WinRAR](https://www.win-rar.com/) for `.cbr`, `.rar` support
 - Optional: [7-Zip CLI](https://www.7-zip.org/) for `.zip`, `.cbz` support
-- Optional: [MuPDF CLI](https://mupdf.com/) for `.pdf` generation
-- Optional: [ImageMagick CLI](https://imagemagick.org/script/download.php) for advanced image optimization
+- Optional: [MuPDF CLI](https://mupdf.com/) for `.pdf` generation - use muttol.exe
+- Optional: [ImageMagick CLI](https://imagemagick.org/script/download.php) for alternative image optimization
 
 ---
 

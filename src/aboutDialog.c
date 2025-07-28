@@ -71,8 +71,7 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
    {
    case WM_CREATE:
    {
-      hIcon = (HICON)LoadImageW( GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON,
-         64, 64, LR_DEFAULTCOLOR | LR_SHARED);
+      hIcon = (HICON)LoadImageW( GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON, 64, 64, LR_DEFAULTCOLOR | LR_SHARED);
 
       if (hIcon)
       {
@@ -103,8 +102,7 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
       SendMessageW(hwndAppVersionStatic, WM_SETFONT, (WPARAM)hAboutFont, TRUE);
       SendMessageW(hwndIconsLink, WM_SETFONT, (WPARAM)hAboutFont, TRUE);
 
-      CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                    110, 125, 80, 25, hWnd, (HMENU)IDC_ABOUT_OK,
+      CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 110, 125, 80, 25, hWnd, (HMENU)IDC_ABOUT_OK,
                     (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
       break;
    }
@@ -122,6 +120,46 @@ LRESULT CALLBACK AboutWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
          NMLINK *link = (NMLINK *)lParam;
          ShellExecuteW(NULL, L"open", link->item.szUrl, NULL, NULL, SW_SHOWNORMAL);
       }
+      break;
+   }
+
+   case WM_SETCURSOR:
+   {
+      POINT pt;
+      GetCursorPos(&pt);
+      ScreenToClient(hWnd, &pt);
+
+      HWND hwndChild = GetWindow(hWnd, GW_CHILD);
+      BOOL overLink = FALSE;
+
+      while (hwndChild)
+      {
+         wchar_t className[32];
+         GetClassNameW(hwndChild, className, 32);
+
+         if (wcscmp(className, WC_LINK) == 0)
+         {
+            RECT rc;
+            GetWindowRect(hwndChild, &rc);
+            ScreenToClient(hWnd, (LPPOINT)&rc.left);
+            ScreenToClient(hWnd, (LPPOINT)&rc.right);
+
+            if (PtInRect(&rc, pt))
+            {
+               overLink = TRUE;
+               break;
+            }
+         }
+
+         hwndChild = GetWindow(hwndChild, GW_HWNDNEXT);
+      }
+
+      if (!overLink)
+      {
+         SetCursor(LoadCursor(NULL, IDC_ARROW));
+         return TRUE;
+      }
+
       break;
    }
 

@@ -150,7 +150,10 @@ GUIHandleEntry groupElements[] = {
     {L"hOutputRunCompressor", L"OutputGroup", &hOutputRunCompressor},
     {L"hOutputRunCompressorLabel", L"OutputGroup", &hOutputRunCompressorLabel},
     {L"hOutputExtractCover", L"OutputGroup", &hOutputExtractCover},
-    {L"hOutputExtractCoverLabel", L"OutputGroup", &hOutputExtractCoverLabel}};
+    {L"hOutputExtractCoverLabel", L"OutputGroup", &hOutputExtractCoverLabel},
+    {L"hWebPConvert", L"OutputGroup", &hWebPConvert},
+    {L"hWebPConvertLabel", L"OutputGroup", &hWebPConvertLabel}
+   };
 
 const size_t groupElementsCount = sizeof(groupElements) / sizeof(groupElements[0]);
 

@@ -52,27 +52,50 @@ LRESULT CALLBACK InstructionsWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
 
       const wchar_t *helpText =
           L"⚙️ Built-in Features:\r\n"
-          L"- You can extract .cbr and .cbz comic archives directly.\r\n"
-          L"- Images inside archives can be optimized using the built-in STB library.\r\n"
-          L"- After optimization, images are repacked into a clean .cbz archive.\r\n"
-          L"- Drag and drop is supported — just drop files or folders into the app window.\r\n\r\n"
+          L"- Automatically extract .cbr and .cbz comic archives.\r\n"
+          L"- Optimize images inside archives using the built-in STB library.\r\n"
+          L"- Repack optimized images into clean .cbz archives.\r\n"
+          L"- Drag and drop support: drop files or folders directly into the app window.\r\n\r\n"
+
+          L"☢️ Image Optimization:\r\n"
+          L"- Images can be resized, compressed, and optionally upscaled.\r\n"
+          L"- Recommended setup: Quality 30, Max Height 1600px, Upscale enabled.\r\n"
+          L"- This setup balances file size and readability for most comic pages.\r\n"
+          L"- Upscaling ensures small images are resized for consistent viewing.\r\n\r\n"
+
+          L"⛺ WebP Conversion:\r\n"
+          L"- Convert images to WebP format for modern compression and reduced file size.\r\n"
+          L"- Supports both lossy and lossless modes — configurable in settings.\r\n"
+          L"- Adjustable parameters:\r\n"
+          L"   • Quality (0-100): Controls visual fidelity vs. file size.\r\n"
+          L"   • Method (0-6): Higher values improve compression but take longer.\r\n"
+          L"   • Lossless: Enables pixel-perfect compression (larger files).\r\n"
+          L"- WebP conversion is applied during optimization and repacking.\r\n\r\n"
+
           L"⚡️ Optional External Tools:\r\n"
-          L"- WinRAR: https://www.win-rar.com — for handling .rar and .cbr files.\r\n"
+          L"- WinRAR: https://www.win-rar.com — required only for writing .cbr files.\r\n"
+          L"          Reading .cbr is fully supported natively.\r\n"
           L"- 7-Zip: https://www.7-zip.org — alternative archive extraction.\r\n"
           L"- MuPDF: https://mupdf.com — required for converting to and from PDF.\r\n"
-          L"- ImageMagick: https://imagemagick.org — advanced image optimization.\r\n\r\n"
+          L"- ImageMagick: https://imagemagick.org — optional external image processing.\r\n\r\n"
+
           L"✅ Supported Formats:\r\n"
-          L"- The app works with .cbz, .cbr, .zip, .rar, and .pdf files.\r\n\r\n"
+          L"- The app works with .cbz, .cbr, .zip, .rar, and .pdf files.\r\n"
+          L"- Image formats supported: .jpg, .jpeg, .png, .bmp, and .webp.\r\n\r\n"
+
           L"✨ Features:\r\n"
           L"- Convert comic archives to PDF (requires MuPDF).\r\n"
           L"- Convert PDF documents back into .cbz or .cbr comic archives.\r\n"
-          L"- Optimize image files using either STB or ImageMagick.\r\n\r\n"
+          L"- Optimize image files using STB, WebP, or ImageMagick.\r\n"
+          L"- Automatically skip already optimized or converted files.\r\n\r\n"
+
           L"✍ How to Use:\r\n"
           L"1. Select one or more input files or folders.\r\n"
           L"2. Choose your desired output format: CBZ, CBR, or PDF.\r\n"
-          L"3. Click the Optimize button and let the tool do the rest.\r\n\r\n"
-          L"ℹ️ For more info and updates: https://github.com/kreso975/CBRZoptimizer";
+          L"3. Configure optimization settings (quality, resize, WebP).\r\n"
+          L"4. Click the Optimize button and let the tool do the rest.\r\n\r\n"
 
+          L"ℹ️ For more info and updates: https://github.com/kreso975/CBRZoptimizer";
       SetWindowTextW(hRichEdit, helpText);
 
       // Apply font to entire body

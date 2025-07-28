@@ -17,21 +17,18 @@ BOOL pdf_extract_images(HWND hwnd, const wchar_t *pdf_path, const wchar_t *outpu
     DEBUG_PRINTF(L"[PDF] Starting extraction: %s → %s\n", pdf_path, output_folder);
 
     // Validate mutool path from config
-    if (wcslen(g_config.MUTOOL_PATH) == 0)
-    {
-        DEBUG_PRINT(L"[PDF] MUTOOL_PATH is not set.\n");
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ MUTOOL_PATH is not set.");
-        MessageBeep(MB_ICONERROR);
-        MessageBoxCentered(hwnd, L"MUTOOL_PATH is not set in config.ini", L"Configuration Error", MB_OK | MB_ICONERROR);
-        return FALSE;
-    }
-
-    DWORD attrib = GetFileAttributesW(g_config.MUTOOL_PATH);
-    if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY))
+    if (!isValidMuTool())
     {
         DEBUG_PRINTF(L"[PDF] Invalid mutool path: %s\n", g_config.MUTOOL_PATH);
+
+        const wchar_t *msg = wcslen(g_config.MUTOOL_PATH) == 0 ? L"MUTOOL_PATH is not set in config.ini"
+                                                               : L"The specified MUTOOL_PATH does not exist or is not a file.";
+
+        const wchar_t *status = wcslen(g_config.MUTOOL_PATH) == 0 ? L"❌ MUTOOL_PATH is not set." : L"❌ MUTOOL_PATH is invalid.";
+
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", status);
         MessageBeep(MB_ICONERROR);
-        MessageBoxCentered(hwnd, L"The specified MUTOOL_PATH does not exist or is not a file.", L"Invalid Path", MB_OK | MB_ICONERROR);
+        MessageBoxCentered(hwnd, msg, L"Configuration Error", MB_OK | MB_ICONERROR);
         return FALSE;
     }
 
@@ -55,8 +52,7 @@ BOOL pdf_extract_images(HWND hwnd, const wchar_t *pdf_path, const wchar_t *outpu
 
     // Build command line
     wchar_t command[1024];
-    swprintf(command, 1024, L"\"%s\" draw -o \"%s\" -r 150 \"%s\"",
-             g_config.MUTOOL_PATH, output_pattern, pdf_path);
+    swprintf(command, 1024, L"\"%s\" draw -o \"%s\" -r 150 \"%s\"", g_config.MUTOOL_PATH, output_pattern, pdf_path);
 
     DEBUG_PRINTF(L"[PDF] Command: %s\n", command);
 
@@ -138,7 +134,7 @@ BOOL pdf_create_from_images(HWND hwnd, const wchar_t *image_folder, const wchar_
     swprintf_s(pdf_file, MAX_PATH, L"%s.pdf", cleanName);
     DEBUG_PRINTF(L"[DEBUG] PDF target filename: %s\n", pdf_file);
 
-    if (!is_valid_mutool())
+    if (!isValidMuTool())
     {
         DEBUG_PRINT(L"[DEBUG] MuPDF path invalid\n");
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ MUTOOL_PATH is invalid or not set.");

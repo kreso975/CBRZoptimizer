@@ -108,7 +108,7 @@ ArchiveType detect_archive_type(const wchar_t *file_path)
 //   mode==1 → extract CBR/RAR (accept winrar.exe OR unrar.exe)
 //   mode==2 → unzip only     (accept ONLY winrar.exe)
 //   mode==3 → compress to RAR(accept ONLY winrar.exe)
-BOOL is_valid_winrar(int mode)
+BOOL isValidWinRAR(int mode)
 {
     // 1) Path must exist
     if (GetFileAttributesW(g_config.WINRAR_PATH) == INVALID_FILE_ATTRIBUTES)
@@ -133,15 +133,13 @@ BOOL is_valid_winrar(int mode)
     }
 }
 
-BOOL is_valid_mutool()
+BOOL isValidMuTool()
 {
     const wchar_t *exe = wcsrchr(g_config.MUTOOL_PATH, L'\\');
     exe = exe ? exe + 1 : g_config.MUTOOL_PATH;
 
-    return wcslen(g_config.MUTOOL_PATH) > 0 &&
-           GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
-           !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY) &&
-           _wcsicmp(exe, L"mutool.exe") == 0;
+    return wcslen(g_config.MUTOOL_PATH) > 0 && GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
+           !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY) && _wcsicmp(exe, L"mutool.exe") == 0;
 }
 
 void get_clean_name(wchar_t *path)
@@ -324,12 +322,12 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     if (type == ARCHIVE_CBR)
     {
         // Case #1: CBR/RAR extraction
-        extracted = is_valid_winrar(1) ? extract_cbr(hwnd, file_path, extracted_dir) : extract_unrar_dll(hwnd, file_path, extracted_dir);
+        extracted = isValidWinRAR(1) ? extract_cbr(hwnd, file_path, extracted_dir) : extract_unrar_dll(hwnd, file_path, extracted_dir);
     }
     else if (type == ARCHIVE_CBZ)
     {
         // Case #2: ZIP extraction / we need winrar.exe to do it
-        BOOL hasWinRAR = is_valid_winrar(2);
+        BOOL hasWinRAR = isValidWinRAR(2);
 
         BOOL has7zip = wcslen(g_config.SEVEN_ZIP_PATH) > 0 &&
                        GetFileAttributesW(g_config.SEVEN_ZIP_PATH) != INVALID_FILE_ATTRIBUTES &&
@@ -452,12 +450,12 @@ void process_file(HWND hwnd, const wchar_t *file_path)
         if ((_wcsicmp(selectedText, L"CBR") == 0) ||
             (_wcsicmp(selectedText, L"Keep original") == 0 && type == ARCHIVE_CBR))
         {
-            useCBR = is_valid_winrar(3);
+            useCBR = isValidWinRAR(3);
         }
 
         if (usePDF)
         {
-            if (!is_valid_mutool())
+            if (!isValidMuTool())
             {
                 SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"PDF: ", L"❌ MuPDF not available.");
                 return;
@@ -488,21 +486,16 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     // Cleanup if selected
     if (!g_config.keepExtracted)
     {
-        // 🧪 Confirm we're entering the block
-        //MessageBox(hwnd, L"🧹 Cleanup triggered: keepExtracted is FALSE", L"Debug", MB_OK | MB_ICONINFORMATION);
-
         DWORD attr = GetFileAttributesW(extracted_dir);
         if (attr == INVALID_FILE_ATTRIBUTES)
         {
             wchar_t msg[MAX_PATH + 64];
             swprintf(msg, MAX_PATH + 64, L"❌ Folder does not exist:\n%s", extracted_dir);
-            //MessageBox(hwnd, msg, L"Delete Folder", MB_OK | MB_ICONERROR);
         }
         else if (!(attr & FILE_ATTRIBUTE_DIRECTORY))
         {
             wchar_t msg[MAX_PATH + 64];
             swprintf(msg, MAX_PATH + 64, L"⚠️ Path is not a directory:\n%s", extracted_dir);
-            //MessageBox(hwnd, msg, L"Delete Folder", MB_OK | MB_ICONWARNING);
         }
         else
         {
@@ -512,13 +505,11 @@ void process_file(HWND hwnd, const wchar_t *file_path)
             {
                 wchar_t msg[MAX_PATH + 64];
                 swprintf(msg, MAX_PATH + 64, L"❌ Failed to delete folder:\n%s", extracted_dir);
-                //MessageBox(hwnd, msg, L"Delete Folder", MB_OK | MB_ICONERROR);
             }
             else
             {
                 wchar_t msg[MAX_PATH + 64];
                 swprintf(msg, MAX_PATH + 64, L"✅ Folder deleted:\n%s", extracted_dir);
-                //MessageBox(hwnd, msg, L"Delete Folder", MB_OK | MB_ICONINFORMATION);
             }
         }
     }
@@ -572,17 +563,15 @@ void BrowseFolder(HWND hwnd, wchar_t *targetPath)
         return;
 
     // Create the FileOpenDialog object
-    hr = CoCreateInstance(&CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER,
-                          &IID_IFileDialog, (void **)&pfd);
+    hr = CoCreateInstance(&CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, &IID_IFileDialog, (void **)&pfd);
+
     if (SUCCEEDED(hr))
     {
         // Set the options to pick folders
         DWORD options = 0;
         hr = pfd->lpVtbl->GetOptions(pfd, &options);
         if (SUCCEEDED(hr))
-        {
             pfd->lpVtbl->SetOptions(pfd, options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
-        }
 
         // Show the dialog
         hr = pfd->lpVtbl->Show(pfd, hwnd);
@@ -618,8 +607,8 @@ void BrowseFile(HWND hwnd, wchar_t *targetPath)
     if (FAILED(hr))
         return;
 
-    hr = CoCreateInstance(&CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER,
-                          &IID_IFileDialog, (void **)&pfd);
+    hr = CoCreateInstance(&CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, &IID_IFileDialog, (void **)&pfd);
+
     if (SUCCEEDED(hr))
     {
         // Set file type filters
@@ -661,17 +650,11 @@ void OpenFileDialog(HWND hwnd, HWND hListBox)
 
     // Build dynamic filter
     wcscpy(filter, L"Comic & Archive Files (*.cbr;*.cbz;*.rar;*.zip");
-    if (wcslen(g_config.MUTOOL_PATH) > 0 && GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
-        !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-    {
+    if (isValidMuTool())
         wcscat(filter, L";*.pdf");
-    }
     wcscat(filter, L")\0*.cbr;*.cbz;*.rar;*.zip");
-    if (wcslen(g_config.MUTOOL_PATH) > 0 && GetFileAttributesW(g_config.MUTOOL_PATH) != INVALID_FILE_ATTRIBUTES &&
-        !(GetFileAttributesW(g_config.MUTOOL_PATH) & FILE_ATTRIBUTE_DIRECTORY))
-    {
+    if (isValidMuTool())
         wcscat(filter, L";*.pdf");
-    }
     wcscat(filter, L"\0All Files\0*.*\0");
 
     ZeroMemory(&ofn, sizeof(ofn));

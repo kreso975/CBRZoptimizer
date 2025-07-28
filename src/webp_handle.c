@@ -6,7 +6,6 @@
 #include <string.h>
 #include "stb_image.h"
 
-
 #include "functions.h"
 #include "gui.h"
 #include "webp_handle.h"

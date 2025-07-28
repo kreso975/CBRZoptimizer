@@ -384,19 +384,16 @@ void RemoveSelectedItems(HWND hListBox)
 
 void update_output_type_dropdown()
 {
-   BOOL hasWinRAR = is_valid_winrar(3); // Mode 3 = compression
-   BOOL hasMuPDF = is_valid_mutool();
-
    SendMessageW(hOutputType, CB_RESETCONTENT, 0, 0);
    SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBZ");
 
-   if (hasWinRAR)
+   if (isValidWinRAR(3)) // Mode 3 = compression
    {
       SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"Keep original");
       SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"CBR");
    }
 
-   if (hasMuPDF)
+   if (isValidMuTool())
       SendMessageW(hOutputType, CB_ADDSTRING, 0, (LPARAM)L"PDF");
 
    // Default selection

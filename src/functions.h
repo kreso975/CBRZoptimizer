@@ -37,8 +37,8 @@ extern const size_t g_skipListCount;
 
 BOOL should_skip_file(const wchar_t *filename);
 
-BOOL is_valid_winrar(int mode);
-BOOL is_valid_mutool();
+BOOL isValidWinRAR(int mode);
+BOOL isValidMuTool();
 void get_clean_name(wchar_t *path);
 BOOL safe_decode_filename(const char *input, wchar_t *output, int fallbackIndex);
 

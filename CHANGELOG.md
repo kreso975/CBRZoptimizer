@@ -3,8 +3,10 @@
 
 ### Added
 - Support for webP image format. Using libwebp library
-  - Added in STB image Optimization workflow
-  - Added when Image Optimization is not selected
+  - Added in STB image Optimization workflow - works fast because of STB multithread
+  - Added when Image Optimization is not selected - Works in multithread
+  - Added to ImageMagick workflow
+  - Added to Cover Extract workflow
 - GUI is done
 - Config and ini are done
 

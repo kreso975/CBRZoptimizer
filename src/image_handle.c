@@ -9,6 +9,8 @@
 #include <direct.h>
 #include <wchar.h>
 
+#include <webp/decode.h>
+
 #include "image_handle.h"
 #include "webp_handle.h"
 #include "gui.h"
@@ -45,6 +47,23 @@ BOOL is_image_file(const wchar_t *filename)
            _wcsicmp(ext, L".png") == 0 || _wcsicmp(ext, L".bmp") == 0 ||
            _wcsicmp(ext, L".webp") == 0 || _wcsicmp(ext, L".gif") == 0;
 }
+
+BOOL IsWebPImage(const BYTE *buffer, DWORD size)
+{
+    if (!buffer || size < 12)
+        return FALSE;
+
+    // Check for "RIFF" at offset 0
+    if (memcmp(buffer, "RIFF", 4) != 0)
+        return FALSE;
+
+    // Check for "WEBP" at offset 8
+    if (memcmp(buffer + 8, "WEBP", 4) != 0)
+        return FALSE;
+
+    return TRUE;
+}
+
 
 BOOL preserve_only_cover_image(const wchar_t *folderPath)
 {
@@ -204,9 +223,23 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     ReadFile(hFile, fileBuf, fileSize, &bytesRead, NULL);
     CloseHandle(hFile);
 
-    // 2) Decode with STB
-    int w, h, c;
-    unsigned char *input = stbi_load_from_memory(fileBuf, (int)fileSize, &w, &h, &c, 3);
+    BOOL isWebP = FALSE;
+    isWebP = IsWebPImage(fileBuf, fileSize);
+
+    // 2) Decode with STB or WebP
+    int w = 0, h = 0, c = 0;
+    unsigned char *input = NULL;
+
+    if (isWebP)
+    {
+        input = webp_decode_from_memory(fileBuf, fileSize, &w, &h, &c);
+    }
+    else
+    {
+        input = stbi_load_from_memory(fileBuf, (int)fileSize, &w, &h, &c, 3);
+        c = 3; // ✅ STB won't update this when forcing 3 channels
+    }
+
     free(fileBuf);
 
     if (!input)
@@ -216,20 +249,22 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
         return 1;
     }
 
-    // 3) Build output path (.bmp → .jpg)
+    // 3) Build output path (.bmp/.png → .jpg or .webp)
     wchar_t outPath[MAX_PATH];
     wcscpy_s(outPath, MAX_PATH, pathW);
 
     const wchar_t *ext = PathFindExtensionW(pathW);
-    BOOL isBMP = (ext && _wcsnicmp(ext, L".bmp", 4) == 0);
-    BOOL isPNG = (ext && _wcsnicmp(ext, L".png", 4) == 0);
+    BOOL isBMP = (ext && _wcsicmp(ext, L".bmp") == 0);
+    BOOL isPNG = (ext && _wcsicmp(ext, L".png") == 0);
 
     if (isBMP || isPNG)
     {
         wchar_t *dot = PathFindExtensionW(outPath);
         if (dot && *dot)
         {
-            wcscpy_s(dot, (rsize_t)(MAX_PATH - (dot - outPath)), L".jpg");
+            const wchar_t *newExt = g_config.convertToWebP ? L".webp" : L".jpg";
+            wcscpy_s(dot, (rsize_t)(MAX_PATH - (dot - outPath)), newExt);
+
             DEBUG_PRINTF(L"[STB] 🖼 %s detected — remapped to: %ls\n", isBMP ? "BMP" : "PNG", outPath);
         }
     }
@@ -315,51 +350,66 @@ DWORD WINAPI OptimizeImageThread(LPVOID lpParam)
     }
 
     // 6) Write output
+    if (isWebP && !g_config.convertToWebP)
+    {
+        wchar_t *dot = PathFindExtensionW(outPath);
+        if (dot && *dot)
+        {
+            wcscpy_s(dot, (rsize_t)(MAX_PATH - (dot - outPath)), L".jpg");
+            DEBUG_PRINTF(L"[STB] 🖼 Renamed .webp to .jpg for output: %ls\n", outPath);
+        }
+    }
+
     int result = 0;
-    FILE *fp = _wfopen(outPath, L"wb");
-    if (fp)
+    if (g_config.convertToWebP)
     {
-        DEBUG_PRINTF(L"[STB] 💾 Saving to %ls\n", outPath);
+        result = webp_encode_and_write(task->hwnd, pathW, final_buf, newW, newH);
+    }
+    else
+    {
+        FILE *fp = _wfopen(outPath, L"wb");
+        if (fp)
+        {
+            DEBUG_PRINTF(L"[STB] 💾 Saving to %ls\n", outPath);
 
-        if (g_config.convertToWebP)
-        {
-            result = webp_encode_and_write(task->hwnd, pathW, final_buf, newW, newH);
-        }
-        else if (outExt && _wcsicmp(outExt, L".jpg") == 0)
-        {
-            result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, final_buf, _wtoi(g_config.IMAGE_QUALITY));
-        }
-        else if (outExt && _wcsicmp(outExt, L".png") == 0)
-        {
-            result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, final_buf, newW * 3);
-        }
+            if (outExt && (_wcsicmp(outExt, L".jpg") == 0 || _wcsicmp(outExt, L".webp") == 0))
+                result = stbi_write_jpg_to_func(stb_write_func, fp, newW, newH, 3, final_buf, _wtoi(g_config.IMAGE_QUALITY));
+            else if (outExt && _wcsicmp(outExt, L".png") == 0)
+                result = stbi_write_png_to_func(stb_write_func, fp, newW, newH, 3, final_buf, newW * 3);
 
-        fclose(fp);
+            fclose(fp);
+        }
     }
 
-    // 7) Delete .bmp if converted
-    if (result && (isBMP || isPNG))
+    // 7) Delete .bmp if converted// 8) Delete .jpg if converted to .webp but if original was .webp do not delete its working file now
+    if (result)
     {
-        if (DeleteFileW(pathW))
-            DEBUG_PRINTF(L"[STB] 🧹 Deleted original %s: %ls\n", isBMP ? "BMP" : "PNG", pathW);
-        else
-            DEBUG_PRINTF(L"[STB] ⚠ Failed to delete %s: %ls (Error: %lu)\n", isBMP ? "BMP" : "PNG", pathW, GetLastError());
-    }
+        const wchar_t *fileType = NULL;
 
-    // 8) Delete .jpg if converted to .webp
-    if (result && g_config.convertToWebP)
-    {
-        if (DeleteFileW(pathW))
-            DEBUG_PRINTF(L"[STB] 🧹 Deleted intermediate JPG: %ls\n", pathW);
-        else
-            DEBUG_PRINTF(L"[STB] ⚠ Failed to delete intermediate JPG: %ls (Error: %lu)\n", pathW, GetLastError());
+        if (isBMP) fileType = L"BMP";
+        else if (isPNG) fileType = L"PNG";
+        else if (g_config.convertToWebP && !isWebP) fileType = L"intermediate JPG";
+        else if (!g_config.convertToWebP && isWebP) fileType = L"original WebP";
+
+        if (fileType)
+        {
+            if (DeleteFileW(pathW))
+                DEBUG_PRINTF(L"[STB] 🧹 Deleted %ls: %ls\n", fileType, pathW);
+            else
+                DEBUG_PRINTF(L"[STB] ⚠ Failed to delete %ls: %ls (Error: %lu)\n", fileType, pathW, GetLastError());
+        }
     }
 
     // 9) Cleanup
     if (resized)
         free(resized);
     else
-        stbi_image_free(input);
+    {
+        if (isWebP)
+            WebPFree(input);
+        else
+            stbi_image_free(input);
+    }
 
     SendStatus(task->hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", result ? L"✔ Image optimized and saved." : L"⚠ Failed to write image.");
 
@@ -378,11 +428,10 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
     DWORD numCPU = sysinfo.dwNumberOfProcessors;
     DWORD max_threads = max(1, min(numCPU * 2, 64));
 
-    const wchar_t *exts[] = {L"jpg", L"png", L"bmp"};
     HANDLE *threads = malloc(sizeof(HANDLE) * max_threads);
     int thread_count = 0;
 
-    wchar_t search_path[MAX_PATH], image_path[MAX_PATH];
+    wchar_t image_path[MAX_PATH];
 
     int target_width = _wtoi(g_config.IMAGE_SIZE_WIDTH);
     int target_height = _wtoi(g_config.IMAGE_SIZE_HEIGHT);
@@ -395,15 +444,14 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
              g_config.resizeTo, target_width, target_height, keep_aspect, allow_upscale);
     DEBUG_PRINT(dbg);
 
-    for (size_t i = 0; i < ARRAYSIZE(exts); i++)
+    // Scan all files in folder
+    wchar_t search_path[MAX_PATH];
+    swprintf(search_path, MAX_PATH, L"%s\\*.*", folder);
+
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileW(search_path, &ffd);
+    if (hFind != INVALID_HANDLE_VALUE)
     {
-        swprintf(search_path, MAX_PATH, L"%s\\*.%s", folder, exts[i]);
-
-        WIN32_FIND_DATAW ffd;
-        HANDLE hFind = FindFirstFileW(search_path, &ffd);
-        if (hFind == INVALID_HANDLE_VALUE)
-            continue;
-
         do
         {
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
@@ -411,6 +459,9 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 
             if (g_StopProcessing)
                 break;
+
+            if (!is_image_file(ffd.cFileName))
+                continue;
 
             swprintf(image_path, MAX_PATH, L"%s\\%s", folder, ffd.cFileName);
 
@@ -438,8 +489,6 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
         } while (FindNextFileW(hFind, &ffd));
 
         FindClose(hFind);
-        if (g_StopProcessing)
-            break;
     }
 
     if (thread_count > 0)
@@ -452,7 +501,7 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
     free(threads);
 
     if (!g_StopProcessing)
-        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"✅ All formats processed.");
+        SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"✅ All images processed.");
     else
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"STB fallback: ", L"🛑 Processing canceled.");
 
@@ -463,7 +512,6 @@ BOOL fallback_optimize_images(HWND hwnd, const wchar_t *folder)
 BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
 {
     wchar_t command[MAX_PATH * 2], buffer[4096];
-
     DWORD bytesRead;
     HANDLE hReadPipe, hWritePipe;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
@@ -481,6 +529,7 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
         return fallback_optimize_images(hwnd, image_folder);
     }
 
+    // Resize argument construction
     wchar_t resizeArg[64] = L"";
     BOOL hasWidth = wcslen(g_config.IMAGE_SIZE_WIDTH) > 0;
     BOOL hasHeight = wcslen(g_config.IMAGE_SIZE_HEIGHT) > 0;
@@ -498,14 +547,57 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
         }
         else if (hasWidth && hasHeight)
         {
-            // For forced resize, don't apply conditional suffix
             swprintf(resizeArg, _countof(resizeArg), L"-resize %sx%s!", g_config.IMAGE_SIZE_WIDTH, g_config.IMAGE_SIZE_HEIGHT);
         }
     }
 
-    const wchar_t *exts[] = {L"jpg", L"png"};
-    // DEBUG_PRINT(g_config.runImageOptimizer ? L"ImageOptimizer: ON\n" : L"ImageOptimizer: OFF\n");
-    for (int i = 0; i < 2; i++)
+    // Convert BMP to JPG first
+    WIN32_FIND_DATAW findData;
+    wchar_t searchPath[MAX_PATH];
+    swprintf(searchPath, MAX_PATH, L"%s\\*.bmp", image_folder);
+
+    HANDLE hFind = FindFirstFileW(searchPath, &findData);
+    if (hFind != INVALID_HANDLE_VALUE)
+    {
+        do
+        {
+            wchar_t bmpPath[MAX_PATH], jpgPath[MAX_PATH];
+            swprintf(bmpPath, MAX_PATH, L"%s\\%s", image_folder, findData.cFileName);
+
+            wcscpy(jpgPath, bmpPath);
+            wchar_t *ext = wcsrchr(jpgPath, L'.');
+            if (ext) wcscpy(ext, L".jpg");
+
+            wchar_t convertCmd[MAX_PATH * 2];
+            swprintf(convertCmd, MAX_PATH * 2, L"\"%s\" convert \"%s\" \"%s\"", g_config.IMAGEMAGICK_PATH, bmpPath, jpgPath);
+            DEBUG_PRINT(convertCmd);
+
+            STARTUPINFOW siConvert = {.cb = sizeof(siConvert)};
+            PROCESS_INFORMATION piConvert;
+            siConvert.dwFlags |= STARTF_USESHOWWINDOW;
+            siConvert.wShowWindow = SW_HIDE;
+
+            if (CreateProcessW(NULL, convertCmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &siConvert, &piConvert))
+            {
+                WaitForSingleObject(piConvert.hProcess, INFINITE);
+                CloseHandle(piConvert.hProcess);
+                CloseHandle(piConvert.hThread);
+
+                // Optionally delete original BMP
+                DeleteFileW(bmpPath);
+            }
+            else
+            {
+                SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"ImageMagick: ", L"Failed to convert BMP to JPG.");
+            }
+
+        } while (FindNextFileW(hFind, &findData));
+        FindClose(hFind);
+    }
+
+    // Optimize supported formats
+    const wchar_t *exts[] = {L"jpg", L"png", L"webp"};
+    for (int i = 0; i < 3; i++)
     {
         if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
         {
@@ -517,9 +609,6 @@ BOOL optimize_images(HWND hwnd, const wchar_t *image_folder)
         si.hStdError = hWritePipe;
         si.wShowWindow = SW_HIDE;
         si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-
-        // swprintf(command, MAX_PATH, L"\"%s\" mogrify -resize %s -quality %s \"%s\\*.%s\"",
-        //          g_config.IMAGEMAGICK_PATH, g_config.IMAGE_SIZE_HEIGHT, g_config.IMAGE_QUALITY, image_folder, exts[i]);
 
         swprintf(command, MAX_PATH * 2, L"\"%s\" mogrify %s -quality %s \"%s\\*.%s\"",
                  g_config.IMAGEMAGICK_PATH,

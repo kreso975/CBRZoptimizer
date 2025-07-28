@@ -17,6 +17,7 @@ extern void TrimTrailingWhitespace(wchar_t *str);
 
 // Expose the thread entry point
 BOOL is_image_file(const wchar_t *filename);
+BOOL IsWebPImage(const BYTE *buffer, DWORD size);
 BOOL preserve_only_cover_image(const wchar_t *folderPath);
 BOOL extract_cover_image(const wchar_t *folderPath, const wchar_t *coverFolderPath);
 DWORD WINAPI OptimizeImageThread(LPVOID lpParam);

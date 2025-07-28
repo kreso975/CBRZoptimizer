@@ -386,11 +386,11 @@ void process_file(HWND hwnd, const wchar_t *file_path)
 
     DEBUG_PRINT(g_config.runImageOptimizer ? L"[DEBUG] RunImageOptimizer = TRUE\n" : L"[DEBUG] RunImageOptimizer = FALSE\n");
 
+    BOOL used_external_optimizer = FALSE;
     // Image optimization
     if (g_config.runImageOptimizer)
     {
-        if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 ||
-            GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
+        if (wcslen(g_config.IMAGEMAGICK_PATH) == 0 || GetFileAttributesW(g_config.IMAGEMAGICK_PATH) == INVALID_FILE_ATTRIBUTES ||
             (GetFileAttributesW(g_config.IMAGEMAGICK_PATH) & FILE_ATTRIBUTE_DIRECTORY))
         {
             DEBUG_PRINT(L"ImageOptimizer3: ON\n");
@@ -403,6 +403,8 @@ void process_file(HWND hwnd, const wchar_t *file_path)
             DEBUG_PRINT(L"ImageOptimizer4: ON\n");
             if (!optimize_images(hwnd, extracted_dir))
                 return;
+            
+            used_external_optimizer = TRUE; // ✅ External tool was used
         }
 
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"Image optimization: ", L"Image optimization completed.");
@@ -411,18 +413,15 @@ void process_file(HWND hwnd, const wchar_t *file_path)
     if (g_StopProcessing)
         return;
 
-    if (!g_config.runImageOptimizer && g_config.convertToWebP)
+    // WebP conversion IF running solo
+    if ((!g_config.runImageOptimizer || used_external_optimizer) && g_config.convertToWebP)
     {
         SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"Converting images to WebP...");
 
         if (!convert_images_to_webp(hwnd, extracted_dir))
-        {
             SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"❌ Failed to convert images.");
-        }
         else
-        {
             SendStatus(hwnd, WM_UPDATE_TERMINAL_TEXT, L"WebP: ", L"✅ Images converted to WebP.");
-        }
     }
 
     if (g_StopProcessing)

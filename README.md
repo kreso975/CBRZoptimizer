@@ -1,4 +1,4 @@
-# CBRZoptimizer
+# CBRZ Optimizer
 [![Donate](https://img.shields.io/badge/donate-PayPal-blue.svg)](https://paypal.me/kreso975)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-donate-gray?logo=ko-fi&logoColor=white&labelColor=blue)](https://ko-fi.com/kreso975)
 
